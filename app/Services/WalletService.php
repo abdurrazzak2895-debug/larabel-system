@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Agency;
 use App\Models\AgencyWallet;
 use App\Models\WalletTransaction;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,17 @@ class WalletService
 {
     public function getWallet(int $agencyId): AgencyWallet
     {
+        // Guard against orphan/invalid agency ids. Without this, calling
+        // firstOrCreate() with an agency_id that has no matching row in
+        // the `agencies` table (e.g. 0 for a user without an agency)
+        // blows up with a cryptic FOREIGN KEY constraint violation.
+        if (! Agency::whereKey($agencyId)->exists()) {
+            throw new \InvalidArgumentException(
+                "Cannot access wallet for agency [{$agencyId}]: no such agency exists. ".
+                'The account is not assigned to a valid agency.'
+            );
+        }
+
         return AgencyWallet::firstOrCreate(
             ['agency_id' => $agencyId],
             [

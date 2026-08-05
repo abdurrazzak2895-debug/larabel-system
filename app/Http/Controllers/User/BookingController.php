@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\Agency;
 use App\Models\Booking;
 use App\Models\PaccCredential;
 use App\Services\BookingService;
@@ -33,6 +34,24 @@ class BookingController extends Controller
         }
 
         return $token;
+    }
+
+    /**
+     * Resolve the authenticated user's agency id — or null when the account
+     * is not (yet) assigned to a real agency. Guards against the FK crash
+     * caused by casting a missing agency_id (null) to (int) 0.
+     */
+    private function currentAgencyId(): ?int
+    {
+        $user = Auth::user();
+
+        if (! $user || ! $user->agency_id) {
+            return null;
+        }
+
+        $agencyId = (int) $user->agency_id;
+
+        return Agency::whereKey($agencyId)->exists() ? $agencyId : null;
     }
 
     public function index(Request $request)
@@ -79,8 +98,14 @@ class BookingController extends Controller
      */
     public function create(Request $request)
     {
+        $agencyId = $this->currentAgencyId();
+
+        if ($agencyId === null) {
+            return redirect()->route('user.dashboard')
+                ->with('error', 'Your account is not assigned to an agency yet. Please contact the administrator to create bookings.');
+        }
+
         $token = $this->ensureSvpToken($request);
-        $agencyId = (int) Auth::user()->agency_id;
 
         if (! $token) {
             return redirect()->route('svp.login.form')
@@ -150,6 +175,12 @@ class BookingController extends Controller
      */
     public function store(Request $request)
     {
+        $agencyId = $this->currentAgencyId();
+
+        if ($agencyId === null) {
+            return back()->with('error', 'Your account is not assigned to an agency yet. Please contact the administrator.');
+        }
+
         $data = $request->validate([
             'candidate_id'    => ['required', 'integer', 'exists:pacc_credentials,id'],
             'occupation_id'   => ['required', 'string'],
@@ -166,7 +197,6 @@ class BookingController extends Controller
             ])->redirectTo(route('svp.login.form'));
         }
 
-        $agencyId = (int) Auth::user()->agency_id;
         $candidate = PaccCredential::where('agency_id', $agencyId)
             ->findOrFail($data['candidate_id']);
 
