@@ -120,7 +120,7 @@ class AdminAuthTest extends TestCase
         Auth::guard('web')->login($agencyUser);
 
         $pages = [
-            route('agency.bookings'),
+            route('agency.bookings.index'),
             route('agency.wallets.index'),
             route('agency.deposits.index'),
             route('agency.refunds.index'),

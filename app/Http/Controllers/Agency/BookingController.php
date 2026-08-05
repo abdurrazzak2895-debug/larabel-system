@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Agency;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
-use App\Models\PaccCredential;
+use App\Models\Candidate;
 use App\Services\BookingService;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
@@ -90,8 +90,8 @@ class BookingController extends Controller
         // Profile / wallet / lookup data for the wizard.
         $wallet = $this->wallet->getWallet($agencyId);
 
-        // Candidates saved on file (PaccCredential) used to choose "who to book for".
-        $candidates = PaccCredential::where('agency_id', $agencyId)->latest()->get();
+        // Candidates synced from SVP profile after login.
+        $candidates = Candidate::where('agency_id', $agencyId)->latest()->get();
 
         $occupations = [];
         $cities      = [];
@@ -236,7 +236,7 @@ class BookingController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'candidate_id'    => ['required', 'integer', 'exists:pacc_credentials,id'],
+            'candidate_id'    => ['required', 'integer', 'exists:candidates,id'],
             'occupation_id'   => ['required', 'string'],
             'exam_session_id' => ['required', 'string'],
             'exam_date'       => ['required', 'date'],
@@ -252,7 +252,7 @@ class BookingController extends Controller
         }
 
         $agencyId = (int) Auth::user()->agency_id;
-        $candidate = PaccCredential::where('agency_id', $agencyId)
+        $candidate = Candidate::where('agency_id', $agencyId)
             ->findOrFail($data['candidate_id']);
 
         $result = $this->booking->completeBooking($token, [

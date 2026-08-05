@@ -60,6 +60,12 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/exam_constraints', [ExamController::class, 'examConstraints']);
     });
 
+    Route::prefix('individual_labor_space/exam_sessions')->group(function (): void {
+        Route::get('/',                    [ExamController::class, 'sessions']);
+        Route::get('/available_dates',     [ExamController::class, 'availableDates']);
+        Route::post('/temporary_seats',    [ExamController::class, 'temporarySeat']);
+    });
+
     // Payment
     Route::prefix('individual_labor_space/payments')->group(function (): void {
         Route::get('/validate_pending', [PaymentNotificationController::class, 'validatePendingPayment']);

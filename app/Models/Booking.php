@@ -56,10 +56,10 @@ class Booking extends Model
         return $this->belongsTo(User::class);
     }
 
-    /** @return BelongsTo<PaccCredential, static> */
+    /** @return BelongsTo<Candidate, static> */
     public function credential(): BelongsTo
     {
-        return $this->belongsTo(PaccCredential::class, 'credential_id');
+        return $this->belongsTo(Candidate::class, 'credential_id');
     }
 
     /** @return HasMany<BookingLog> */

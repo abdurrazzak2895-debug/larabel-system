@@ -31,12 +31,13 @@ class BookingService
     // Read-only lookups (proxy to provider)
     // -----------------------------------------------------------------
 
-    public function sessions(string $token) { return $this->provider->withToken($token)->examSessions(); }
+    public function sessions(string $token, array $params = []) { return $this->provider->withToken($token)->examSessions($params); }
     public function availableDates(string $token) { return $this->provider->withToken($token)->availableDates(); }
     public function validateReservation(string $token) { return $this->provider->withToken($token)->validateReservation(); }
     public function reservations(string $token) { return $this->provider->withToken($token)->reservationDetails(); }
     public function occupations(string $token) { return $this->provider->withToken($token)->occupations(); }
-    public function cities(string $token) { return $this->provider->withToken($token)->cities(); }
+    public function cities(string $token, ?string $occupationId = null) { return $this->provider->withToken($token)->cities($occupationId); }
+    public function testCenters(string $token, ?string $city = null, ?string $occupationId = null) { return $this->provider->withToken($token)->testCentersForFilters($city, $occupationId); }
     public function categories(string $token) { return $this->provider->withToken($token)->categories(); }
     public function examConstraints(string $token) { return $this->provider->withToken($token)->examConstraints(); }
 

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Candidate;
 use App\Models\User;
+use App\Services\ProfileService;
 use App\Services\SvpApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,7 +17,7 @@ use Illuminate\Validation\ValidationException;
  */
 class SvpLoginController extends Controller
 {
-    public function __construct(protected SvpApiService $svp)
+    public function __construct(protected SvpApiService $svp, protected ProfileService $profile)
     {
     }
 
@@ -232,6 +234,19 @@ class SvpLoginController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
+        // Auto-create / update candidate from SVP profile after successful login.
+        try {
+            $profileResponse = $this->profile->profile($token);
+            $profileData = $profileResponse->getData(true);
+            $profile = data_get($profileData, 'data', $profileData);
+
+            if (is_array($profile) && ! empty($profile)) {
+                $this->syncCandidateFromProfile($user, $profile);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('SVP profile sync after login failed', ['error' => $e->getMessage()]);
+        }
+
         // Agency staff land on the agency panel; standalone SVP users on the user panel.
         $home = $user->agency_id !== null
             ? route('agency.dashboard')
@@ -260,5 +275,33 @@ class SvpLoginController extends Controller
         }
 
         return null;
+    }
+
+    private function syncCandidateFromProfile(User $user, array $profile): void
+    {
+        $svpUserId = (string) data_get($profile, 'id', data_get($profile, 'user_id', ''));
+
+        Candidate::updateOrCreate(
+            [
+                'user_id'    => $user->id,
+                'svp_user_id' => $svpUserId ?: null,
+            ],
+            [
+                'agency_id'  => $user->agency_id,
+                'full_name'  => data_get($profile, 'full_name')
+                    ?? trim((data_get($profile, 'first_name', '') . ' ' . data_get($profile, 'last_name', '')))
+                    ?? $user->name,
+                'national_id'=> data_get($profile, 'national_id')
+                    ?? data_get($profile, 'iqama')
+                    ?? data_get($profile, 'id_number')
+                    ?? null,
+                'phone'      => data_get($profile, 'phone')
+                    ?? data_get($profile, 'mobile')
+                    ?? data_get($profile, 'phone_number')
+                    ?? null,
+                'email'      => data_get($profile, 'email') ?? $user->email,
+                'svp_data'   => $profile,
+            ]
+        );
     }
 }

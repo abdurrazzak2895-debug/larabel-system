@@ -5,7 +5,7 @@ namespace App\Http\Controllers\User;
 use App\Http\Controllers\Controller;
 use App\Models\Agency;
 use App\Models\Booking;
-use App\Models\PaccCredential;
+use App\Models\Candidate;
 use App\Services\BookingService;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
@@ -112,9 +112,9 @@ class BookingController extends Controller
                 ->with('status', 'Please sign in with your SVP account to create a booking.');
         }
 
-        // Wallet + candidates saved on file for "who to book for".
+        // Wallet + candidates synced from SVP profile after login.
         $wallet = $this->wallet->getWallet($agencyId);
-        $candidates = PaccCredential::where('agency_id', $agencyId)->latest()->get();
+        $candidates = Candidate::where('user_id', Auth::id())->latest()->get();
 
         $occupations = [];
         $cities      = [];
@@ -247,7 +247,7 @@ class BookingController extends Controller
         }
 
         $data = $request->validate([
-            'candidate_id'    => ['required', 'integer', 'exists:pacc_credentials,id'],
+            'candidate_id'    => ['required', 'integer', 'exists:candidates,id'],
             'occupation_id'   => ['required', 'string'],
             'exam_session_id' => ['required', 'string'],
             'exam_date'       => ['required', 'date'],
@@ -262,7 +262,13 @@ class BookingController extends Controller
             ])->redirectTo(route('svp.login.form'));
         }
 
-        $candidate = PaccCredential::where('agency_id', $agencyId)
+        $agencyId = $this->currentAgencyId();
+
+        if ($agencyId === null) {
+            return back()->with('error', 'Your account is not assigned to an agency yet. Please contact the administrator.');
+        }
+
+        $candidate = Candidate::where('user_id', Auth::id())
             ->findOrFail($data['candidate_id']);
 
         $result = $this->booking->completeBooking($token, [

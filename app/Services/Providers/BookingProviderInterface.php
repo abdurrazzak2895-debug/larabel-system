@@ -19,13 +19,14 @@ interface BookingProviderInterface
     public function certificatePrice(): JsonResponse;
 
     // Exam
-    public function examSessions(): JsonResponse;
+    public function examSessions(array $params = []): JsonResponse;
     public function availableDates(): JsonResponse;
     public function temporarySeat(array $payload): JsonResponse;
     public function validateReservation(): JsonResponse;
     public function reservationDetails(): JsonResponse;
     public function occupations(): JsonResponse;
-    public function cities(): JsonResponse;
+    public function cities(?string $occupationId = null): JsonResponse;
+    public function testCentersForFilters(?string $city = null, ?string $occupationId = null): JsonResponse;
     public function categories(): JsonResponse;
     public function examConstraints(): JsonResponse;
 

@@ -39,10 +39,10 @@ class Agency extends Model
         return $this->hasOne(AgencyWallet::class);
     }
 
-    /** @return HasMany<PaccCredential> */
-    public function credentials(): HasMany
+    /** @return HasMany<Candidate> */
+    public function candidates(): HasMany
     {
-        return $this->hasMany(PaccCredential::class);
+        return $this->hasMany(Candidate::class);
     }
 
     /** @return HasMany<Booking> */

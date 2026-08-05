@@ -45,7 +45,7 @@
                 </select>
                 @error('candidate_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 @if ($candidates->isEmpty())
-                    <p class="text-xs text-amber-600 mt-2">No candidates on file yet.</p>
+                    <p class="text-xs text-amber-600 mt-2">No candidate synced yet. Complete SVP login to auto-generate your profile as a candidate.</p>
                 @endif
             </div>
         </div>
