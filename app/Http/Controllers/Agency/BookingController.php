@@ -128,6 +128,7 @@ class BookingController extends Controller
             'constraints' => $constraints,
             'profile'     => $profile,
             'svpError'    => $svpError,
+            'svpToken'    => $token,
         ]);
     }
 
@@ -150,6 +151,82 @@ class BookingController extends Controller
         } catch (\Throwable $e) {
             Log::error('SVP availableDates failed', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Unable to fetch dates.'], 503);
+        }
+    }
+
+    /**
+     * GET /agency/bookings/lookup/cities?occupation_id=…
+     * AJAX: return cities that have sessions for the given occupation.
+     */
+    public function lookupCities(Request $request)
+    {
+        $request->validate(['occupation_id' => 'nullable|string']);
+
+        $token = $this->ensureSvpToken($request);
+        if (! $token) {
+            return response()->json(['error' => 'SVP session expired.'], 401);
+        }
+
+        try {
+            $response = $this->booking->cities($token, $request->query('occupation_id'));
+            return response()->json($response->getData(true), $response->getStatusCode());
+        } catch (\Throwable $e) {
+            Log::error('SVP lookup cities failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Unable to fetch cities.'], 503);
+        }
+    }
+
+    /**
+     * GET /agency/bookings/lookup/test-centers?city=&occupation_id=
+     * AJAX: return test centers for the given filters.
+     */
+    public function lookupTestCenters(Request $request)
+    {
+        $request->validate([
+            'city' => 'nullable|string',
+            'occupation_id' => 'nullable|string',
+        ]);
+
+        $token = $this->ensureSvpToken($request);
+        if (! $token) {
+            return response()->json(['error' => 'SVP session expired.'], 401);
+        }
+
+        try {
+            $response = $this->booking->testCenters($token, $request->query('city'), $request->query('occupation_id'));
+            return response()->json($response->getData(true), $response->getStatusCode());
+        } catch (\Throwable $e) {
+            Log::error('SVP lookup test-centers failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Unable to fetch test centers.'], 503);
+        }
+    }
+
+    /**
+     * GET /agency/bookings/lookup/sessions?city=&occupation_id=&test_center_id=
+     * AJAX: return exam sessions for the given filters.
+     */
+    public function lookupSessions(Request $request)
+    {
+        $request->validate([
+            'city' => 'nullable|string',
+            'occupation_id' => 'nullable|string',
+            'test_center_id' => 'nullable|string',
+        ]);
+
+        $token = $this->ensureSvpToken($request);
+        if (! $token) {
+            return response()->json(['error' => 'SVP session expired.'], 401);
+        }
+
+        $params = $request->only(['city', 'occupation_id', 'test_center_id']);
+        $params = array_filter($params);
+
+        try {
+            $response = $this->booking->sessions($token, $params);
+            return response()->json($response->getData(true), $response->getStatusCode());
+        } catch (\Throwable $e) {
+            Log::error('SVP lookup sessions failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Unable to fetch sessions.'], 503);
         }
     }
 

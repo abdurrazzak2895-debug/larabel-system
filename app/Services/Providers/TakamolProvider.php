@@ -116,9 +116,9 @@ class TakamolProvider implements BookingProviderInterface
     // Exam
     // -----------------------------------------------------------------
 
-    public function examSessions(): JsonResponse
+    public function examSessions(array $params = []): JsonResponse
     {
-        return $this->dispatch('GET', '/individual_labor_space/exam_sessions');
+        return $this->dispatch('GET', '/individual_labor_space/exam_sessions', $params);
     }
 
     public function availableDates(): JsonResponse
@@ -146,13 +146,13 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/occupations');
     }
 
-    public function cities(): JsonResponse
+    public function cities(?string $occupationId = null): JsonResponse
     {
-        // The live SVP API doesn't have a /cities endpoint (404).
-        // Fallback: fetch exam_sessions and extract unique cities from test_center.city
-        $sessionsResponse = $this->dispatch('GET', '/individual_labor_space/exam_sessions');
+        $params = $occupationId ? ['occupation_id' => $occupationId] : [];
+
+        $sessionsResponse = $this->dispatch('GET', '/individual_labor_space/exam_sessions', $params);
         $sessionsData = $sessionsResponse->getData(true);
-        
+
         $cities = [];
         if (isset($sessionsData['data']['exam_sessions']) && is_array($sessionsData['data']['exam_sessions'])) {
             $citySet = [];
@@ -167,8 +167,41 @@ class TakamolProvider implements BookingProviderInterface
             }
             $cities = array_values($citySet);
         }
-        
+
         return ResponseService::success(['cities' => $cities]);
+    }
+
+    public function testCentersForFilters(?string $city = null, ?string $occupationId = null): JsonResponse
+    {
+        $params = [];
+        if ($city) {
+            $params['city'] = $city;
+        }
+        if ($occupationId) {
+            $params['occupation_id'] = $occupationId;
+        }
+
+        $sessionsResponse = $this->dispatch('GET', '/individual_labor_space/exam_sessions', $params);
+        $sessionsData = $sessionsResponse->getData(true);
+
+        $testCenters = [];
+        if (isset($sessionsData['data']['exam_sessions']) && is_array($sessionsData['data']['exam_sessions'])) {
+            $centerSet = [];
+            foreach ($sessionsData['data']['exam_sessions'] as $session) {
+                $center = $session['test_center'] ?? null;
+                if ($center && isset($center['id']) && isset($center['name'])) {
+                    $centerSet[$center['id']] = [
+                        'id' => $center['id'],
+                        'name' => $center['name'],
+                        'city' => $center['city'] ?? '',
+                        'country_code' => $center['country_code'] ?? '',
+                    ];
+                }
+            }
+            $testCenters = array_values($centerSet);
+        }
+
+        return ResponseService::success(['test_centers' => $testCenters]);
     }
 
     public function reservations(): JsonResponse

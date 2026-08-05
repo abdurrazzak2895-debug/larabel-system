@@ -38,6 +38,17 @@
                 <label for="candidate_id" class="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Candidate</label>
                 <select name="candidate_id" id="candidate_id" required
                     class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <option value="">Select candidate…</option>
+                    @foreach ($candidates as $c)
+                        <option value="{{ $c->id }}" {{ old('candidate_id') == $c->id ? 'selected' : '' }}>{{ $c->full_name ?? $c->name ?? ('Credential #' . $c->id) }}</option>
+                    @endforeach
+                </select>
+                @error('candidate_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                @if ($candidates->isEmpty())
+                    <p class="text-xs text-amber-600 mt-2">No candidates on file yet.</p>
+                @endif
+            </div>
+        </div>
 
         {{-- Lookups: Occupation / City / Category --}}
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
@@ -60,11 +71,6 @@
                     <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1">City</label>
                     <select name="city_id" id="city_id" class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $citiesArr = $cities; if (!is_array($citiesArr) && !($citiesArr instanceof \Traversable)) $citiesArr = []; @endphp
-                        @foreach ($citiesArr as $c)
-                            @php $c = is_array($c) ? $c : (array) $c; @endphp
-                            <option value="{{ $c['name'] ?? '' }}" {{ old('city_id') == ($c['name'] ?? '') ? 'selected' : '' }}>{{ $c['name'] ?? '' }}</option>
-                        @endforeach
                     </select>
                 </div>
                 <div>
@@ -81,15 +87,15 @@
             </div>
         </div>
 
-                    <option value="">Select candidate…</option>
-                    @foreach ($candidates as $c)
-                        <option value="{{ $c->id }}" {{ old('candidate_id') == $c->id ? 'selected' : '' }}>{{ $c->full_name ?? $c->name ?? ('Credential #' . $c->id) }}</option>
-                    @endforeach
+        {{-- Test Center --}}
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4" id="test-center-section" style="display:none;">
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Test Center</p>
+            <div>
+                <label for="test_center_id" class="block text-sm font-medium text-slate-700 mb-1">Test Center</label>
+                <select name="test_center_id" id="test_center_id"
+                    class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <option value="">Select…</option>
                 </select>
-                @error('candidate_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                @if ($candidates->isEmpty())
-                    <p class="text-xs text-amber-600 mt-2">No candidates on file yet.</p>
-                @endif
             </div>
         </div>
 
@@ -102,11 +108,6 @@
                     <select name="exam_session_id" id="exam_session_id" required
                         class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $sess = data_get($sessions, 'data.exam_sessions', $sessions); if (!is_array($sess) && !($sess instanceof \Traversable)) $sess = []; @endphp
-                        @foreach ($sess as $s)
-                            @php $s = is_array($s) ? $s : (array) $s; @endphp
-                            <option value="{{ $s['id'] ?? '' }}" {{ old('exam_session_id') == ($s['id'] ?? '') ? 'selected' : '' }}>{{ $s['name'] ?? $s['title'] ?? ('Session #' . ($s['id'] ?? '')) }}</option>
-                        @endforeach
                     </select>
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
@@ -144,5 +145,159 @@
         </div>
     </form>
 </div>
-@endsection
 
+<script>
+(function () {
+    const occupationSelect = document.getElementById('occupation_id');
+    const citySelect = document.getElementById('city_id');
+    const categorySelect = document.getElementById('category_id');
+    const testCenterSelect = document.getElementById('test_center_id');
+    const sessionSelect = document.getElementById('exam_session_id');
+    const dateInput = document.getElementById('exam_date');
+    const testCenterSection = document.getElementById('test-center-section');
+
+    function setLoading(select, isLoading) {
+        if (!select) return;
+        select.disabled = isLoading;
+        if (isLoading) {
+            select.insertAdjacentHTML('afterend', '<span class="text-xs text-slate-400 ml-2">Loading…</span>');
+        } else {
+            const loading = select.parentElement.querySelector('.text-slate-400');
+            if (loading && loading.textContent === 'Loading…') {
+                loading.remove();
+            }
+        }
+    }
+
+    function populateSelect(select, items, valueKey, labelKey) {
+        if (!select) return;
+        const current = select.value;
+        select.innerHTML = '<option value="">Select…</option>';
+        (items || []).forEach(function (item) {
+            const option = document.createElement('option');
+            option.value = item[valueKey] || '';
+            option.textContent = item[labelKey] || item[valueKey] || '';
+            select.appendChild(option);
+        });
+        if (current) {
+            select.value = current;
+        }
+    }
+
+    async function fetchJSON(url) {
+        const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error('HTTP ' + response.status + ': ' + text);
+        }
+        return response.json();
+    }
+
+    if (occupationSelect) {
+        occupationSelect.addEventListener('change', async function () {
+            const occupationId = occupationSelect.value;
+            testCenterSection.style.display = 'none';
+            populateSelect(testCenterSelect, []);
+            populateSelect(sessionSelect, []);
+            dateInput.value = '';
+
+            if (!occupationId) {
+                populateSelect(citySelect, []);
+                return;
+            }
+
+            try {
+                setLoading(citySelect, true);
+                const data = await fetchJSON("{{ route('user.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId));
+                const cities = (data && data.data && data.data.cities) ? data.data.cities : [];
+                populateSelect(citySelect, cities, 'name', 'name');
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(citySelect, false);
+            }
+        });
+    }
+
+    if (citySelect) {
+        citySelect.addEventListener('change', async function () {
+            const city = citySelect.value;
+            const occupationId = occupationSelect.value;
+            testCenterSection.style.display = 'none';
+            populateSelect(testCenterSelect, []);
+            populateSelect(sessionSelect, []);
+            dateInput.value = '';
+
+            if (!city) {
+                return;
+            }
+
+            try {
+                setLoading(testCenterSelect, true);
+                const url = "{{ route('user.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + (occupationId ? "&occupation_id=" + encodeURIComponent(occupationId) : '');
+                const data = await fetchJSON(url);
+                const centers = (data && data.data && data.data.test_centers) ? data.data.test_centers : [];
+                populateSelect(testCenterSelect, centers, 'id', 'name');
+                if (centers.length > 0) {
+                    testCenterSection.style.display = '';
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(testCenterSelect, false);
+            }
+        });
+    }
+
+    if (testCenterSelect) {
+        testCenterSelect.addEventListener('change', async function () {
+            const testCenterId = testCenterSelect.value;
+            const city = citySelect.value;
+            const occupationId = occupationSelect.value;
+            populateSelect(sessionSelect, []);
+            dateInput.value = '';
+
+            if (!testCenterId) {
+                return;
+            }
+
+            try {
+                setLoading(sessionSelect, true);
+                const params = new URLSearchParams();
+                if (city) params.set('city', city);
+                if (occupationId) params.set('occupation_id', occupationId);
+                params.set('test_center_id', testCenterId);
+                const data = await fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString());
+                const sessions = (data && data.data && data.data.exam_sessions) ? data.data.exam_sessions : [];
+                populateSelect(sessionSelect, sessions, 'id', 'name');
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(sessionSelect, false);
+            }
+        });
+    }
+
+    if (sessionSelect) {
+        sessionSelect.addEventListener('change', async function () {
+            const sessionId = sessionSelect.value;
+            dateInput.value = '';
+
+            if (!sessionId) {
+                return;
+            }
+
+            try {
+                const data = await fetchJSON("{{ route('user.bookings.available-dates') }}?session_id=" + encodeURIComponent(sessionId));
+                const dates = (data && data.data && data.data.dates) ? data.data.dates : [];
+                if (dates.length > 0) {
+                    dateInput.value = dates[0];
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        });
+    }
+})();
+</script>
+@endsection
