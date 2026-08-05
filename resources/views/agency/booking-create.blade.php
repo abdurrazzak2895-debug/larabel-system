@@ -58,7 +58,7 @@
                     <select name="occupation_id" id="occupation_id" required
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $occ = data_get($occupations, 'data', $occupations); if (!is_array($occ)) $occ = []; @endphp
+                        @php $occ = data_get($occupations, 'data.occupations', $occupations); if (!is_array($occ)) $occ = []; @endphp
                         @foreach($occ as $o)
                             @php $o = (array) $o; @endphp
                             <option value="{{ $o['id'] ?? '' }}">{{ $o['name'] ?? $o['title'] ?? $o['id'] }}</option>
@@ -71,7 +71,7 @@
                     <select name="city_id" id="city_id"
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $cities = data_get($cities, 'data', $cities); if (!is_array($cities)) $cities = []; @endphp
+                        @php $cities = $cities; if (!is_array($cities)) $cities = []; @endphp
                         @foreach($cities as $c)
                             @php $c = (array) $c; @endphp
                             <option value="{{ $c['id'] ?? '' }}">{{ $c['name'] ?? $c['title'] ?? $c['id'] }}</option>
@@ -83,7 +83,7 @@
                     <select name="category_id" id="category_id"
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $cats = data_get($categories, 'data', $categories); if (!is_array($cats)) $cats = []; @endphp
+                        @php $cats = data_get($categories, 'data.categories', $categories); if (!is_array($cats)) $cats = []; @endphp
                         @foreach($cats as $c)
                             @php $c = (array) $c; @endphp
                             <option value="{{ $c['id'] ?? '' }}">{{ $c['name'] ?? $c['title'] ?? $c['id'] }}</option>
@@ -102,7 +102,7 @@
                     <select name="exam_session_id" id="exam_session_id" required
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $sess = data_get($sessions, 'data', $sessions); if (!is_array($sess)) $sess = []; @endphp
+                        @php $sess = data_get($sessions, 'data.exam_sessions', $sessions); if (!is_array($sess)) $sess = []; @endphp
                         @foreach($sess as $s)
                             @php $s = (array) $s; @endphp
                             <option value="{{ $s['id'] ?? '' }}">{{ $s['name'] ?? $s['title'] ?? ('Session #'.$s['id']) }}</option>

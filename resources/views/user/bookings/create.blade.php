@@ -48,7 +48,7 @@
                     <select name="occupation_id" id="occupation_id" required
                         class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $occ = data_get($occupations, 'data', $occupations); if (!is_array($occ) && !($occ instanceof \Traversable)) $occ = []; @endphp
+                        @php $occ = data_get($occupations, 'data.occupations', $occupations); if (!is_array($occ) && !($occ instanceof \Traversable)) $occ = []; @endphp
                         @foreach ($occ as $o)
                             @php $o = is_array($o) ? $o : (array) $o; @endphp
                             <option value="{{ $o['id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? '') ? 'selected' : '' }}>{{ $o['name'] ?? $o['title'] ?? $o['id'] ?? '' }}</option>
@@ -60,7 +60,7 @@
                     <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1">City</label>
                     <select name="city_id" id="city_id" class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $citiesArr = data_get($cities, 'data', $cities); if (!is_array($citiesArr) && !($citiesArr instanceof \Traversable)) $citiesArr = []; @endphp
+                        @php $citiesArr = $cities; if (!is_array($citiesArr) && !($citiesArr instanceof \Traversable)) $citiesArr = []; @endphp
                         @foreach ($citiesArr as $c)
                             @php $c = is_array($c) ? $c : (array) $c; @endphp
                             <option value="{{ $c['id'] ?? '' }}" {{ old('city_id') == ($c['id'] ?? '') ? 'selected' : '' }}>{{ $c['name'] ?? $c['title'] ?? $c['id'] ?? '' }}</option>
@@ -71,7 +71,7 @@
                     <label for="category_id" class="block text-sm font-medium text-slate-700 mb-1">Category</label>
                     <select name="category_id" id="category_id" class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $cats = data_get($categories, 'data', $categories); if (!is_array($cats) && !($cats instanceof \Traversable)) $cats = []; @endphp
+                        @php $cats = data_get($categories, 'data.categories', $categories); if (!is_array($cats) && !($cats instanceof \Traversable)) $cats = []; @endphp
                         @foreach ($cats as $c)
                             @php $c = is_array($c) ? $c : (array) $c; @endphp
                             <option value="{{ $c['id'] ?? '' }}" {{ old('category_id') == ($c['id'] ?? '') ? 'selected' : '' }}>{{ $c['name'] ?? $c['title'] ?? $c['id'] ?? '' }}</option>
@@ -102,7 +102,7 @@
                     <select name="exam_session_id" id="exam_session_id" required
                         class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $sess = data_get($sessions, 'data', $sessions); if (!is_array($sess) && !($sess instanceof \Traversable)) $sess = []; @endphp
+                        @php $sess = data_get($sessions, 'data.exam_sessions', $sessions); if (!is_array($sess) && !($sess instanceof \Traversable)) $sess = []; @endphp
                         @foreach ($sess as $s)
                             @php $s = is_array($s) ? $s : (array) $s; @endphp
                             <option value="{{ $s['id'] ?? '' }}" {{ old('exam_session_id') == ($s['id'] ?? '') ? 'selected' : '' }}>{{ $s['name'] ?? $s['title'] ?? ('Session #' . ($s['id'] ?? '')) }}</option>
