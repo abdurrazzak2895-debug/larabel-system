@@ -1,0 +1,6 @@
+# Ensures Node.js/npm is present in the Nixpacks build image alongside PHP.
+# Without this, Railway's custom `buildCommand` (npm run build) can run in a
+# stage where only the PHP provider's packages were installed, causing:
+#   /bin/bash: line 1: npm: command not found
+[phases.setup]
+nixPkgs = ["...", "nodejs_20"]
