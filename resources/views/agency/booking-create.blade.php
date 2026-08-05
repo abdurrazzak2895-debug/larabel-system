@@ -74,7 +74,7 @@
                         @php $cities = $cities; if (!is_array($cities)) $cities = []; @endphp
                         @foreach($cities as $c)
                             @php $c = (array) $c; @endphp
-                            <option value="{{ $c['id'] ?? '' }}">{{ $c['name'] ?? $c['title'] ?? $c['id'] }}</option>
+                            <option value="{{ $c['name'] ?? '' }}">{{ $c['name'] ?? '' }}</option>
                         @endforeach
                     </select>
                 </div>

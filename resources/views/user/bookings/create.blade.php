@@ -63,7 +63,7 @@
                         @php $citiesArr = $cities; if (!is_array($citiesArr) && !($citiesArr instanceof \Traversable)) $citiesArr = []; @endphp
                         @foreach ($citiesArr as $c)
                             @php $c = is_array($c) ? $c : (array) $c; @endphp
-                            <option value="{{ $c['id'] ?? '' }}" {{ old('city_id') == ($c['id'] ?? '') ? 'selected' : '' }}>{{ $c['name'] ?? $c['title'] ?? $c['id'] ?? '' }}</option>
+                            <option value="{{ $c['name'] ?? '' }}" {{ old('city_id') == ($c['name'] ?? '') ? 'selected' : '' }}>{{ $c['name'] ?? '' }}</option>
                         @endforeach
                     </select>
                 </div>

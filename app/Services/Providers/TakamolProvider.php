@@ -148,7 +148,27 @@ class TakamolProvider implements BookingProviderInterface
 
     public function cities(): JsonResponse
     {
-        return $this->dispatch('GET', '/individual_labor_space/cities');
+        // The live SVP API doesn't have a /cities endpoint (404).
+        // Fallback: fetch exam_sessions and extract unique cities from test_center.city
+        $sessionsResponse = $this->dispatch('GET', '/individual_labor_space/exam_sessions');
+        $sessionsData = $sessionsResponse->getData(true);
+        
+        $cities = [];
+        if (isset($sessionsData['data']['exam_sessions']) && is_array($sessionsData['data']['exam_sessions'])) {
+            $citySet = [];
+            foreach ($sessionsData['data']['exam_sessions'] as $session) {
+                if (isset($session['test_center']['city']) && $session['test_center']['city']) {
+                    $citySet[$session['test_center']['city']] = [
+                        'name' => $session['test_center']['city'],
+                        'country_code' => $session['test_center']['country_code'] ?? '',
+                        'country_id' => $session['test_center']['country_id'] ?? null,
+                    ];
+                }
+            }
+            $cities = array_values($citySet);
+        }
+        
+        return ResponseService::success(['cities' => $cities]);
     }
 
     public function reservations(): JsonResponse

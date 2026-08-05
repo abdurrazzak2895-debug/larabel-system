@@ -126,21 +126,10 @@ class BookingController extends Controller
 
         try {
             $occupations = $this->booking->occupations($token)->getData(true);
+            $cities      = $this->booking->cities($token)->getData(true);
             $categories  = $this->booking->categories($token)->getData(true);
             $sessions    = $this->booking->sessions($token)->getData(true);
             $constraints = $this->booking->examConstraints($token)->getData(true);
-
-            // Cities endpoint returns 404 on live API; extract unique cities from exam_sessions.test_center.city
-            $cities = [];
-            if (isset($sessions['data']['exam_sessions']) && is_array($sessions['data']['exam_sessions'])) {
-                $citySet = [];
-                foreach ($sessions['data']['exam_sessions'] as $session) {
-                    if (isset($session['test_center']['city']) && $session['test_center']['city']) {
-                        $citySet[$session['test_center']['city']] = $session['test_center']['city'];
-                    }
-                }
-                $cities = array_values($citySet);
-            }
         } catch (\Throwable $e) {
             Log::warning('SVP booking lookup failed', ['error' => $e->getMessage()]);
             $svpError = 'Could not load SVP booking data. Please try again.';
