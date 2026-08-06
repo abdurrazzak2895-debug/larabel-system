@@ -1,11 +1,27 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "NIXPACKS",
+    "buildCommand": "npm run build",
+    "buildEnvironment": "V3"
   },
   "deploy": {
+    "runtime": "V2",
+    "numReplicas": 1,
+    "startCommand": "php artisan serve --host=0.0.0.0 --port=${PORT:-8080}",
+    "preDeployCommand": [
+      "chmod +x ./railway/init-app.sh && sh ./railway/init-app.sh"
+    ],
     "healthcheckPath": "/",
     "healthcheckTimeout": 100,
+    "sleepApplication": false,
+    "useLegacyStacker": false,
+    "ipv6EgressEnabled": false,
+    "multiRegionConfig": {
+      "sfo": {
+        "numReplicas": 1
+      }
+    },
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
