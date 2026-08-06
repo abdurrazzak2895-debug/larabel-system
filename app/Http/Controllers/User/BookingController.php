@@ -185,6 +185,32 @@ class BookingController extends Controller
         }
     }
 
+    public function lookupOccupations(Request $request)
+    {
+        $request->validate([
+            'search' => 'nullable|string',
+            'page'   => 'nullable|integer|min:1',
+        ]);
+
+        $token = $this->ensureSvpToken($request);
+        if (! $token) {
+            return response()->json(['error' => 'SVP session expired.'], 401);
+        }
+
+        try {
+            $response = $this->booking->occupationsSearch(
+                $token,
+                $request->query('search'),
+                (int) ($request->query('page') ?? 1),
+                1000
+            );
+            return response()->json($response->getData(true), $response->getStatusCode());
+        } catch (\Throwable $e) {
+            Log::error('SVP lookup occupations failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Unable to fetch occupations.'], 503);
+        }
+    }
+
     public function lookupTestCenters(Request $request)
     {
         $request->validate([

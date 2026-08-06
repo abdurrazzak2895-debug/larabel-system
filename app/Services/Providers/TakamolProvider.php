@@ -2,6 +2,7 @@
 
 namespace App\Services\Providers;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\JsonResponse;
@@ -36,7 +37,12 @@ class TakamolProvider implements BookingProviderInterface
             ->withHeader('Sec-Fetch-Mode', 'cors')
             ->withHeader('Sec-Fetch-Site', 'same-site')
             ->withHeader('sec-ch-ua-mobile', '?0')
-            ->withHeader('sec-ch-ua-platform', '"Windows"');
+            ->withHeader('sec-ch-ua-platform', '"Windows"')
+            ->retry(
+                (int) config('svp.retry_times', 3),
+                (int) config('svp.retry_delay', 1000),
+                static fn ($exception) => $exception instanceof ConnectionException
+            );
 
         if ($csrf = Session::get('svp_csrf')) {
             $this->client = $this->client->withHeader('X-CSRF-Token', $csrf);
@@ -112,6 +118,16 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/certificate_price');
     }
 
+    public function featureFlags(): JsonResponse
+    {
+        return $this->dispatch('GET', '/flipper/feature_flags');
+    }
+
+    public function userBalance(string $userId): JsonResponse
+    {
+        return $this->dispatch('GET', '/users/'.$userId.'/balance');
+    }
+
     // -----------------------------------------------------------------
     // Exam
     // -----------------------------------------------------------------
@@ -119,6 +135,11 @@ class TakamolProvider implements BookingProviderInterface
     public function examSessions(array $params = []): JsonResponse
     {
         return $this->dispatch('GET', '/individual_labor_space/exam_sessions', $params);
+    }
+
+    public function examSession(string $id): JsonResponse
+    {
+        return $this->dispatch('GET', '/individual_labor_space/exam_sessions/'.$id);
     }
 
     public function availableDates(): JsonResponse
@@ -136,14 +157,50 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/exam_reservations/validate');
     }
 
-    public function reservationDetails(): JsonResponse
+    public function reservationDetails(?string $id = null): JsonResponse
     {
-        return $this->dispatch('GET', '/individual_labor_space/exam_reservations');
+        $uri = $id
+            ? '/individual_labor_space/exam_reservations/'.$id
+            : '/individual_labor_space/exam_reservations';
+
+        return $this->dispatch('GET', $uri);
+    }
+
+    public function createReservation(array $payload): JsonResponse
+    {
+        return $this->dispatch('POST', '/individual_labor_space/exam_reservations', $payload);
+    }
+
+    public function cancelReservation(string $id): JsonResponse
+    {
+        return $this->dispatch('DELETE', '/individual_labor_space/exam_reservations/'.$id);
+    }
+
+    public function rescheduleReservation(string $id, array $payload): JsonResponse
+    {
+        return $this->dispatch('POST', '/individual_labor_space/exam_reservations/'.$id.'/reschedule', $payload);
+    }
+
+    public function useReservationCredit(array $payload): JsonResponse
+    {
+        return $this->dispatch('POST', '/individual_labor_space/reservation_credits/use', $payload);
     }
 
     public function occupations(): JsonResponse
     {
         return $this->dispatch('GET', '/individual_labor_space/occupations');
+    }
+
+    public function occupationsSearch(?string $search = null, int $page = 1, int $perPage = 1000): JsonResponse
+    {
+        $params = [];
+        if ($search) {
+            $params['search'] = $search;
+        }
+        $params['page'] = $page;
+        $params['per_page'] = $perPage;
+
+        return $this->dispatch('GET', '/individual_labor_space/occupations', $params);
     }
 
     public function cities(?string $occupationId = null): JsonResponse
@@ -226,6 +283,16 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/exam_constraints');
     }
 
+    public function examEngines(): JsonResponse
+    {
+        return $this->dispatch('GET', '/individual_labor_space/exam_engines');
+    }
+
+    public function countries(): JsonResponse
+    {
+        return $this->dispatch('GET', '/individual_labor_space/countries');
+    }
+
     // -----------------------------------------------------------------
     // Payment / Notification / Verification
     // -----------------------------------------------------------------
@@ -233,6 +300,25 @@ class TakamolProvider implements BookingProviderInterface
     public function validatePendingPayment(): JsonResponse
     {
         return $this->dispatch('GET', '/individual_labor_space/payments/validate_pending');
+    }
+
+    public function payments(?string $id = null): JsonResponse
+    {
+        $uri = $id
+            ? '/individual_labor_space/payments/'.$id
+            : '/individual_labor_space/payments';
+
+        return $this->dispatch('GET', $uri);
+    }
+
+    public function createPayment(array $payload): JsonResponse
+    {
+        return $this->dispatch('POST', '/individual_labor_space/payments', $payload);
+    }
+
+    public function updatePayment(string $id, array $payload): JsonResponse
+    {
+        return $this->dispatch('PUT', '/individual_labor_space/payments/'.$id, $payload);
     }
 
     public function notifications(): JsonResponse

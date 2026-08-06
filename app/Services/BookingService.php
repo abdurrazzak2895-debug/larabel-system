@@ -35,12 +35,21 @@ class BookingService
     public function availableDates(string $token) { return $this->provider->withToken($token)->availableDates(); }
     public function validateReservation(string $token) { return $this->provider->withToken($token)->validateReservation(); }
     public function reservations(string $token) { return $this->provider->withToken($token)->reservationDetails(); }
+    public function reservation(string $token, string $id) { return $this->provider->withToken($token)->reservationDetails($id); }
+    public function createReservation(string $token, array $payload) { return $this->provider->withToken($token)->createReservation($payload); }
+    public function cancelReservation(string $token, string $id) { return $this->provider->withToken($token)->cancelReservation($id); }
+    public function rescheduleReservation(string $token, string $id, array $payload) { return $this->provider->withToken($token)->rescheduleReservation($id, $payload); }
+    public function useReservationCredit(string $token, array $payload) { return $this->provider->withToken($token)->useReservationCredit($payload); }
+    public function examSession(string $token, string $id) { return $this->provider->withToken($token)->examSession($id); }
     public function occupations(string $token) { return $this->provider->withToken($token)->occupations(); }
+    public function occupationsSearch(string $token, ?string $search = null, int $page = 1, int $perPage = 1000) { return $this->provider->withToken($token)->occupationsSearch($search, $page, $perPage); }
     public function cities(string $token, ?string $occupationId = null) { return $this->provider->withToken($token)->cities($occupationId); }
     public function testCenters(string $token, ?string $city = null, ?string $occupationId = null) { return $this->provider->withToken($token)->testCentersForFilters($city, $occupationId); }
     public function categories(string $token) { return $this->provider->withToken($token)->categories(); }
+    public function countries(string $token) { return $this->provider->withToken($token)->countries(); }
     public function categoriesForOccupation(string $token, ?string $occupationId = null) { return $this->provider->withToken($token)->categoriesForOccupation($occupationId); }
     public function examConstraints(string $token) { return $this->provider->withToken($token)->examConstraints(); }
+    public function examEngines(string $token) { return $this->provider->withToken($token)->examEngines(); }
 
     /**
      * Create a temporary seat reservation on the external API.

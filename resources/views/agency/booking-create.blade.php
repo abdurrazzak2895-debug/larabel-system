@@ -55,15 +55,22 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label for="occupation_id" class="block text-sm font-medium text-slate-700 mb-1">Occupation</label>
-                    <select name="occupation_id" id="occupation_id" required
-                        class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select…</option>
-                        @php $occ = data_get($occupations, 'data.occupations', $occupations); if (!is_array($occ)) $occ = []; @endphp
-                        @foreach($occ as $o)
-                            @php $o = (array) $o; @endphp
-                            <option value="{{ $o['id'] ?? '' }}">{{ $o['name'] ?? $o['title'] ?? $o['id'] }}</option>
-                        @endforeach
-                    </select>
+                    <div class="relative">
+                        <input type="text" id="occupation-search" placeholder="Search occupation..." 
+                            class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500 pl-10 pr-3" autocomplete="off">
+                        <select name="occupation_id" id="occupation_id" required
+                            class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;">
+                            <option value="">Select…</option>
+                            @php $occ = data_get($occupations, 'data.occupations', $occupations); if (!is_array($occ)) $occ = []; @endphp
+                            @foreach($occ as $o)
+                                @php $o = (array) $o; @endphp
+                                <option value="{{ $o['id'] ?? '' }}">{{ $o['name'] ?? $o['title'] ?? $o['id'] }}</option>
+                            @endforeach
+                        </select>
+                        <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M9.75 9.75c0 1.568 1.273 2.84 2.84 2.84s2.84-1.273 2.84-2.84-1.273-2.84-2.84-2.84S9.75 8.182 9.75 9.75z"/></svg>
+                        </div>
+                    </div>
                     @error('occupation_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -148,165 +155,224 @@
 </div>
 
 <script>
-(function () {
-    const occupationSelect = document.getElementById('occupation_id');
-    const citySelect = document.getElementById('city_id');
-    const categorySelect = document.getElementById('category_id');
-    const testCenterSelect = document.getElementById('test_center_id');
-    const sessionSelect = document.getElementById('exam_session_id');
-    const dateInput = document.getElementById('exam_date');
-    const testCenterSection = document.getElementById('test-center-section');
+    (function () {
+        const occupationSearchInput = document.getElementById('occupation-search');
+        const occupationSelect = document.getElementById('occupation_id');
+        const citySelect = document.getElementById('city_id');
+        const categorySelect = document.getElementById('category_id');
+        const testCenterSelect = document.getElementById('test_center_id');
+        const sessionSelect = document.getElementById('exam_session_id');
+        const dateInput = document.getElementById('exam_date');
+        const testCenterSection = document.getElementById('test-center-section');
 
-    function setLoading(select, isLoading) {
-        if (!select) return;
-        select.disabled = isLoading;
-        if (isLoading) {
-            select.insertAdjacentHTML('afterend', '<span class="text-xs text-slate-400 ml-2">Loading…</span>');
-        } else {
-            const loading = select.parentElement.querySelector('.text-slate-400');
-            if (loading && loading.textContent === 'Loading…') {
-                loading.remove();
+        let currentPage = 1;
+        let hasMore = true;
+        let isLoading = false;
+
+        function setLoading(select, isLoading) {
+            if (!select) return;
+            select.disabled = isLoading;
+            if (isLoading) {
+                select.insertAdjacentHTML('afterend', '<span class="text-xs text-slate-400 ml-2">Loading…</span>');
+            } else {
+                const loading = select.parentElement.querySelector('.text-slate-400');
+                if (loading && loading.textContent === 'Loading…') {
+                    loading.remove();
+                }
             }
         }
-    }
 
-    function populateSelect(select, items, valueKey, labelKey) {
-        if (!select) return;
-        const current = select.value;
-        select.innerHTML = '<option value="">Select…</option>';
-        (items || []).forEach(function (item) {
-            const option = document.createElement('option');
-            option.value = item[valueKey] || '';
-            option.textContent = item[labelKey] || item[valueKey] || '';
-            select.appendChild(option);
-        });
-        if (current) {
-            select.value = current;
-        }
-    }
-
-    async function fetchJSON(url) {
-        const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error('HTTP ' + response.status + ': ' + text);
-        }
-        return response.json();
-    }
-
-    if (occupationSelect) {
-        occupationSelect.addEventListener('change', async function () {
-            const occupationId = occupationSelect.value;
-            testCenterSection.style.display = 'none';
-            populateSelect(testCenterSelect, []);
-            populateSelect(sessionSelect, []);
-            dateInput.value = '';
-
-            if (!occupationId) {
-                populateSelect(citySelect, []);
-                populateSelect(categorySelect, []);
-                return;
+        function populateSelect(select, items, valueKey, labelKey) {
+            if (!select) return;
+            const current = select.value;
+            select.innerHTML = '<option value="">Select…</option>';
+            (items || []).forEach(function (item) {
+                const option = document.createElement('option');
+                option.value = item[valueKey] || '';
+                option.textContent = item[labelKey] || item[valueKey] || '';
+                select.appendChild(option);
+            });
+            if (current) {
+                select.value = current;
             }
+        }
 
+        async function fetchJSON(url) {
+            const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error('HTTP ' + response.status + ': ' + text);
+            }
+            return response.json();
+        }
+
+        async function loadOccupations(page = 1) {
+            if (isLoading || !hasMore) return;
+            
+            isLoading = true;
+            const searchTerm = occupationSearchInput.value.trim();
             try {
-                setLoading(citySelect, true);
-                setLoading(categorySelect, true);
-                const cityData = await fetchJSON("{{ route('agency.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId));
-                const cities = (cityData && cityData.data && cityData.data.cities) ? cityData.data.cities : [];
-                populateSelect(citySelect, cities, 'name', 'name');
-
-                const catData = await fetchJSON("{{ route('agency.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
-                const categories = (catData && catData.data && catData.data.categories) ? catData.data.categories : [];
-                populateSelect(categorySelect, categories, 'id', 'name');
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(citySelect, false);
-                setLoading(categorySelect, false);
-            }
-        });
-    }
-
-    if (citySelect) {
-        citySelect.addEventListener('change', async function () {
-            const city = citySelect.value;
-            const occupationId = occupationSelect.value;
-            testCenterSection.style.display = 'none';
-            populateSelect(testCenterSelect, []);
-            populateSelect(sessionSelect, []);
-            dateInput.value = '';
-
-            if (!city) {
-                populateSelect(citySelect, []);
-                return;
-            }
-
-            try {
-                setLoading(testCenterSelect, true);
-                const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + (occupationId ? "&occupation_id=" + encodeURIComponent(occupationId) : '');
+                const url = "{{ route('agency.bookings.lookup.occupations') }}?page=" + page + (searchTerm ? "&search=" + encodeURIComponent(searchTerm) : '');
                 const data = await fetchJSON(url);
-                const centers = (data && data.data && data.data.test_centers) ? data.data.test_centers : [];
-                populateSelect(testCenterSelect, centers, 'id', 'name');
-                if (centers.length > 0) {
-                    testCenterSection.style.display = '';
+                
+                const occupations = (data && data.data && data.data.occupations) ? data.data.occupations : [];
+                hasMore = (data && data.data && data.data.has_more_pages) || false;
+                
+                populateSelect(occupationSelect, occupations, 'id', 'name');
+                
+                // If no search term and first page, trigger change to load cities/categories
+                if (!searchTerm && page === 1 && occupations.length > 0) {
+                    occupationSelect.value = occupations[0].id;
+                    occupationSelect.dispatchEvent(new Event('change'));
                 }
             } catch (e) {
                 console.error(e);
             } finally {
-                setLoading(testCenterSelect, false);
+                isLoading = false;
             }
-        });
-    }
+        }
 
-    if (testCenterSelect) {
-        testCenterSelect.addEventListener('change', async function () {
-            const testCenterId = testCenterSelect.value;
-            const city = citySelect.value;
-            const occupationId = occupationSelect.value;
-            populateSelect(sessionSelect, []);
-            dateInput.value = '';
+        if (occupationSearchInput) {
+            // Debounce function for search
+            let debounceTimer;
+            occupationSearchInput.addEventListener('input', function () {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    currentPage = 1;
+                    hasMore = true;
+                    loadOccupations(currentPage);
+                }, 300);
+            });
 
-            if (!testCenterId) {
-                return;
-            }
-
-            try {
-                setLoading(sessionSelect, true);
-                const params = new URLSearchParams();
-                if (city) params.set('city', city);
-                if (occupationId) params.set('occupation_id', occupationId);
-                params.set('test_center_id', testCenterId);
-                const data = await fetchJSON("{{ route('agency.bookings.lookup.sessions') }}?" + params.toString());
-                const sessions = (data && data.data && data.data.exam_sessions) ? data.data.exam_sessions : [];
-                populateSelect(sessionSelect, sessions, 'id', 'name');
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(sessionSelect, false);
-            }
-        });
-    }
-
-    if (sessionSelect) {
-        sessionSelect.addEventListener('change', async function () {
-            const sessionId = sessionSelect.value;
-            dateInput.value = '';
-
-            if (!sessionId) {
-                return;
-            }
-
-            try {
-                const data = await fetchJSON("{{ route('agency.bookings.available-dates') }}?session_id=" + encodeURIComponent(sessionId));
-                const dates = (data && data.data && data.data.dates) ? data.data.dates : [];
-                if (dates.length > 0) {
-                    dateInput.value = dates[0];
+            // Handle Enter key
+            occupationSearchInput.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    currentPage = 1;
+                    hasMore = true;
+                    loadOccupations(currentPage);
                 }
-            } catch (e) {
-                console.error(e);
-            }
-        });
-    }
-})();
+            });
+        }
+
+        if (occupationSelect) {
+            occupationSelect.addEventListener('change', async function () {
+                const occupationId = occupationSelect.value;
+                testCenterSection.style.display = 'none';
+                populateSelect(testCenterSelect, []);
+                populateSelect(sessionSelect, []);
+                dateInput.value = '';
+
+                if (!occupationId) {
+                    populateSelect(citySelect, []);
+                    populateSelect(categorySelect, []);
+                    return;
+                }
+
+                try {
+                    setLoading(citySelect, true);
+                    setLoading(categorySelect, true);
+                    const cityData = await fetchJSON("{{ route('agency.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId));
+                    const cities = (cityData && cityData.data && cityData.data.cities) ? cityData.data.cities : [];
+                    populateSelect(citySelect, cities, 'name', 'name');
+
+                    const catData = await fetchJSON("{{ route('agency.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
+                    const categories = (catData && catData.data && catData.data.categories) ? catData.data.categories : [];
+                    populateSelect(categorySelect, categories, 'id', 'name');
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    setLoading(citySelect, false);
+                    setLoading(categorySelect, false);
+                }
+            });
+        }
+
+        // Initialize with first page of occupations
+        if (occupationSearchInput) {
+            loadOccupations(1);
+        }
+
+        if (citySelect) {
+            citySelect.addEventListener('change', async function () {
+                const city = citySelect.value;
+                const occupationId = occupationSelect.value;
+                testCenterSection.style.display = 'none';
+                populateSelect(testCenterSelect, []);
+                populateSelect(sessionSelect, []);
+                dateInput.value = '';
+
+                if (!city) {
+                    populateSelect(citySelect, []);
+                    return;
+                }
+
+                try {
+                    setLoading(testCenterSelect, true);
+                    const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + (occupationId ? "&occupation_id=" + encodeURIComponent(occupationId) : '');
+                    const data = await fetchJSON(url);
+                    const centers = (data && data.data && data.data.test_centers) ? data.data.test_centers : [];
+                    populateSelect(testCenterSelect, centers, 'id', 'name');
+                    if (centers.length > 0) {
+                        testCenterSection.style.display = '';
+                    }
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    setLoading(testCenterSelect, false);
+                }
+            });
+        }
+
+        if (testCenterSelect) {
+            testCenterSelect.addEventListener('change', async function () {
+                const testCenterId = testCenterSelect.value;
+                const city = citySelect.value;
+                const occupationId = occupationSelect.value;
+                populateSelect(sessionSelect, []);
+                dateInput.value = '';
+
+                if (!testCenterId) {
+                    return;
+                }
+
+                try {
+                    setLoading(sessionSelect, true);
+                    const params = new URLSearchParams();
+                    if (city) params.set('city', city);
+                    if (occupationId) params.set('occupation_id', occupationId);
+                    params.set('test_center_id', testCenterId);
+                    const data = await fetchJSON("{{ route('agency.bookings.lookup.sessions') }}?" + params.toString());
+                    const sessions = (data && data.data && data.data.exam_sessions) ? data.data.exam_sessions : [];
+                    populateSelect(sessionSelect, sessions, 'id', 'name');
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    setLoading(sessionSelect, false);
+                }
+            });
+        }
+
+        if (sessionSelect) {
+            sessionSelect.addEventListener('change', async function () {
+                const sessionId = sessionSelect.value;
+                dateInput.value = '';
+
+                if (!sessionId) {
+                    return;
+                }
+
+                try {
+                    const data = await fetchJSON("{{ route('agency.bookings.available-dates') }}?session_id=" + encodeURIComponent(sessionId));
+                    const dates = (data && data.data && data.data.dates) ? data.data.dates : [];
+                    if (dates.length > 0) {
+                        dateInput.value = dates[0];
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        }
+    })();
 </script>
 @endsection

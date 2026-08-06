@@ -59,9 +59,66 @@ class ExamController
         return $this->booking->reservations($this->svpToken($request));
     }
 
+    /**
+     * Fetch a single exam session by id (e.g. GET /exam-sessions/{id}).
+     */
+    public function examSession(Request $request, string $session): JsonResponse
+    {
+        return $this->booking->examSession($this->svpToken($request), $session);
+    }
+
+    /**
+     * Fetch a single reservation by id (e.g. GET /exam-reservations/{id}).
+     */
+    public function reservation(Request $request, string $reservation): JsonResponse
+    {
+        return $this->booking->reservation($this->svpToken($request), $reservation);
+    }
+
+    /**
+     * Create a reservation on the external API (POST /exam-reservations).
+     */
+    public function storeReservation(Request $request): JsonResponse
+    {
+        return $this->booking->createReservation($this->svpToken($request), $request->all());
+    }
+
+    /**
+     * Cancel a reservation (DELETE /exam-reservations/{id}).
+     */
+    public function cancelReservation(Request $request, string $reservation): JsonResponse
+    {
+        return $this->booking->cancelReservation($this->svpToken($request), $reservation);
+    }
+
+    /**
+     * Reschedule a reservation (POST /exam-reservations/{id}/reschedule).
+     */
+    public function rescheduleReservation(Request $request, string $reservation): JsonResponse
+    {
+        return $this->booking->rescheduleReservation($this->svpToken($request), $reservation, $request->all());
+    }
+
+    /**
+     * Consume a reservation credit (POST /reservation-credits/use).
+     */
+    public function useReservationCredit(Request $request): JsonResponse
+    {
+        return $this->booking->useReservationCredit($this->svpToken($request), $request->all());
+    }
+
     public function occupations(Request $request): JsonResponse
     {
         return $this->booking->occupations($this->svpToken($request));
+    }
+
+    public function occupationsSearch(Request $request): JsonResponse
+    {
+        $search = $request->query('search');
+        $page = (int) $request->query('page', 1);
+        $perPage = (int) $request->query('per_page', 1000);
+
+        return $this->booking->occupationsSearch($this->svpToken($request), $search, $page, $perPage);
     }
 
     public function cities(Request $request): JsonResponse
@@ -72,6 +129,16 @@ class ExamController
     public function categories(Request $request): JsonResponse
     {
         return $this->booking->categories($this->svpToken($request));
+    }
+
+    public function countries(Request $request): JsonResponse
+    {
+        return $this->booking->countries($this->svpToken($request));
+    }
+
+    public function examEngines(Request $request): JsonResponse
+    {
+        return $this->booking->examEngines($this->svpToken($request));
     }
 
     public function categoriesForOccupation(Request $request): JsonResponse

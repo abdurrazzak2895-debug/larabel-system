@@ -42,38 +42,57 @@ Route::prefix('v1')->group(function (): void {
 
     // Exam & Booking
     Route::prefix('individual_labor_space/exam_sessions')->group(function (): void {
-        Route::get('/',                    [ExamController::class, 'sessions']);
-        Route::get('/available_dates',     [ExamController::class, 'availableDates']);
-        Route::post('/temporary_seats',    [ExamController::class, 'temporarySeat']);
+        Route::get('/',                 [ExamController::class, 'sessions']);
+        Route::get('/available_dates',  [ExamController::class, 'availableDates']);
+        Route::get('/{session}',        [ExamController::class, 'examSession']);
     });
 
     Route::prefix('individual_labor_space/exam_reservations')->group(function (): void {
-        Route::get('/',        [ExamController::class, 'reservations']);
-        Route::get('/validate', [ExamController::class, 'validateReservation']);
+        Route::get('/',                         [ExamController::class, 'reservations']);
+        Route::get('/validate',                  [ExamController::class, 'validateReservation']);
+        Route::post('/',                         [ExamController::class, 'storeReservation']);
+        Route::get('/{reservation}',             [ExamController::class, 'reservation']);
+        Route::delete('/{reservation}',          [ExamController::class, 'cancelReservation']);
+        Route::post('/{reservation}/reschedule', [ExamController::class, 'rescheduleReservation']);
+    });
+
+    Route::prefix('individual_labor_space')->group(function (): void {
+        Route::post('/temporary_seats',         [ExamController::class, 'temporarySeat']);
+        Route::post('/reservation_credits/use', [ExamController::class, 'useReservationCredit']);
     });
 
     // Exam lookups
     Route::prefix('individual_labor_space')->group(function (): void {
-        Route::get('/occupations',    [ExamController::class, 'occupations']);
-        Route::get('/cities',         [ExamController::class, 'cities']);
-        Route::get('/categories',     [ExamController::class, 'categories']);
+        Route::get('/occupations',      [ExamController::class, 'occupations']);
+        Route::get('/cities',           [ExamController::class, 'cities']);
+        Route::get('/countries',        [ExamController::class, 'countries']);
+        Route::get('/categories',       [ExamController::class, 'categories']);
+        Route::get('/exam_engines',     [ExamController::class, 'examEngines']);
         Route::get('/exam_constraints', [ExamController::class, 'examConstraints']);
-    });
-
-    Route::prefix('individual_labor_space/exam_sessions')->group(function (): void {
-        Route::get('/',                    [ExamController::class, 'sessions']);
-        Route::get('/available_dates',     [ExamController::class, 'availableDates']);
-        Route::post('/temporary_seats',    [ExamController::class, 'temporarySeat']);
+        Route::get('/test_centers',     [ExamController::class, 'testCenters']);
     });
 
     // Payment
     Route::prefix('individual_labor_space/payments')->group(function (): void {
         Route::get('/validate_pending', [PaymentNotificationController::class, 'validatePendingPayment']);
+        Route::get('/',                 [PaymentNotificationController::class, 'payments']);
+        Route::post('/',                [PaymentNotificationController::class, 'storePayment']);
+        Route::get('/{payment}',        [PaymentNotificationController::class, 'showPayment']);
+        Route::put('/{payment}',        [PaymentNotificationController::class, 'updatePayment']);
     });
 
-    // Notification
-    Route::get('individual_labor_space/notifications', [PaymentNotificationController::class, 'notifications']);
+    // Feature flags & user balance (mirror the official SVP paths)
+    Route::prefix('flipper')->group(function (): void {
+        Route::get('/feature_flags', [ProfileController::class, 'featureFlags']);
+    });
 
-    // Verification
-    Route::get('individual_labor_space/verification_requests', [PaymentNotificationController::class, 'verificationRequests']);
+    Route::prefix('users')->group(function (): void {
+        Route::get('/{user}/balance', [ProfileController::class, 'userBalance']);
+    });
+
+    // Notification / Verification
+    Route::prefix('individual_labor_space')->group(function (): void {
+        Route::get('/notifications',         [PaymentNotificationController::class, 'notifications']);
+        Route::get('/verification_requests', [PaymentNotificationController::class, 'verificationRequests']);
+    });
 });

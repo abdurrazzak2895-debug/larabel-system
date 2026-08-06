@@ -28,6 +28,16 @@ class ProfileController
         return $this->profile->certificatePrice($this->svpToken($request));
     }
 
+    public function featureFlags(Request $request): JsonResponse
+    {
+        return $this->profile->featureFlags($this->svpToken($request));
+    }
+
+    public function userBalance(Request $request, string $user): JsonResponse
+    {
+        return $this->profile->userBalance($this->svpToken($request), $user);
+    }
+
     private function svpToken(Request $request): string
     {
         $bearer = $request->bearerToken();

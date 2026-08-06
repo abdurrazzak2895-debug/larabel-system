@@ -115,6 +115,7 @@
             <div>
                 <div class="space-y-1">
                     {!! $__navLink('Reports', 'admin.reports.index', str_starts_with((string) $__routeName, 'admin.reports'), 'chart') !!}
+                    {!! $__navLink('Test Centers', 'admin.test-centers.index', str_starts_with((string) $__routeName, 'admin.test-centers'), 'building') !!}
                     {!! $__navLink('Pricing', 'admin.pricing.index', str_starts_with((string) $__routeName, 'admin.pricing'), 'tag') !!}
                     {!! $__navLink('Notifications', 'admin.notifications.index', str_starts_with((string) $__routeName, 'admin.notifications'), 'bell') !!}
                     {!! $__navLink('Audit Logs', 'admin.audit-logs.index', str_starts_with((string) $__routeName, 'admin.audit-logs'), 'list') !!}

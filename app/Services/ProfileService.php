@@ -25,4 +25,14 @@ class ProfileService
     {
         return $this->provider->withToken($token)->certificatePrice();
     }
+
+    public function featureFlags(string $token)
+    {
+        return $this->provider->withToken($token)->featureFlags();
+    }
+
+    public function userBalance(string $token, string $userId)
+    {
+        return $this->provider->withToken($token)->userBalance($userId);
+    }
 }

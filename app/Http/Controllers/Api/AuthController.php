@@ -18,21 +18,54 @@ class AuthController
      */
     public function login(Request $request): JsonResponse
     {
-        $payload = $request->only(['identifier', 'username', 'email', 'password', 'mobile_number']);
-
-        return $this->auth->login($payload);
+        return $this->auth->login($this->userPayload($request));
     }
 
     /**
      * POST /api/v1/sessions/otp
      *
-     * Accepts the OTP identifier + code, forwards it to the SVP OTP endpoint,
-     * and returns the response (typically containing the access token).
+     * Accepts the OTP attempt (plus login credentials) and forwards it to the
+     * SVP OTP endpoint, returning the response (typically containing the
+     * access token and CSRF token).
      */
     public function verifyOtp(Request $request): JsonResponse
     {
-        $payload = $request->only(['identifier', 'otp_code', 'code', 'reference']);
+        return $this->auth->verifyOtp($this->userPayload($request, otp: true));
+    }
 
-        return $this->auth->verifyOtp($payload);
+    /**
+     * Build the nested `user` object the SVP API documents for auth requests:
+     *
+     *   POST /sessions/login → {"user":{"login","password","otp_method","fe_app","recaptcha_response"}}
+     *   POST /sessions/otp   → {"user":{"login","password","otp_attempt","fe_app","otp_method"}}
+     *
+     * Accepts either the fully-formed `user` object from the caller (forwarded
+     * unchanged) or flat fields, and always emits the exact documented shape.
+     */
+    private function userPayload(Request $request, bool $otp = false): array
+    {
+        $user = $request->input('user');
+
+        if (! is_array($user)) {
+            $user = [
+                'login'      => $request->input('login')
+                    ?? $request->input('identifier')
+                    ?? $request->input('email')
+                    ?? $request->input('mobile_number'),
+                'password'   => $request->input('password'),
+                'otp_method' => $request->input('otp_method', 'email'),
+                'fe_app'     => $request->input('fe_app', 'legislator'),
+            ];
+
+            if ($otp) {
+                $user['otp_attempt'] = $request->input('otp_attempt')
+                    ?? $request->input('otp_code')
+                    ?? $request->input('code');
+            } elseif ($request->filled('recaptcha_response')) {
+                $user['recaptcha_response'] = $request->input('recaptcha_response');
+            }
+        }
+
+        return ['user' => array_filter($user, static fn ($value) => $value !== null)];
     }
 }

@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\AgencyController;
+use App\Http\Controllers\Admin\TestCenterController;
 use App\Http\Controllers\Agency\DashboardController as AgencyDashboardController;
 use App\Http\Controllers\Agency\DepositController as AgencyDepositController;
 use App\Http\Controllers\Agency\NotificationController as AgencyNotificationController;
@@ -102,6 +103,12 @@ Route::middleware('web')->group(function () {
     // Audit Logs
     Route::resource('audit-logs', AuditLogController::class)->only(['index']);
 
+    // Test Centers (real SVP API sync + local rows)
+    Route::prefix('test-centers')->name('test-centers.')->group(function () {
+        Route::get('/', [TestCenterController::class, 'index'])->name('index');
+        Route::post('/sync', [TestCenterController::class, 'sync'])->name('sync');
+    });
+
     // Settings
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
     Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
@@ -129,6 +136,7 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::get('/bookings/available-dates', [\App\Http\Controllers\Agency\BookingController::class, 'availableDates'])->name('bookings.available-dates');
     Route::get('/bookings/lookup/cities', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCities'])->name('bookings.lookup.cities');
     Route::get('/bookings/lookup/categories', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCategories'])->name('bookings.lookup.categories');
+    Route::get('/bookings/lookup/occupations', [\App\Http\Controllers\Agency\BookingController::class, 'lookupOccupations'])->name('bookings.lookup.occupations');
     Route::get('/bookings/lookup/test-centers', [\App\Http\Controllers\Agency\BookingController::class, 'lookupTestCenters'])->name('bookings.lookup.test-centers');
     Route::get('/bookings/lookup/sessions', [\App\Http\Controllers\Agency\BookingController::class, 'lookupSessions'])->name('bookings.lookup.sessions');
     Route::post('/bookings/{booking}/cancel', [\App\Http\Controllers\Agency\BookingController::class, 'cancel'])->name('bookings.cancel');
@@ -194,6 +202,7 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/available-dates', [UserBookingController::class, 'availableDates'])->name('available-dates');
         Route::get('/lookup/cities', [UserBookingController::class, 'lookupCities'])->name('lookup.cities');
         Route::get('/lookup/categories', [UserBookingController::class, 'lookupCategories'])->name('lookup.categories');
+        Route::get('/lookup/occupations', [UserBookingController::class, 'lookupOccupations'])->name('lookup.occupations');
         Route::get('/lookup/test-centers', [UserBookingController::class, 'lookupTestCenters'])->name('lookup.test-centers');
         Route::get('/lookup/sessions', [UserBookingController::class, 'lookupSessions'])->name('lookup.sessions');
         Route::get('/{booking}', [UserBookingController::class, 'show'])->name('show');

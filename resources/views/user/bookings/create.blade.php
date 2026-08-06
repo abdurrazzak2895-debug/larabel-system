@@ -56,15 +56,22 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label for="occupation_id" class="block text-sm font-medium text-slate-700 mb-1">Occupation</label>
-                    <select name="occupation_id" id="occupation_id" required
-                        class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select…</option>
-                        @php $occ = data_get($occupations, 'data.occupations', $occupations); if (!is_array($occ) && !($occ instanceof \Traversable)) $occ = []; @endphp
-                        @foreach ($occ as $o)
-                            @php $o = is_array($o) ? $o : (array) $o; @endphp
-                            <option value="{{ $o['id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? '') ? 'selected' : '' }}>{{ $o['name'] ?? $o['title'] ?? $o['id'] ?? '' }}</option>
-                        @endforeach
-                    </select>
+                    <div class="relative">
+                        <input type="text" id="occupation-search" placeholder="Search occupation..." 
+                            class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500 pl-10 pr-3" autocomplete="off">
+                        <select name="occupation_id" id="occupation_id" required
+                            class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;">
+                            <option value="">Select…</option>
+                            @php $occ = data_get($occupations, 'data.occupations', $occupations); if (!is_array($occ) && !($occ instanceof \Traversable)) $occ = []; @endphp
+                            @foreach ($occ as $o)
+                                @php $o = is_array($o) ? $o : (array) $o; @endphp
+                                <option value="{{ $o['id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? '') ? 'selected' : '' }}>{{ $o['name'] ?? $o['title'] ?? $o['id'] ?? '' }}</option>
+                            @endforeach
+                        </select>
+                        <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M9.75 9.75c0 1.568 1.273 2.84 2.84 2.84s2.84-1.273 2.84-2.84-1.273-2.84-2.84-2.84S9.75 8.182 9.75 9.75z"/></svg>
+                        </div>
+                    </div>
                     @error('occupation_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
