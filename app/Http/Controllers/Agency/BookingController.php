@@ -111,7 +111,7 @@ class BookingController extends Controller
             // cities / test centers / sessions / dates are lazy-loaded through
             // the AJAX lookup endpoints once an occupation is selected, so a
             // slow or unreachable SVP API does not block the whole page.
-            $occupations = $this->booking->occupations($token)->getData(true);
+            $occupations = $this->booking->occupationsSearch($token, null, 1, 1000)->getData(true);
             $categories  = $this->booking->categories($token)->getData(true);
         } catch (\Throwable $e) {
             Log::warning('SVP booking lookup failed', ['error' => $e->getMessage()]);
