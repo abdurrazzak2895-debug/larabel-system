@@ -59,7 +59,7 @@ class SvpLoginController extends Controller
         } catch (\Throwable $e) {
             Log::error('SVP login failed', ['error' => $e->getMessage()]);
             throw ValidationException::withMessages([
-                'email' => 'Unable to reach SVP. Please try again.',
+                'email' => 'Takamol SVP is temporarily unreachable (external service outage, not an account issue). Please try again in a few minutes.',
             ]);
         }
 
@@ -118,7 +118,7 @@ class SvpLoginController extends Controller
         } catch (\Throwable $e) {
             Log::error('SVP OTP resend failed', ['error' => $e->getMessage()]);
             throw ValidationException::withMessages([
-                'otp_code' => 'Unable to reach SVP. Please try again.',
+                'otp_code' => 'Takamol SVP is temporarily unreachable (external service outage). Please try again in a few minutes.',
             ]);
         }
 
@@ -149,7 +149,7 @@ class SvpLoginController extends Controller
         } catch (\Throwable $e) {
             Log::error('SVP OTP verify failed', ['error' => $e->getMessage()]);
             throw ValidationException::withMessages([
-                'otp_code' => 'Unable to reach SVP. Please try again.',
+                'otp_code' => 'Takamol SVP is temporarily unreachable (external service outage). Please try again in a few minutes.',
             ]);
         }
 
