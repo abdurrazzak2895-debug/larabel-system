@@ -39,6 +39,7 @@ class BookingService
     public function cities(string $token, ?string $occupationId = null) { return $this->provider->withToken($token)->cities($occupationId); }
     public function testCenters(string $token, ?string $city = null, ?string $occupationId = null) { return $this->provider->withToken($token)->testCentersForFilters($city, $occupationId); }
     public function categories(string $token) { return $this->provider->withToken($token)->categories(); }
+    public function categoriesForOccupation(string $token, ?string $occupationId = null) { return $this->provider->withToken($token)->categoriesForOccupation($occupationId); }
     public function examConstraints(string $token) { return $this->provider->withToken($token)->examConstraints(); }
 
     /**

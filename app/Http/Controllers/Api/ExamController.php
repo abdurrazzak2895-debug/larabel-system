@@ -74,6 +74,13 @@ class ExamController
         return $this->booking->categories($this->svpToken($request));
     }
 
+    public function categoriesForOccupation(Request $request): JsonResponse
+    {
+        $occupationId = $request->query('occupation_id');
+
+        return $this->booking->categoriesForOccupation($this->svpToken($request), $occupationId);
+    }
+
     public function examConstraints(Request $request): JsonResponse
     {
         return $this->booking->examConstraints($this->svpToken($request));

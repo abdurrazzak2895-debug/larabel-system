@@ -214,6 +214,13 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/categories');
     }
 
+    public function categoriesForOccupation(?string $occupationId = null): JsonResponse
+    {
+        $params = $occupationId ? ['occupation_id' => $occupationId] : [];
+
+        return $this->dispatch('GET', '/individual_labor_space/categories', $params);
+    }
+
     public function examConstraints(): JsonResponse
     {
         return $this->dispatch('GET', '/individual_labor_space/exam_constraints');

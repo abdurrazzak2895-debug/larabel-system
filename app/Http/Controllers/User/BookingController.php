@@ -167,6 +167,24 @@ class BookingController extends Controller
         }
     }
 
+    public function lookupCategories(Request $request)
+    {
+        $request->validate(['occupation_id' => 'nullable|string']);
+
+        $token = $this->ensureSvpToken($request);
+        if (! $token) {
+            return response()->json(['error' => 'SVP session expired.'], 401);
+        }
+
+        try {
+            $response = $this->booking->categoriesForOccupation($token, $request->query('occupation_id'));
+            return response()->json($response->getData(true), $response->getStatusCode());
+        } catch (\Throwable $e) {
+            Log::error('SVP lookup categories failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Unable to fetch categories.'], 503);
+        }
+    }
+
     public function lookupTestCenters(Request $request)
     {
         $request->validate([

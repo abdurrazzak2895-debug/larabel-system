@@ -128,6 +128,7 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::get('/bookings/{booking}',   [\App\Http\Controllers\Agency\BookingController::class, 'show'])->name('bookings.show');
     Route::get('/bookings/available-dates', [\App\Http\Controllers\Agency\BookingController::class, 'availableDates'])->name('bookings.available-dates');
     Route::get('/bookings/lookup/cities', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCities'])->name('bookings.lookup.cities');
+    Route::get('/bookings/lookup/categories', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCategories'])->name('bookings.lookup.categories');
     Route::get('/bookings/lookup/test-centers', [\App\Http\Controllers\Agency\BookingController::class, 'lookupTestCenters'])->name('bookings.lookup.test-centers');
     Route::get('/bookings/lookup/sessions', [\App\Http\Controllers\Agency\BookingController::class, 'lookupSessions'])->name('bookings.lookup.sessions');
     Route::post('/bookings/{booking}/cancel', [\App\Http\Controllers\Agency\BookingController::class, 'cancel'])->name('bookings.cancel');
@@ -192,6 +193,7 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::post('/', [UserBookingController::class, 'store'])->name('store');
         Route::get('/available-dates', [UserBookingController::class, 'availableDates'])->name('available-dates');
         Route::get('/lookup/cities', [UserBookingController::class, 'lookupCities'])->name('lookup.cities');
+        Route::get('/lookup/categories', [UserBookingController::class, 'lookupCategories'])->name('lookup.categories');
         Route::get('/lookup/test-centers', [UserBookingController::class, 'lookupTestCenters'])->name('lookup.test-centers');
         Route::get('/lookup/sessions', [UserBookingController::class, 'lookupSessions'])->name('lookup.sessions');
         Route::get('/{booking}', [UserBookingController::class, 'show'])->name('show');

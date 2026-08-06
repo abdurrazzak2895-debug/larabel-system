@@ -28,6 +28,7 @@ interface BookingProviderInterface
     public function cities(?string $occupationId = null): JsonResponse;
     public function testCentersForFilters(?string $city = null, ?string $occupationId = null): JsonResponse;
     public function categories(): JsonResponse;
+    public function categoriesForOccupation(?string $occupationId = null): JsonResponse;
     public function examConstraints(): JsonResponse;
 
     // Payment / Notification / Verification

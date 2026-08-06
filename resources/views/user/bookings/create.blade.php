@@ -203,18 +203,25 @@
 
             if (!occupationId) {
                 populateSelect(citySelect, []);
+                populateSelect(categorySelect, []);
                 return;
             }
 
             try {
                 setLoading(citySelect, true);
-                const data = await fetchJSON("{{ route('user.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId));
-                const cities = (data && data.data && data.data.cities) ? data.data.cities : [];
+                setLoading(categorySelect, true);
+                const cityData = await fetchJSON("{{ route('user.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId));
+                const cities = (cityData && cityData.data && cityData.data.cities) ? cityData.data.cities : [];
                 populateSelect(citySelect, cities, 'name', 'name');
+
+                const catData = await fetchJSON("{{ route('user.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
+                const categories = (catData && catData.data && catData.data.categories) ? catData.data.categories : [];
+                populateSelect(categorySelect, categories, 'id', 'name');
             } catch (e) {
                 console.error(e);
             } finally {
                 setLoading(citySelect, false);
+                setLoading(categorySelect, false);
             }
         });
     }
