@@ -107,12 +107,12 @@ class BookingController extends Controller
         }
 
         try {
-            $profile     = $this->booking->sessions($token)->getData(true);   // proxy to SVP profile-ish
+            // Only the lookups needed to render the page are fetched here —
+            // cities / test centers / sessions / dates are lazy-loaded through
+            // the AJAX lookup endpoints once an occupation is selected, so a
+            // slow or unreachable SVP API does not block the whole page.
             $occupations = $this->booking->occupations($token)->getData(true);
-            $cities      = $this->booking->cities($token)->getData(true);
             $categories  = $this->booking->categories($token)->getData(true);
-            $sessions    = $this->booking->sessions($token)->getData(true);
-            $constraints = $this->booking->examConstraints($token)->getData(true);
         } catch (\Throwable $e) {
             Log::warning('SVP booking lookup failed', ['error' => $e->getMessage()]);
             $svpError = 'Could not load SVP booking data. Please try again.';
@@ -146,7 +146,7 @@ class BookingController extends Controller
         }
 
         try {
-            $response = $this->booking->availableDates($token);
+            $response = $this->booking->availableDates($token, $request->query('session_id'));
             return response()->json($response->getData(true), $response->getStatusCode());
         } catch (\Throwable $e) {
             Log::error('SVP availableDates failed', ['error' => $e->getMessage()]);

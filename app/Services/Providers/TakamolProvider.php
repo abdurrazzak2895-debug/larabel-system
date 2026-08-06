@@ -142,9 +142,11 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/exam_sessions/'.$id);
     }
 
-    public function availableDates(): JsonResponse
+    public function availableDates(?string $sessionId = null): JsonResponse
     {
-        return $this->dispatch('GET', '/individual_labor_space/exam_sessions/available_dates');
+        $params = $sessionId ? ['session_id' => $sessionId] : [];
+
+        return $this->dispatch('GET', '/individual_labor_space/exam_sessions/available_dates', $params);
     }
 
     public function temporarySeat(array $payload): JsonResponse
@@ -374,6 +376,16 @@ class TakamolProvider implements BookingProviderInterface
                 'method' => $method,
                 'uri'    => $uri,
                 'error'  => $e->getMessage(),
+                'class'  => get_class($e),
+            ]);
+
+            // Also surface on the default channel (stderr on Railway) so the
+            // underlying connection error is visible in the platform logs.
+            Log::error('SVP API request exception', [
+                'method' => $method,
+                'uri'    => $uri,
+                'error'  => $e->getMessage(),
+                'class'  => get_class($e),
             ]);
 
             return ResponseService::error(

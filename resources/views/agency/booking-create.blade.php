@@ -54,12 +54,13 @@
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Exam Lookups</p>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                    <label for="occupation_id" class="block text-sm font-medium text-slate-700 mb-1">Occupation</label>
-                    <div class="relative">
+                    <label for="occupation-search" class="block text-sm font-medium text-slate-700 mb-1">Occupation</label>
+                    <div class="relative" id="occupation-combobox">
                         <input type="text" id="occupation-search" placeholder="Search occupation..." 
-                            class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500 pl-10 pr-3" autocomplete="off">
+                            class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500 pl-10 pr-9" autocomplete="off"
+                            role="combobox" aria-expanded="false" aria-controls="occupation-dropdown" aria-autocomplete="list">
                         <select name="occupation_id" id="occupation_id" required
-                            class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;">
+                            class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;" tabindex="-1" aria-hidden="true">
                             <option value="">Select…</option>
                             @php $occ = data_get($occupations, 'data.occupations', $occupations); if (!is_array($occ)) $occ = []; @endphp
                             @foreach($occ as $o)
@@ -70,7 +71,15 @@
                         <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M9.75 9.75c0 1.568 1.273 2.84 2.84 2.84s2.84-1.273 2.84-2.84-1.273-2.84-2.84-2.84S9.75 8.182 9.75 9.75z"/></svg>
                         </div>
+                        <button type="button" id="occupation-clear" tabindex="-1" aria-label="Clear occupation selection"
+                            class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-200 text-slate-500 text-xs leading-5 text-center hover:bg-slate-300">×</button>
+                        <div id="occupation-dropdown" class="hidden absolute z-20 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg max-h-64 overflow-y-auto">
+                            <p id="occupation-dropdown-status" class="px-3 py-2 text-xs text-slate-500 border-b border-slate-100"></p>
+                            <ul id="occupation-dropdown-list" class="py-1"></ul>
+                        </div>
                     </div>
+                    <p id="occupation-error" class="hidden text-red-600 text-xs mt-1"></p>
+                    <p id="occupation-hint" class="hidden text-xs text-slate-400 mt-1">Type to search, then pick an occupation from the list.</p>
                     @error('occupation_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -79,6 +88,7 @@
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
                     </select>
+                    <p id="city-error" class="hidden text-red-600 text-xs mt-1"></p>
                 </div>
                 <div>
                     <label for="category_id" class="block text-sm font-medium text-slate-700 mb-1">Category</label>
@@ -91,6 +101,7 @@
                             <option value="{{ $c['id'] ?? '' }}">{{ $c['name'] ?? $c['title'] ?? $c['id'] }}</option>
                         @endforeach
                     </select>
+                    <p id="category-error" class="hidden text-red-600 text-xs mt-1"></p>
                 </div>
             </div>
         </div>
@@ -104,6 +115,7 @@
                     class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                     <option value="">Select…</option>
                 </select>
+                <p id="test-center-error" class="hidden text-red-600 text-xs mt-1"></p>
             </div>
         </div>
 
@@ -117,12 +129,14 @@
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
                     </select>
+                    <p id="session-error" class="hidden text-red-600 text-xs mt-1"></p>
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="exam_date" class="block text-sm font-medium text-slate-700 mb-1">Exam Date</label>
                     <input type="date" name="exam_date" id="exam_date" required
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
                     @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
             </div>
@@ -158,16 +172,40 @@
     (function () {
         const occupationSearchInput = document.getElementById('occupation-search');
         const occupationSelect = document.getElementById('occupation_id');
+        const occupationDropdown = document.getElementById('occupation-dropdown');
+        const occupationDropdownStatus = document.getElementById('occupation-dropdown-status');
+        const occupationDropdownList = document.getElementById('occupation-dropdown-list');
+        const occupationClear = document.getElementById('occupation-clear');
+        const occupationError = document.getElementById('occupation-error');
+        const occupationHint = document.getElementById('occupation-hint');
         const citySelect = document.getElementById('city_id');
+        const cityError = document.getElementById('city-error');
         const categorySelect = document.getElementById('category_id');
+        const categoryError = document.getElementById('category-error');
         const testCenterSelect = document.getElementById('test_center_id');
-        const sessionSelect = document.getElementById('exam_session_id');
-        const dateInput = document.getElementById('exam_date');
+        const testCenterError = document.getElementById('test-center-error');
         const testCenterSection = document.getElementById('test-center-section');
+        const sessionSelect = document.getElementById('exam_session_id');
+        const sessionError = document.getElementById('session-error');
+        const dateInput = document.getElementById('exam_date');
+        const dateError = document.getElementById('date-error');
 
-        let currentPage = 1;
-        let hasMore = true;
-        let isLoading = false;
+        // Occupation combobox state.
+        let occupationsCache = [];
+        let occupationsLoaded = false;
+        let occupationsLoading = false;
+
+        function showError(el, message) {
+            if (!el) return;
+            el.textContent = message;
+            el.classList.remove('hidden');
+        }
+
+        function clearError(el) {
+            if (!el) return;
+            el.textContent = '';
+            el.classList.add('hidden');
+        }
 
         function setLoading(select, isLoading) {
             if (!select) return;
@@ -206,53 +244,143 @@
             return response.json();
         }
 
-        async function loadOccupations(page = 1) {
-            if (isLoading || !hasMore) return;
-            
-            isLoading = true;
-            const searchTerm = occupationSearchInput.value.trim();
-            try {
-                const url = "{{ route('agency.bookings.lookup.occupations') }}?page=" + page + (searchTerm ? "&search=" + encodeURIComponent(searchTerm) : '');
-                const data = await fetchJSON(url);
-                
-                const occupations = (data && data.data && data.data.occupations) ? data.data.occupations : [];
-                hasMore = (data && data.data && data.data.has_more_pages) || false;
-                
-                populateSelect(occupationSelect, occupations, 'id', 'name');
-                
-                // If no search term and first page, trigger change to load cities/categories
-                if (!searchTerm && page === 1 && occupations.length > 0) {
-                    occupationSelect.value = occupations[0].id;
-                    occupationSelect.dispatchEvent(new Event('change'));
+        // Seed the cache from the options the server already rendered, so the
+        // dropdown works instantly without an extra request when available.
+        function seedOccupationsFromServer() {
+            if (occupationsCache.length > 0) return;
+            if (!occupationSelect) return;
+            occupationSelect.querySelectorAll('option').forEach(function (opt) {
+                if (opt.value) {
+                    occupationsCache.push({ id: opt.value, name: opt.textContent.trim() });
                 }
+            });
+            occupationsLoaded = occupationsCache.length > 0;
+        }
+
+        async function loadOccupationsFromApi(searchTerm) {
+            if (occupationsLoading) return;
+            occupationsLoading = true;
+            try {
+                const url = "{{ route('agency.bookings.lookup.occupations') }}?page=1" + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');
+                const data = await fetchJSON(url);
+                const occupations = (data && data.data && data.data.occupations) ? data.data.occupations : [];
+                occupationsCache = occupations.map(function (o) {
+                    return { id: o.id || '', name: o.name || o.title || o.id || '' };
+                });
+                occupationsLoaded = true;
+                clearError(occupationError);
+                return true;
             } catch (e) {
+                showError(occupationError, 'Could not load occupations. The SVP service is unreachable — please try again in a moment.');
                 console.error(e);
+                return false;
             } finally {
-                isLoading = false;
+                occupationsLoading = false;
+            }
+        }
+
+        function renderOccupationDropdown(filter) {
+            if (!occupationDropdown || !occupationDropdownStatus || !occupationDropdownList) return;
+            const term = (filter || '').trim().toLowerCase();
+            const matches = occupationsCache.filter(function (o) {
+                return !term || (o.name || '').toLowerCase().indexOf(term) !== -1;
+            });
+
+            if (occupationsCache.length === 0) {
+                occupationDropdownStatus.textContent = 'No occupations available.';
+            } else if (matches.length === 0) {
+                occupationDropdownStatus.textContent = 'No occupations match "' + (filter || '') + '".';
+            } else {
+                occupationDropdownStatus.textContent = matches.length + (matches.length === 1 ? ' occupation' : ' occupations');
+            }
+
+            occupationDropdownList.innerHTML = '';
+            matches.slice(0, 100).forEach(function (o) {
+                const li = document.createElement('li');
+                li.className = 'px-3 py-2 text-sm text-slate-700 cursor-pointer hover:bg-brand-50';
+                li.textContent = o.name;
+                li.addEventListener('click', function () {
+                    selectOccupation(o.id, o.name);
+                });
+                occupationDropdownList.appendChild(li);
+            });
+
+            occupationDropdown.classList.remove('hidden');
+            occupationSearchInput.setAttribute('aria-expanded', 'true');
+        }
+
+        function selectOccupation(id, name) {
+            if (!id) return;
+            occupationSelect.value = id;
+            occupationSearchInput.value = name;
+            occupationDropdown.classList.add('hidden');
+            occupationSearchInput.setAttribute('aria-expanded', 'false');
+            occupationClear.classList.remove('hidden');
+            occupationHint.classList.add('hidden');
+            clearError(occupationError);
+            occupationSelect.dispatchEvent(new Event('change'));
+        }
+
+        function clearOccupation() {
+            occupationSelect.value = '';
+            occupationSearchInput.value = '';
+            occupationDropdown.classList.add('hidden');
+            occupationSearchInput.setAttribute('aria-expanded', 'false');
+            occupationClear.classList.add('hidden');
+            occupationHint.classList.remove('hidden');
+            clearError(occupationError);
+            occupationSelect.dispatchEvent(new Event('change'));
+        }
+
+        async function ensureOccupationsLoaded() {
+            seedOccupationsFromServer();
+            if (!occupationsLoaded) {
+                await loadOccupationsFromApi(occupationSearchInput ? occupationSearchInput.value.trim() : '');
             }
         }
 
         if (occupationSearchInput) {
-            // Debounce function for search
             let debounceTimer;
+
+            occupationSearchInput.addEventListener('focus', function () {
+                ensureOccupationsLoaded().then(function () {
+                    renderOccupationDropdown(occupationSearchInput.value);
+                });
+            });
+
             occupationSearchInput.addEventListener('input', function () {
                 clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                    currentPage = 1;
-                    hasMore = true;
-                    loadOccupations(currentPage);
+                clearError(occupationError);
+                debounceTimer = setTimeout(function () {
+                    ensureOccupationsLoaded().then(function () {
+                        renderOccupationDropdown(occupationSearchInput.value);
+                    });
                 }, 300);
             });
 
-            // Handle Enter key
-            occupationSearchInput.addEventListener('keypress', function (e) {
+            occupationSearchInput.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    currentPage = 1;
-                    hasMore = true;
-                    loadOccupations(currentPage);
+                    ensureOccupationsLoaded().then(function () {
+                        renderOccupationDropdown(occupationSearchInput.value);
+                    });
+                }
+                if (e.key === 'Escape') {
+                    occupationDropdown.classList.add('hidden');
+                    occupationSearchInput.setAttribute('aria-expanded', 'false');
                 }
             });
+
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest('#occupation-combobox') && !e.target.closest('#occupation-dropdown')) {
+                    occupationDropdown.classList.add('hidden');
+                    occupationSearchInput.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        if (occupationClear) {
+            occupationClear.addEventListener('click', clearOccupation);
         }
 
         if (occupationSelect) {
@@ -262,6 +390,11 @@
                 populateSelect(testCenterSelect, []);
                 populateSelect(sessionSelect, []);
                 dateInput.value = '';
+                clearError(cityError);
+                clearError(categoryError);
+                clearError(testCenterError);
+                clearError(sessionError);
+                clearError(dateError);
 
                 if (!occupationId) {
                     populateSelect(citySelect, []);
@@ -275,22 +408,25 @@
                     const cityData = await fetchJSON("{{ route('agency.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId));
                     const cities = (cityData && cityData.data && cityData.data.cities) ? cityData.data.cities : [];
                     populateSelect(citySelect, cities, 'name', 'name');
+                    if (cities.length === 0) {
+                        showError(cityError, 'No cities available for this occupation.');
+                    }
 
                     const catData = await fetchJSON("{{ route('agency.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
                     const categories = (catData && catData.data && catData.data.categories) ? catData.data.categories : [];
                     populateSelect(categorySelect, categories, 'id', 'name');
+                    if (categories.length === 0) {
+                        showError(categoryError, 'No categories available for this occupation.');
+                    }
                 } catch (e) {
+                    showError(cityError, 'Could not load cities. The SVP service is unreachable — please try again.');
+                    showError(categoryError, 'Could not load categories. The SVP service is unreachable — please try again.');
                     console.error(e);
                 } finally {
                     setLoading(citySelect, false);
                     setLoading(categorySelect, false);
                 }
             });
-        }
-
-        // Initialize with first page of occupations
-        if (occupationSearchInput) {
-            loadOccupations(1);
         }
 
         if (citySelect) {
@@ -301,9 +437,11 @@
                 populateSelect(testCenterSelect, []);
                 populateSelect(sessionSelect, []);
                 dateInput.value = '';
+                clearError(testCenterError);
+                clearError(sessionError);
+                clearError(dateError);
 
                 if (!city) {
-                    populateSelect(citySelect, []);
                     return;
                 }
 
@@ -315,8 +453,11 @@
                     populateSelect(testCenterSelect, centers, 'id', 'name');
                     if (centers.length > 0) {
                         testCenterSection.style.display = '';
+                    } else {
+                        showError(testCenterError, 'No test centers available for the selected city.');
                     }
                 } catch (e) {
+                    showError(testCenterError, 'Could not load test centers. The SVP service is unreachable — please try again.');
                     console.error(e);
                 } finally {
                     setLoading(testCenterSelect, false);
@@ -331,6 +472,8 @@
                 const occupationId = occupationSelect.value;
                 populateSelect(sessionSelect, []);
                 dateInput.value = '';
+                clearError(sessionError);
+                clearError(dateError);
 
                 if (!testCenterId) {
                     return;
@@ -345,7 +488,11 @@
                     const data = await fetchJSON("{{ route('agency.bookings.lookup.sessions') }}?" + params.toString());
                     const sessions = (data && data.data && data.data.exam_sessions) ? data.data.exam_sessions : [];
                     populateSelect(sessionSelect, sessions, 'id', 'name');
+                    if (sessions.length === 0) {
+                        showError(sessionError, 'No exam sessions available for the selected test center.');
+                    }
                 } catch (e) {
+                    showError(sessionError, 'Could not load exam sessions. The SVP service is unreachable — please try again.');
                     console.error(e);
                 } finally {
                     setLoading(sessionSelect, false);
@@ -357,6 +504,7 @@
             sessionSelect.addEventListener('change', async function () {
                 const sessionId = sessionSelect.value;
                 dateInput.value = '';
+                clearError(dateError);
 
                 if (!sessionId) {
                     return;
@@ -367,8 +515,11 @@
                     const dates = (data && data.data && data.data.dates) ? data.data.dates : [];
                     if (dates.length > 0) {
                         dateInput.value = dates[0];
+                    } else {
+                        showError(dateError, 'No available dates for this session.');
                     }
                 } catch (e) {
+                    showError(dateError, 'Could not load available dates. The SVP service is unreachable — please try again.');
                     console.error(e);
                 }
             });

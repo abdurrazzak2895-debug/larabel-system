@@ -32,7 +32,7 @@ class BookingService
     // -----------------------------------------------------------------
 
     public function sessions(string $token, array $params = []) { return $this->provider->withToken($token)->examSessions($params); }
-    public function availableDates(string $token) { return $this->provider->withToken($token)->availableDates(); }
+    public function availableDates(string $token, ?string $sessionId = null) { return $this->provider->withToken($token)->availableDates($sessionId); }
     public function validateReservation(string $token) { return $this->provider->withToken($token)->validateReservation(); }
     public function reservations(string $token) { return $this->provider->withToken($token)->reservationDetails(); }
     public function reservation(string $token, string $id) { return $this->provider->withToken($token)->reservationDetails($id); }
