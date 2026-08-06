@@ -125,7 +125,7 @@ class BookingController extends Controller
         $svpError    = null;
 
         try {
-            $occupations = $this->booking->occupations($token)->getData(true);
+            $occupations = $this->booking->occupationsSearch($token, null, 1, 1000)->getData(true);
             $cities      = $this->booking->cities($token)->getData(true);
             $categories  = $this->booking->categories($token)->getData(true);
             $sessions    = $this->booking->sessions($token)->getData(true);
