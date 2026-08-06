@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Agency;
+use App\Models\AgencyWallet;
 use App\Models\Candidate;
 use App\Models\User;
 use App\Services\ProfileService;
@@ -10,6 +12,7 @@ use App\Services\SvpApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -181,13 +184,34 @@ class SvpLoginController extends Controller
             ]
         );
 
-        // Ensure agency assignment if the SVP profile contains one
-        if (empty($user->agency_id) && data_get($result['body'], 'user.agency_id')) {
-            $user->update(['agency_id' => (int) data_get($result['body'], 'user.agency_id')]);
-        }
-
         Auth::login($user);
         $request->session()->regenerate();
+
+        // Ensure the user has an agency — auto-create one if missing.
+        if (empty($user->agency_id)) {
+            // Try to assign agency from SVP profile first.
+            $svpAgencyId = data_get($result['body'], 'user.agency_id');
+
+            if ($svpAgencyId && Agency::whereKey((int) $svpAgencyId)->exists()) {
+                $user->update(['agency_id' => (int) $svpAgencyId]);
+            } else {
+                // No agency found — auto-create a personal agency.
+                $agency = Agency::create([
+                    'name'   => $user->name . "'s Agency",
+                    'code'   => Str::upper(Str::random(6)),
+                    'status' => true,
+                ]);
+
+                AgencyWallet::create([
+                    'agency_id'         => $agency->id,
+                    'available_balance' => 0,
+                    'reserved_balance'  => 0,
+                    'credit_limit'      => 0,
+                ]);
+
+                $user->update(['agency_id' => $agency->id]);
+            }
+        }
 
         // Auto-create / update candidate from SVP profile after successful login.
         try {
