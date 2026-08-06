@@ -14,6 +14,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Real SVP / Takamol login: email+password -> OTP -> bearer token.
+ * Accessible to all authenticated users (both agency staff and individual users).
  */
 class SvpLoginController extends Controller
 {
@@ -23,23 +24,12 @@ class SvpLoginController extends Controller
 
     /**
      * Show SVP login form.
-     * Only accessible to authenticated users WITHOUT agency_id (regular users).
-     * Agency users must use regular /login.
+     * Only accessible to authenticated users.
      */
     public function showLoginForm(Request $request)
     {
-        // If already authenticated, check if they're an agency user
-        $user = $request->user('web');
-        
-        if ($user) {
-            // Agency users cannot use SVP login - redirect to their dashboard
-            if ($user->agency_id !== null) {
-                return redirect()->route('agency.dashboard')
-                    ->with('error', 'Agency users must use the regular login. SVP login is only for individual users.');
-            }
-            // Regular user - allow SVP login
-        } else {
-            // Not authenticated - redirect to regular login first
+        // If already authenticated, allow SVP login for all users.
+        if (! $request->user('web')) {
             return redirect()->route('login')
                 ->with('error', 'Please log in first to access SVP authentication.');
         }
@@ -49,18 +39,9 @@ class SvpLoginController extends Controller
 
     /**
      * Step 1 — hit SVP /sessions/login, then show OTP form.
-     * Only for users WITHOUT agency_id (regular users).
      */
     public function login(Request $request)
     {
-        // Check if user is authenticated and is an agency user
-        $user = $request->user('web');
-        if ($user && $user->agency_id !== null) {
-            throw ValidationException::withMessages([
-                'email' => 'Agency users cannot use SVP login. Please use regular login.',
-            ]);
-        }
-
         $credentials = $request->validate([
             'email'    => ['required', 'email'],
             'password' => ['required', 'string'],
@@ -97,17 +78,9 @@ class SvpLoginController extends Controller
 
     /**
      * Show OTP entry form.
-     * Only for users WITHOUT agency_id (regular users).
      */
     public function showOtpForm(Request $request)
     {
-        // Check if user is authenticated and is an agency user
-        $user = $request->user('web');
-        if ($user && $user->agency_id !== null) {
-            return redirect()->route('agency.dashboard')
-                ->with('error', 'Agency users cannot use SVP login. Please use regular login.');
-        }
-
         if (! $request->session()->has('svp_login')) {
             return redirect()->route('svp.login.form');
         }
@@ -117,18 +90,9 @@ class SvpLoginController extends Controller
 
     /**
      * Resend OTP — re-submits credentials to SVP.
-     * Only for users WITHOUT agency_id (regular users).
      */
     public function resendOtp(Request $request)
     {
-        // Check if user is authenticated and is an agency user
-        $user = $request->user('web');
-        if ($user && $user->agency_id !== null) {
-            throw ValidationException::withMessages([
-                'otp_code' => 'Agency users cannot use SVP login. Please use regular login.',
-            ]);
-        }
-
         $svpLogin = $request->session()->get('svp_login');
         if (! $svpLogin) {
             return redirect()->route('svp.login.form');
@@ -160,18 +124,9 @@ class SvpLoginController extends Controller
 
     /**
      * Step 2 — verify OTP with SVP, obtain token, log in local user.
-     * Only for users WITHOUT agency_id (regular users).
      */
     public function verifyOtp(Request $request)
     {
-        // Check if user is authenticated and is an agency user
-        $user = $request->user('web');
-        if ($user && $user->agency_id !== null) {
-            throw ValidationException::withMessages([
-                'otp_code' => 'Agency users cannot use SVP login. Please use regular login.',
-            ]);
-        }
-
         $svpLogin = $request->session()->get('svp_login');
         if (! $svpLogin) {
             return redirect()->route('svp.login.form');
