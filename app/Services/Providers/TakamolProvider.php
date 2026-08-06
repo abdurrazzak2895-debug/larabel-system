@@ -210,6 +210,14 @@ class TakamolProvider implements BookingProviderInterface
         $params = $occupationId ? ['occupation_id' => $occupationId] : [];
 
         $sessionsResponse = $this->dispatch('GET', '/individual_labor_space/exam_sessions', $params);
+
+        // Propagate real upstream failures (expired token, SVP down, connection
+        // error, etc.) instead of silently returning success with an empty
+        // list — that used to mask genuine outages as "no cities available".
+        if ($sessionsResponse->getStatusCode() >= 300 || ($sessionsResponse->getData(true)['success'] ?? false) === false) {
+            return $sessionsResponse;
+        }
+
         $sessionsData = $sessionsResponse->getData(true);
 
         $cities = [];
@@ -241,6 +249,13 @@ class TakamolProvider implements BookingProviderInterface
         }
 
         $sessionsResponse = $this->dispatch('GET', '/individual_labor_space/exam_sessions', $params);
+
+        // Same rule as cities(): don't mask real upstream failures as "no
+        // test centers available".
+        if ($sessionsResponse->getStatusCode() >= 300 || ($sessionsResponse->getData(true)['success'] ?? false) === false) {
+            return $sessionsResponse;
+        }
+
         $sessionsData = $sessionsResponse->getData(true);
 
         $testCenters = [];
