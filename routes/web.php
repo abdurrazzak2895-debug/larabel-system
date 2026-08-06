@@ -132,14 +132,16 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::get('/bookings',             [\App\Http\Controllers\Agency\BookingController::class, 'index'])->name('bookings.index');
     Route::get('/bookings/create',      [\App\Http\Controllers\Agency\BookingController::class, 'create'])->name('bookings.create');
     Route::post('/bookings',            [\App\Http\Controllers\Agency\BookingController::class, 'store'])->name('bookings.store');
-    Route::get('/bookings/{booking}',   [\App\Http\Controllers\Agency\BookingController::class, 'show'])->name('bookings.show');
+    // NOTE: /bookings/{booking} is registered LAST so the lookups below
+    // (available-dates, lookup/*) are never shadowed by the {booking} wildcard.
     Route::get('/bookings/available-dates', [\App\Http\Controllers\Agency\BookingController::class, 'availableDates'])->name('bookings.available-dates');
     Route::get('/bookings/lookup/cities', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCities'])->name('bookings.lookup.cities');
     Route::get('/bookings/lookup/categories', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCategories'])->name('bookings.lookup.categories');
     Route::get('/bookings/lookup/occupations', [\App\Http\Controllers\Agency\BookingController::class, 'lookupOccupations'])->name('bookings.lookup.occupations');
     Route::get('/bookings/lookup/test-centers', [\App\Http\Controllers\Agency\BookingController::class, 'lookupTestCenters'])->name('bookings.lookup.test-centers');
     Route::get('/bookings/lookup/sessions', [\App\Http\Controllers\Agency\BookingController::class, 'lookupSessions'])->name('bookings.lookup.sessions');
-    Route::post('/bookings/{booking}/cancel', [\App\Http\Controllers\Agency\BookingController::class, 'cancel'])->name('bookings.cancel');
+    Route::get('/bookings/{booking}',   [\App\Http\Controllers\Agency\BookingController::class, 'show'])->whereNumber('booking')->name('bookings.show');
+    Route::post('/bookings/{booking}/cancel', [\App\Http\Controllers\Agency\BookingController::class, 'cancel'])->whereNumber('booking')->name('bookings.cancel');
 
     // Users
     Route::prefix('users')->name('users.')->group(function () {
@@ -205,7 +207,7 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/lookup/occupations', [UserBookingController::class, 'lookupOccupations'])->name('lookup.occupations');
         Route::get('/lookup/test-centers', [UserBookingController::class, 'lookupTestCenters'])->name('lookup.test-centers');
         Route::get('/lookup/sessions', [UserBookingController::class, 'lookupSessions'])->name('lookup.sessions');
-        Route::get('/{booking}', [UserBookingController::class, 'show'])->name('show');
+        Route::get('/{booking}', [UserBookingController::class, 'show'])->whereNumber('booking')->name('show');
     });
 
     // Wallet

@@ -20,6 +20,12 @@ class AuthenticateMultiGuard
             return $next($request);
         }
 
+        // JSON/API callers (Accept: application/json) get a 401 instead of
+        // being bounced to the HTML login page.
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
         return redirect()->route('login');
     }
 }

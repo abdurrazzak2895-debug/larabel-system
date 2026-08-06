@@ -22,6 +22,11 @@ class AgencyScope
             return $next($request);
         }
 
+        // JSON/API callers get a 403 instead of a redirect to the HTML login.
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Unauthorized: no agency scope.'], 403);
+        }
+
         return redirect()->route('login')
             ->with('status', 'Your account is not assigned to an agency. Please contact the administrator.');
     }
