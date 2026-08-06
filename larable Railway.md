@@ -92,12 +92,8 @@ Four services are created inside one Railway project:
 2. Name the service `App`.
 3. In **Settings**:
    - **Source** → the repo is connected (auto-deploys on every push to `main`).
-   - **Build** → **Build Command**: `npm run build`
-   - **Deploy** → **Pre-Deploy Command**:
-     ```
-     chmod +x ./railway/init-app.sh && sh ./railway/init-app.sh
-     ```
-   - The builder is **Nixpacks** (set automatically by `railway.json`).
+   - The builder, build command, pre-deploy command, health check and restart policy are committed in `railway.json`, so Railway should show these settings with the config-file icon.
+   - Leave the custom start command blank for the App service so Nixpacks can use its default Laravel nginx + PHP-FPM start command.
 
 ### Step 4 — Add environment variables (App, Worker and Cron)
 
@@ -141,7 +137,7 @@ it never changes between redeploys (that would invalidate sessions).
 
 1. Click **Deploy** on the `App` service.
 2. Watch the deployment logs:
-   - Nixpacks builds (composer install → npm run build).
+   - Nixpacks builds (composer install → configured `npm run build`).
    - The pre-deploy hook runs migrations and seeds roles/admin.
    - nginx + PHP-FPM starts.
 3. In **Settings → Networking**, click **Generate Domain** to get a public URL
