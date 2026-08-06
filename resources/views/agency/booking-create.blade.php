@@ -402,30 +402,42 @@
                     return;
                 }
 
-                try {
-                    setLoading(citySelect, true);
-                    setLoading(categorySelect, true);
-                    const cityData = await fetchJSON("{{ route('agency.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId));
-                    const cities = (cityData && cityData.data && cityData.data.cities) ? cityData.data.cities : [];
-                    populateSelect(citySelect, cities, 'name', 'name');
-                    if (cities.length === 0) {
-                        showError(cityError, 'No cities available for this occupation.');
-                    }
+                setLoading(citySelect, true);
+                setLoading(categorySelect, true);
 
-                    const catData = await fetchJSON("{{ route('agency.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
-                    const categories = (catData && catData.data && catData.data.categories) ? catData.data.categories : [];
-                    populateSelect(categorySelect, categories, 'id', 'name');
-                    if (categories.length === 0) {
-                        showError(categoryError, 'No categories available for this occupation.');
-                    }
-                } catch (e) {
-                    showError(cityError, 'Could not load cities. The SVP service is unreachable — please try again.');
-                    showError(categoryError, 'Could not load categories. The SVP service is unreachable — please try again.');
-                    console.error(e);
-                } finally {
-                    setLoading(citySelect, false);
-                    setLoading(categorySelect, false);
-                }
+                const cityPromise = fetchJSON("{{ route('agency.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId))
+                    .then(function (cityData) {
+                        const cities = (cityData && cityData.data && cityData.data.cities) ? cityData.data.cities : [];
+                        populateSelect(citySelect, cities, 'name', 'name');
+                        if (cities.length === 0) {
+                            showError(cityError, 'No cities available for this occupation.');
+                        }
+                    })
+                    .catch(function (e) {
+                        showError(cityError, 'Could not load cities. The SVP service is unreachable — please try again.');
+                        console.error(e);
+                    })
+                    .finally(function () {
+                        setLoading(citySelect, false);
+                    });
+
+                const categoryPromise = fetchJSON("{{ route('agency.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId))
+                    .then(function (catData) {
+                        const categories = (catData && catData.data && catData.data.categories) ? catData.data.categories : [];
+                        populateSelect(categorySelect, categories, 'id', 'name');
+                        if (categories.length === 0) {
+                            showError(categoryError, 'No categories available for this occupation.');
+                        }
+                    })
+                    .catch(function (e) {
+                        showError(categoryError, 'Could not load categories. The SVP service is unreachable — please try again.');
+                        console.error(e);
+                    })
+                    .finally(function () {
+                        setLoading(categorySelect, false);
+                    });
+
+                await Promise.all([cityPromise, categoryPromise]);
             });
         }
 
