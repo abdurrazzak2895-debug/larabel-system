@@ -271,7 +271,8 @@ class BookingController extends Controller
         }
 
         try {
-            $response = $this->booking->availableDates($token);
+            $sessionId = $request->query('session_id');
+            $response = $this->booking->availableDates($token, $sessionId);
             return response()->json($response->getData(true), $response->getStatusCode());
         } catch (\Throwable $e) {
             Log::error('SVP availableDates failed', ['error' => $e->getMessage()]);
