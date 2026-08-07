@@ -96,3 +96,12 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/verification_requests', [PaymentNotificationController::class, 'verificationRequests']);
     });
 });
+
+// ---------------------------------------------------------------------
+// SVP proxy route: forward browser or API calls to the SVP host via
+// our server. This keeps the upstream host hidden and ensures headers
+// (Authorization, X-Tenant-Name, X-CSRF-Token) are set server-side.
+// ---------------------------------------------------------------------
+Route::any('svp/{any}', [\App\Http\Controllers\SvpProxyController::class, 'proxy'])
+    ->where('any', '.*')
+    ->middleware(\App\Http\Middleware\HandleSvpCors::class);

@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int|null $credential_id
  * @property string|null $occupation_id
  * @property string|null $exam_session_id
+ * @property string|null $reservation_id
  * @property string $booking_status // pending | processing | booked | failed | cancelled | refunded
  * @property string|null $booking_reference
  * @property string|null $notes
@@ -32,6 +33,7 @@ class Booking extends Model
         'credential_id',
         'occupation_id',
         'exam_session_id',
+        'reservation_id',
         'booking_status',
         'booking_reference',
         'notes',

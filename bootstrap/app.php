@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'CheckPermission'    => \App\Http\Middleware\CheckPermission::class,
             'agency.scope'       => \App\Http\Middleware\AgencyScope::class,
             'auth.multi'         => \App\Http\Middleware\AuthenticateMultiGuard::class,
+            'svp_cors'           => \App\Http\Middleware\HandleSvpCors::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
