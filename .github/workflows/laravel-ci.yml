@@ -1,0 +1,59 @@
+name: Laravel CI
+
+on:
+  push:
+    branches: [ main, "fix/**" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_CONNECTION: sqlite
+      DB_DATABASE: database/database.sqlite
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, dom, fileinfo, mysql, curl, zip
+          coverage: none
+
+      - name: Copy .env
+        run: cp .env.example .env
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Create SQLite database
+        run: |
+          mkdir -p database
+          touch database/database.sqlite
+
+      - name: Run migrations
+        run: php artisan migrate --force
+
+      - name: PHP syntax lint
+        run: find app -name "*.php" -print0 | xargs -0 -n1 php -l
+
+      # Sanity check: fail the build early if the SVP proxy base URL
+      # accidentally points at the non-API frontend host instead of
+      # the real API host (svp-international-api.pacc.sa).
+      - name: Guard against wrong SVP host
+        run: |
+          if grep -rn "https://svp-international\.pacc\.sa" app config 2>/dev/null | grep -v "svp-international-api"; then
+            echo "::error::Found a reference to the non-API SVP host (svp-international.pacc.sa). The real API host is svp-international-api.pacc.sa — fix the base URL."
+            exit 1
+          fi
+
+      - name: Run PHPUnit tests
+        run: php artisan test
