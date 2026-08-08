@@ -407,7 +407,7 @@
 
                 const cityPromise = fetchJSON("{{ route('agency.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId))
                     .then(function (cityData) {
-                        const cities = (cityData && cityData.data && cityData.data.cities) ? cityData.data.cities : [];
+                        const cities = (cityData && Array.isArray(cityData.data)) ? cityData.data : [];
                         populateSelect(citySelect, cities, 'name', 'name');
                         if (cities.length === 0) {
                             showError(cityError, 'No cities available for this occupation.');
@@ -423,7 +423,7 @@
 
                 const categoryPromise = fetchJSON("{{ route('agency.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId))
                     .then(function (catData) {
-                        const categories = (catData && catData.data && catData.data.categories) ? catData.data.categories : [];
+                        const categories = (catData && Array.isArray(catData.data)) ? catData.data : [];
                         populateSelect(categorySelect, categories, 'id', 'name');
                         if (categories.length === 0) {
                             showError(categoryError, 'No categories available for this occupation.');

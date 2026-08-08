@@ -218,11 +218,11 @@
                 setLoading(citySelect, true);
                 setLoading(categorySelect, true);
                 const cityData = await fetchJSON("{{ route('user.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId));
-                const cities = (cityData && cityData.data && cityData.data.cities) ? cityData.data.cities : [];
+                const cities = (cityData && Array.isArray(cityData.data)) ? cityData.data : [];
                 populateSelect(citySelect, cities, 'name', 'name');
 
                 const catData = await fetchJSON("{{ route('user.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
-                const categories = (catData && catData.data && catData.data.categories) ? catData.data.categories : [];
+                const categories = (catData && Array.isArray(catData.data)) ? catData.data : [];
                 populateSelect(categorySelect, categories, 'id', 'name');
             } catch (e) {
                 console.error(e);
