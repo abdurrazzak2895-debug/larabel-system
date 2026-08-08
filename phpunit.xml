@@ -23,8 +23,12 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!-- force=true: keep the suite hermetic. Without it, PHPUnit skips its
+             <env> value whenever the variable already exists in the OS
+             environment (e.g. a CI job exporting DB_DATABASE=database/database.sqlite),
+             which would make CI run against a file DB instead of :memory:. -->
+        <env name="DB_CONNECTION" value="sqlite" force="true"/>
+        <env name="DB_DATABASE" value=":memory:" force="true"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

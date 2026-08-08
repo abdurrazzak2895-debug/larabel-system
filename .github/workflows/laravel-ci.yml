@@ -11,8 +11,12 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      # NOTE: no DB_DATABASE here on purpose. phpunit.xml forces the test suite
+      # onto an in-memory SQLite. Exporting DB_DATABASE=database/database.sqlite
+      # in this block leaked the file DB into the tests (PHPUnit only applies its
+      # <env> when the OS variable is absent), making CI run differently from
+      # local. The file DB created/migrated below is only a schema sanity check.
       DB_CONNECTION: sqlite
-      DB_DATABASE: database/database.sqlite
 
     steps:
       - name: Checkout code
@@ -56,4 +60,4 @@ jobs:
           fi
 
       - name: Run PHPUnit tests
-        run: php artisan test
+        run: php -d display_errors=1 -d error_reporting=E_ALL artisan test
