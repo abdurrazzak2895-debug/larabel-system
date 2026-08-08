@@ -290,6 +290,41 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/exam_engines');
     }
 
+    // Payment / Notification / Verification
+    public function validatePendingPayment(): JsonResponse
+    {
+        return $this->dispatch('GET', '/individual_labor_space/payments/validate_pending');
+    }
+
+    public function payments(?string $id = null): JsonResponse
+    {
+        $uri = $id
+            ? '/individual_labor_space/payments/'.$id
+            : '/individual_labor_space/payments';
+
+        return $this->dispatch('GET', $uri);
+    }
+
+    public function createPayment(array $payload): JsonResponse
+    {
+        return $this->dispatch('POST', '/individual_labor_space/payments', $payload);
+    }
+
+    public function updatePayment(string $id, array $payload): JsonResponse
+    {
+        return $this->dispatch('PUT', '/individual_labor_space/payments/'.$id, $payload);
+    }
+
+    public function notifications(): JsonResponse
+    {
+        return $this->dispatch('GET', '/individual_labor_space/notifications');
+    }
+
+    public function verificationRequests(): JsonResponse
+    {
+        return $this->dispatch('GET', '/individual_labor_space/verification_requests');
+    }
+
     // -----------------------------------------------------------------
     // HTTP dispatch
     // -----------------------------------------------------------------
