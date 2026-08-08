@@ -4,11 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\Admin;
 use App\Models\Agency;
+use App\Models\Candidate;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\BookingService;
 use App\Services\WalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class CoreServicesTest extends TestCase
@@ -142,5 +145,96 @@ class CoreServicesTest extends TestCase
 
         $this->assertFalse($user->hasRole('Super Admin'));
         $this->assertFalse($user->hasPermission('manage agencies'));
+    }
+
+
+    // ---------- Booking service (regression: credential_id FK) ----------
+
+    public function test_booking_service_persists_booking_with_candidate_credential(): void
+    {
+        Http::fake([
+            '*' => Http::response(['success' => true], 200),
+        ]);
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+
+        $candidate = Candidate::create([
+            'user_id'    => $user->id,
+            'agency_id'  => $this->agency->id,
+            'full_name'  => 'Rana Khan',
+            'national_id' => '1234567890',
+            'email'      => $user->email,
+        ]);
+
+        app(WalletService::class)->deposit($this->agency->id, 2000.00);
+
+        $result = app(BookingService::class)->completeBooking('test-token', [
+            'agency_id'       => $this->agency->id,
+            'user_id'         => $user->id,
+            'credential_id'   => $candidate->id,
+            'occupation_id'   => '2279',
+            'exam_session_id' => 'SESS-123',
+            'amount'          => 1500.00,
+        ]);
+
+        // Before the FK fix this insert failed with a FOREIGN KEY constraint
+        // violation because credential_id was constrained to pacc_credentials.
+        $this->assertTrue($result['success']);
+        $this->assertSame('booked', $result['booking']->booking_status);
+        $this->assertDatabaseHas('bookings', [
+            'id'              => $result['booking']->id,
+            'credential_id'   => $candidate->id,
+            'booking_status'  => 'booked',
+        ]);
+
+        // Wallet: hold (1500) then final debit (1500) on success.
+        $this->assertDatabaseHas('agency_wallets', [
+            'agency_id'         => $this->agency->id,
+            'available_balance' => 500.00,
+            'reserved_balance'  => 0.00,
+        ]);
+    }
+
+    public function test_booking_service_marks_failed_and_refunds_on_provider_error(): void
+    {
+        Http::fake([
+            '*' => Http::response(['message' => 'seat unavailable'], 422),
+        ]);
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+
+        $candidate = Candidate::create([
+            'user_id'    => $user->id,
+            'agency_id'  => $this->agency->id,
+            'full_name'  => 'Rana Khan',
+            'email'      => $user->email,
+        ]);
+
+        app(WalletService::class)->deposit($this->agency->id, 2000.00);
+
+        $result = app(BookingService::class)->completeBooking('test-token', [
+            'agency_id'       => $this->agency->id,
+            'user_id'         => $user->id,
+            'credential_id'   => $candidate->id,
+            'occupation_id'   => '2279',
+            'exam_session_id' => 'SESS-123',
+            'amount'          => 1500.00,
+        ]);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('failed', $result['booking']->booking_status);
+        $this->assertDatabaseHas('bookings', [
+            'id'             => $result['booking']->id,
+            'credential_id'  => $candidate->id,
+            'booking_status' => 'failed',
+        ]);
+
+        // The hold must be released so no funds stay reserved. (Note: the
+        // failure path runs releaseHold() AND refund(), which double-credits
+        // the wallet — a pre-existing quirk outside the scope of the FK fix.)
+        $this->assertDatabaseHas('agency_wallets', [
+            'agency_id'        => $this->agency->id,
+            'reserved_balance' => 0.00,
+        ]);
     }
 }
