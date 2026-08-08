@@ -55,14 +55,9 @@ class LoginController extends Controller
                 return redirect()->intended(route('agency.dashboard'));
             }
 
-            // Standalone / individual users don't need an agency code — but they
-            // do need a real SVP session (email+password+OTP) before they can
-            // book. Send them straight into that flow right after login, unless
-            // they already have a live SVP token from earlier this session.
-            if (! $request->session()->has('svp_token')) {
-                return redirect()->route('svp.login.form');
-            }
-
+            // Standalone / individual users don't need an agency code.
+            // They can access their dashboard immediately; the booking
+            // flow will prompt for SVP login only when they try to book.
             return redirect()->intended(route('user.dashboard'));
         }
 
