@@ -8,7 +8,6 @@
   "deploy": {
     "runtime": "V2",
     "numReplicas": 1,
-    "startCommand": "chmod +x ./railway/run-worker.sh && sh ./railway/run-worker.sh",
     "preDeployCommand": [
       "chmod +x ./railway/init-app.sh && sh ./railway/init-app.sh"
     ],
