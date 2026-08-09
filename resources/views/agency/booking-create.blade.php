@@ -62,10 +62,17 @@
                         <select name="occupation_id" id="occupation_id" required
                             class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;" tabindex="-1" aria-hidden="true">
                             <option value="">Select…</option>
-                            @php $occ = data_get($occupations, 'data.occupations', $occupations); if (!is_array($occ)) $occ = []; @endphp
+                            @php
+                                $occ = data_get($occupations, 'data.occupations')
+                                    ?? data_get($occupations, 'data')
+                                    ?? data_get($occupations, 'occupations')
+                                    ?? $occupations;
+                                if (!is_array($occ)) $occ = [];
+                                $occ = array_values(array_filter($occ, fn($item) => is_array($item) || is_object($item)));
+                            @endphp
                             @foreach($occ as $o)
                                 @php $o = (array) $o; @endphp
-                                <option value="{{ $o['id'] ?? '' }}">{{ $o['name'] ?? $o['title'] ?? $o['id'] }}</option>
+                                <option value="{{ $o['id'] ?? '' }}">{{ $o['name'] ?? $o['title'] ?? $o['id'] ?? '' }}</option>
                             @endforeach
                         </select>
                         <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -95,10 +102,17 @@
                     <select name="category_id" id="category_id"
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $cats = data_get($categories, 'data.categories', $categories); if (!is_array($cats)) $cats = []; @endphp
+                        @php
+                            $cats = data_get($categories, 'data.categories')
+                                ?? data_get($categories, 'data')
+                                ?? data_get($categories, 'categories')
+                                ?? $categories;
+                            if (!is_array($cats)) $cats = [];
+                            $cats = array_values(array_filter($cats, fn($item) => is_array($item) || is_object($item)));
+                        @endphp
                         @foreach($cats as $c)
                             @php $c = (array) $c; @endphp
-                            <option value="{{ $c['id'] ?? '' }}">{{ $c['name'] ?? $c['title'] ?? $c['id'] }}</option>
+                            <option value="{{ $c['id'] ?? '' }}">{{ $c['name'] ?? $c['title'] ?? $c['id'] ?? '' }}</option>
                         @endforeach
                     </select>
                     <p id="category-error" class="hidden text-red-600 text-xs mt-1"></p>

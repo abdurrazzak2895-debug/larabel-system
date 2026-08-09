@@ -62,7 +62,14 @@
                         <select name="occupation_id" id="occupation_id" required
                             class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;">
                             <option value="">Select…</option>
-                            @php $occ = data_get($occupations, 'data.occupations', $occupations); if (!is_array($occ) && !($occ instanceof \Traversable)) $occ = []; @endphp
+                            @php
+                                $occ = data_get($occupations, 'data.occupations')
+                                    ?? data_get($occupations, 'data')
+                                    ?? data_get($occupations, 'occupations')
+                                    ?? $occupations;
+                                if (!is_array($occ) && !($occ instanceof \Traversable)) $occ = [];
+                                $occ = collect($occ)->filter(fn($item) => is_array($item) || is_object($item))->values();
+                            @endphp
                             @foreach ($occ as $o)
                                 @php $o = is_array($o) ? $o : (array) $o; @endphp
                                 <option value="{{ $o['id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? '') ? 'selected' : '' }}>{{ $o['name'] ?? $o['title'] ?? $o['id'] ?? '' }}</option>
@@ -84,7 +91,7 @@
                     <label for="category_id" class="block text-sm font-medium text-slate-700 mb-1">Category</label>
                     <select name="category_id" id="category_id" class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
-                        @php $cats = data_get($categories, 'data.categories', $categories); if (!is_array($cats) && !($cats instanceof \Traversable)) $cats = []; @endphp
+                        @php $cats = data_get($categories, 'data', []); if (!is_array($cats) && !($cats instanceof \Traversable)) $cats = []; @endphp
                         @foreach ($cats as $c)
                             @php $c = is_array($c) ? $c : (array) $c; @endphp
                             <option value="{{ $c['id'] ?? '' }}" {{ old('category_id') == ($c['id'] ?? '') ? 'selected' : '' }}>{{ $c['name'] ?? $c['title'] ?? $c['id'] ?? '' }}</option>

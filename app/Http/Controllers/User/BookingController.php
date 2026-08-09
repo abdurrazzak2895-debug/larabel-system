@@ -117,19 +117,12 @@ class BookingController extends Controller
         $candidates = Candidate::where('user_id', Auth::id())->latest()->get();
 
         $occupations = [];
-        $cities      = [];
         $categories  = [];
-        $sessions    = [];
-        $constraints = [];
-        $profile     = null;
         $svpError    = null;
 
         try {
             $occupations = $this->booking->occupationsSearch($token, null, 1, 1000)->getData(true);
-            $cities      = $this->booking->cities($token)->getData(true);
             $categories  = $this->booking->categories($token)->getData(true);
-            $sessions    = $this->booking->sessions($token)->getData(true);
-            $constraints = $this->booking->examConstraints($token)->getData(true);
         } catch (\Throwable $e) {
             Log::warning('SVP booking lookup failed', ['error' => $e->getMessage()]);
             $svpError = 'Could not load SVP booking data. Please try again.';
@@ -139,11 +132,7 @@ class BookingController extends Controller
             'wallet'      => $wallet,
             'candidates'  => $candidates,
             'occupations' => $occupations,
-            'cities'      => $cities,
             'categories'  => $categories,
-            'sessions'    => $sessions,
-            'constraints' => $constraints,
-            'profile'     => $profile,
             'svpError'    => $svpError,
             'svpToken'    => $token,
         ]);
