@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In — SVP Takamol Portal</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -101,23 +98,10 @@
                 <h2 class="text-2xl font-bold mb-1">Welcome back</h2>
                 <p class="text-slate-400 text-sm mb-8">Sign in to access your dashboard</p>
 
-                @if ($errors->any())
-                    <div class="mb-6 rounded-xl bg-red-500/10 border border-red-500/30 p-4 text-sm text-red-200">
-                        @foreach ($errors->all() as $error)
-                            <p>{{ $error }}</p>
-                        @endforeach
-                    </div>
-                @endif
-
-                @if (session('status'))
-                    <div class="mb-6 rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4 text-sm text-emerald-200">
-                        {{ session('status') }}
-                    </div>
-                @endif
-
-                <form method="POST" action="{{ route('login.attempt') }}" class="space-y-5">
-                    @csrf
-
+                
+                
+                <form method="POST" action="https://takamol-production.up.railway.app/login" class="space-y-5">
+                    <input type="hidden" name="_token" value="xYrf46kiYTOtj8cq2hdhcIGku5o7ML1EYyeQE7x7" autocomplete="off">
                     <div>
                         <label for="login" class="block text-sm font-medium text-slate-300 mb-2">Username or Email</label>
                         <div class="relative">
@@ -126,7 +110,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-4.5L21 21"/>
                                 </svg>
                             </span>
-                            <input type="text" id="login" name="login" value="{{ old('login') }}" required autofocus autocomplete="username"
+                            <input type="text" id="login" name="login" value="" required autofocus autocomplete="username"
                                 class="input-glass w-full rounded-xl pl-12 pr-4 py-3.5 text-white placeholder-slate-500 text-sm"
                                 placeholder="admin">
                         </div>
@@ -167,7 +151,7 @@
                 </form>
 
                 <div class="mt-8 pt-6 border-t border-white/10 text-center space-y-3">
-                    <a href="{{ route('svp.login.form') }}" class="block text-sm text-indigo-300 hover:text-indigo-200 transition">
+                    <a href="https://takamol-production.up.railway.app/svp/login" class="block text-sm text-indigo-300 hover:text-indigo-200 transition">
                         Login with real SVP / Takamol account →
                     </a>
                     <a href="/" class="text-sm text-slate-400 hover:text-white transition inline-flex items-center gap-2">
