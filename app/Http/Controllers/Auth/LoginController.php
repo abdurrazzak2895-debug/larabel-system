@@ -9,8 +9,13 @@ use Illuminate\Validation\ValidationException;
 
 class LoginController extends Controller
 {
-    public function showLoginForm()
+    public function showLoginForm(Request $request)
     {
+        // If user already has a valid SVP token, skip straight to the booking page.
+        if ($request->session()->has('svp_token')) {
+            return redirect()->route('user.bookings.create');
+        }
+
         return view('auth.login');
     }
 
