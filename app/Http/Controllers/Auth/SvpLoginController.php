@@ -27,14 +27,13 @@ class SvpLoginController extends Controller
 
     /**
      * Show SVP login form.
-     * Only accessible to authenticated users.
+     * Public — any user can attempt SVP authentication directly.
      */
     public function showLoginForm(Request $request)
     {
-        // If already authenticated, allow SVP login for all users.
-        if (! $request->user('web')) {
-            return redirect()->route('login')
-                ->with('error', 'Please log in first to access SVP authentication.');
+        // If user already has a valid SVP token, skip straight to dashboard.
+        if ($request->session()->has('svp_token')) {
+            return redirect()->route('agency.dashboard');
         }
 
         return view('auth.svp-login');
