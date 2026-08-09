@@ -257,7 +257,7 @@
                 setLoading(testCenterSelect, true);
                 const url = "{{ route('user.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + (occupationId ? "&occupation_id=" + encodeURIComponent(occupationId) : '');
                 const data = await fetchJSON(url);
-                const centers = (data && data.data && data.data.test_centers) ? data.data.test_centers : [];
+                const centers = (data && Array.isArray(data.data)) ? data.data : [];
                 populateSelect(testCenterSelect, centers, 'id', 'name');
                 if (centers.length > 0) {
                     testCenterSection.style.display = '';

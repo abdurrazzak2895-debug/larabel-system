@@ -277,8 +277,8 @@
             try {
                 const url = "{{ route('agency.bookings.lookup.occupations') }}?page=1" + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');
                 const data = await fetchJSON(url);
-                const occupations = (data && data.data && data.data.occupations) ? data.data.occupations : [];
-                occupationsCache = occupations.map(function (o) {
+                const occupations = data.data?.occupations || data.data || data.occupations || [];
+                occupationsCache = (Array.isArray(occupations) ? occupations : []).map(function (o) {
                     return { id: o.id || '', name: o.name || o.title || o.id || '' };
                 });
                 occupationsLoaded = true;
@@ -346,10 +346,18 @@
             occupationSelect.dispatchEvent(new Event('change'));
         }
 
-        async function ensureOccupationsLoaded() {
+        async function ensureOccupationsLoaded(searchTerm) {
+            const term = (searchTerm || '').trim();
+            if (term) {
+                // A real search term should always query the live SVP API —
+                // the initially-seeded list may only be the first page/batch
+                // and won't contain every occupation.
+                await loadOccupationsFromApi(term);
+                return;
+            }
             seedOccupationsFromServer();
             if (!occupationsLoaded) {
-                await loadOccupationsFromApi(occupationSearchInput ? occupationSearchInput.value.trim() : '');
+                await loadOccupationsFromApi('');
             }
         }
 
@@ -357,7 +365,7 @@
             let debounceTimer;
 
             occupationSearchInput.addEventListener('focus', function () {
-                ensureOccupationsLoaded().then(function () {
+                ensureOccupationsLoaded(occupationSearchInput.value).then(function () {
                     renderOccupationDropdown(occupationSearchInput.value);
                 });
             });
@@ -366,7 +374,7 @@
                 clearTimeout(debounceTimer);
                 clearError(occupationError);
                 debounceTimer = setTimeout(function () {
-                    ensureOccupationsLoaded().then(function () {
+                    ensureOccupationsLoaded(occupationSearchInput.value).then(function () {
                         renderOccupationDropdown(occupationSearchInput.value);
                     });
                 }, 300);
@@ -375,7 +383,7 @@
             occupationSearchInput.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    ensureOccupationsLoaded().then(function () {
+                    ensureOccupationsLoaded(occupationSearchInput.value).then(function () {
                         renderOccupationDropdown(occupationSearchInput.value);
                     });
                 }
@@ -475,7 +483,7 @@
                     setLoading(testCenterSelect, true);
                     const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + (occupationId ? "&occupation_id=" + encodeURIComponent(occupationId) : '');
                     const data = await fetchJSON(url);
-                    const centers = (data && data.data && data.data.test_centers) ? data.data.test_centers : [];
+                    const centers = (data && Array.isArray(data.data)) ? data.data : [];
                     populateSelect(testCenterSelect, centers, 'id', 'name');
                     if (centers.length > 0) {
                         testCenterSection.style.display = '';
