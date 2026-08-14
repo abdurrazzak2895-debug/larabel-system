@@ -31,8 +31,12 @@ class SvpLoginController extends Controller
      */
     public function showLoginForm(Request $request)
     {
-        // If user already has a valid SVP token, skip straight to dashboard.
-        if ($request->session()->has('svp_token')) {
+        // Allow an authenticated user to replace an expired/stale SVP token.
+        // The booking page can link here with ?force=1 after an external API
+        // authentication failure; no credentials are persisted beyond the OTP step.
+        if ($request->boolean('force')) {
+            $request->session()->forget(['svp_token', 'svp_csrf', 'svp_login']);
+        } elseif ($request->session()->has('svp_token')) {
             return redirect()->route('agency.dashboard');
         }
 
