@@ -28,13 +28,25 @@ class AdminAuthTest extends TestCase
         ];
     }
 
+    /**
+     * Exercise the real CSRF-protected web login route with a valid session
+     * token, matching the browser login form's @csrf behavior.
+     */
+    protected function postLogin(array $credentials)
+    {
+        $csrfToken = 'admin-login-csrf-token';
+
+        return $this->withSession(['_token' => $csrfToken])
+            ->post(route('login.attempt'), $credentials + ['_token' => $csrfToken]);
+    }
+
     public function test_admin_can_login_with_email_and_reach_dashboard(): void
     {
         $admin = Admin::where('email', env('ADMIN_EMAIL', 'admin@takamol.example.com'))->first();
         $this->assertNotNull($admin);
         $this->assertTrue($admin->hasPermission('manage_agencies'));
 
-        $response = $this->post(route('login.attempt'), $this->adminCredentials());
+        $response = $this->postLogin($this->adminCredentials());
 
         $response->assertRedirect(route('admin.dashboard'));
         $this->assertAuthenticatedAs($admin, 'admin');
@@ -44,7 +56,7 @@ class AdminAuthTest extends TestCase
     {
         $admin = Admin::where('email', env('ADMIN_EMAIL', 'admin@takamol.example.com'))->first();
 
-        $response = $this->post(route('login.attempt'), [
+        $response = $this->postLogin([
             'login'    => $admin->name,
             'password' => env('ADMIN_PASSWORD', 'ChangeMe123!'),
         ]);

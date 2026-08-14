@@ -28,11 +28,23 @@ class UserPanelTest extends TestCase
         return $user;
     }
 
+    /**
+     * Exercise the real CSRF-protected web login route with a valid session
+     * token, matching the browser login form's @csrf behavior.
+     */
+    protected function postLogin(array $credentials)
+    {
+        $csrfToken = 'user-panel-login-csrf-token';
+
+        return $this->withSession(['_token' => $csrfToken])
+            ->post(route('login.attempt'), $credentials + ['_token' => $csrfToken]);
+    }
+
     public function test_agency_user_can_login_and_reach_dashboard(): void
     {
         $user = User::where('username', 'alnoor')->firstOrFail();
 
-        $response = $this->post(route('login.attempt'), [
+        $response = $this->postLogin([
             'login'    => 'alnoor',
             'password' => 'password',
         ]);
@@ -83,7 +95,7 @@ class UserPanelTest extends TestCase
             'status'    => true,
         ]);
 
-        $response = $this->post(route('login.attempt'), [
+        $response = $this->postLogin([
             'login'    => 'standalone',
             'password' => 'password',
         ]);
