@@ -1,0 +1,3 @@
+Railway deployment trigger: 2026-08-14T06:48:00Z
+This marker intentionally contains no runtime behavior; it exists to trigger a fresh main-branch deployment after the Railway source configuration fix.
+
