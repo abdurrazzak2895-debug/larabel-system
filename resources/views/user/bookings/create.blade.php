@@ -131,9 +131,11 @@
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
-                    <label for="exam_date" class="block text-sm font-medium text-slate-700 mb-1">Exam Date</label>
-                    <input type="date" name="exam_date" id="exam_date" value="{{ old('exam_date') }}" required
-                        class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <label for="exam_date" class="block text-sm font-medium text-slate-700 mb-1">Exam Date <span class="text-slate-400 font-normal">(from selected SVP session)</span></label>
+                    <input type="date" name="exam_date" id="exam_date" value="{{ old('exam_date') }}" required readonly
+                        class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
+                    <p class="text-xs text-slate-400 mt-1">The date is supplied by the exact center-specific SVP session and cannot be changed.</p>
                     @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
             </div>
@@ -198,6 +200,7 @@
     const sessionSelect = document.getElementById('exam_session_id');
     const sessionNameInput = document.getElementById('exam_session_name');
     const dateInput = document.getElementById('exam_date');
+    const dateError = document.getElementById('date-error');
     const testCenterSection = document.getElementById('test-center-section');
     const temporaryHoldPanel = document.getElementById('temporary-hold-panel');
     const temporaryHoldButton = document.getElementById('create-temporary-hold');
@@ -278,6 +281,18 @@
         temporaryHoldPanel?.classList.remove('hidden');
     });
 
+    function showDateError(message) {
+        if (!dateError) return;
+        dateError.textContent = message;
+        dateError.classList.remove('hidden');
+    }
+
+    function clearDateError() {
+        if (!dateError) return;
+        dateError.textContent = '';
+        dateError.classList.add('hidden');
+    }
+
     function setLoading(select, isLoading) {
         if (!select) return;
         select.disabled = isLoading;
@@ -305,7 +320,7 @@
             option.dataset.name = item.name || baseLabel;
             option.dataset.centerName = centerName || '';
             option.dataset.centerId = centerId || '';
-            option.dataset.date = item.test_date || item.exam_date || item.date || item.start_date_in_browser_time_zone || '';
+            option.dataset.date = item.exam_date || item.test_date || item.date || item.start_date_in_browser_time_zone || item.start_date_in_tc_time_zone || '';
             if (select === testCenterSelect && centerId) {
                 option.textContent = (centerName || baseLabel) + ' — SVP ID: ' + centerId;
             } else if (select === sessionSelect) {
@@ -459,38 +474,28 @@
     }
 
     if (sessionSelect) {
-        sessionSelect.addEventListener('change', async function () {
+        sessionSelect.addEventListener('change', function () {
             const sessionId = sessionSelect.value;
             const selectedSessionOption = sessionSelect.options[sessionSelect.selectedIndex];
             if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || selectedSessionOption?.textContent || '';
-            const sessionDate = selectedSessionOption?.dataset?.date || '';
-            dateInput.value = sessionDate && /^\d{4}-\d{2}-\d{2}$/.test(sessionDate) ? sessionDate : '';
-            clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
 
-            if (!sessionId) {
+            // The selected session is already narrowed to one live SVP center.
+            // Its own date is authoritative and must never be overwritten by a
+            // broader category/city available_dates response.
+            const sessionDate = (selectedSessionOption?.dataset?.date || '').substring(0, 10);
+            dateInput.value = /^\d{4}-\d{2}-\d{2}$/.test(sessionDate) ? sessionDate : '';
+            clearTemporaryHold('Select a live SVP session to load its exact date, then create a temporary hold.');
+            clearDateError();
+
+            if (!sessionId) return;
+
+            if (!dateInput.value) {
+                showDateError('The selected SVP session did not return an exam date. Please select another session.');
                 return;
             }
 
-            try {
-                const dateParams = new URLSearchParams({
-                    session_id: sessionId,
-                    category_id: categorySelect.value,
-                    city: citySelect.value
-                });
-                const data = await fetchJSON("{{ route('user.bookings.available-dates') }}?" + dateParams.toString());
-                const dates = data?.available_dates || data?.dates || data?.data?.available_dates || data?.data?.dates || data?.data || [];
-                const firstDate = (Array.isArray(dates) ? dates : []).map(function (item) {
-                    if (typeof item === 'string') return item;
-                    return item?.date || item?.test_date || item?.exam_date || item?.start_date || item?.start_date_in_tc_time_zone || item?.start_date_in_browser_time_zone || '';
-                }).find(function (value) { return /^\d{4}-\d{2}-\d{2}/.test(value); });
-                if (firstDate) {
-                    dateInput.value = firstDate.substring(0, 10);
-                    temporaryHoldPanel?.classList.remove('hidden');
-                    temporaryHoldButton.disabled = false;
-                }
-            } catch (e) {
-                console.error(e);
-            }
+            temporaryHoldPanel?.classList.remove('hidden');
+            temporaryHoldButton.disabled = false;
         });
     }
 })();

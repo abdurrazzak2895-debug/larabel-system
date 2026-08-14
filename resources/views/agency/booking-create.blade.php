@@ -152,10 +152,11 @@
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
-                    <label for="exam_date" class="block text-sm font-medium text-slate-700 mb-1">Exam Date</label>
-                    <input type="date" name="exam_date" id="exam_date" required
-                        class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <label for="exam_date" class="block text-sm font-medium text-slate-700 mb-1">Exam Date <span class="text-slate-400 font-normal">(from selected SVP session)</span></label>
+                    <input type="date" name="exam_date" id="exam_date" required readonly
+                        class="w-full rounded-lg border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
                     <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
+                    <p class="text-xs text-slate-400 mt-1">The date is supplied by the exact center-specific SVP session and cannot be changed.</p>
                     @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
             </div>
@@ -356,7 +357,7 @@
                 option.dataset.name = item.name || baseLabel;
                 option.dataset.centerName = centerName || '';
                 option.dataset.centerId = centerId || '';
-                option.dataset.date = item.test_date || item.exam_date || item.date || item.start_date_in_browser_time_zone || '';
+                option.dataset.date = item.exam_date || item.test_date || item.date || item.start_date_in_browser_time_zone || item.start_date_in_tc_time_zone || '';
                 if (select === testCenterSelect && centerId) {
                     option.textContent = (centerName || baseLabel) + ' — SVP ID: ' + centerId;
                 } else if (select === sessionSelect) {
@@ -687,42 +688,30 @@
         }
 
         if (sessionSelect) {
-            sessionSelect.addEventListener('change', async function () {
+            sessionSelect.addEventListener('change', function () {
                 const sessionId = sessionSelect.value;
                 const selectedSessionOption = sessionSelect.options[sessionSelect.selectedIndex];
                 if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || selectedSessionOption?.textContent || '';
-                const sessionDate = selectedSessionOption?.dataset?.date || '';
-                dateInput.value = sessionDate && /^\d{4}-\d{2}-\d{2}$/.test(sessionDate) ? sessionDate : '';
-                clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
+
+                // A session lookup is already scoped to the selected center. Its
+                // own date is therefore authoritative. Do not overwrite it with
+                // the category/city-wide available_dates response.
+                const sessionDate = (selectedSessionOption?.dataset?.date || '').substring(0, 10);
+                dateInput.value = /^\d{4}-\d{2}-\d{2}$/.test(sessionDate) ? sessionDate : '';
+                clearTemporaryHold('Select a live SVP session to load its exact date, then create a temporary hold.');
                 clearError(dateError);
 
                 if (!sessionId) {
                     return;
                 }
 
-                try {
-                    const dateParams = new URLSearchParams({
-                        session_id: sessionId,
-                        category_id: categorySelect.value,
-                        city: citySelect.value
-                    });
-                    const data = await fetchJSON("{{ route('agency.bookings.available-dates') }}?" + dateParams.toString());
-                    const dates = data?.available_dates || data?.dates || data?.data?.available_dates || data?.data?.dates || data?.data || [];
-                    const firstDate = (Array.isArray(dates) ? dates : []).map(function (item) {
-                        if (typeof item === 'string') return item;
-                        return item?.date || item?.test_date || item?.exam_date || item?.start_date || item?.start_date_in_tc_time_zone || item?.start_date_in_browser_time_zone || '';
-                    }).find(function (value) { return /^\d{4}-\d{2}-\d{2}/.test(value); });
-                    if (firstDate) {
-                        dateInput.value = firstDate.substring(0, 10);
-                        temporaryHoldPanel?.classList.remove('hidden');
-                        temporaryHoldButton.disabled = false;
-                    } else {
-                        showError(dateError, 'No available dates for this session.');
-                    }
-                } catch (e) {
-                    showError(dateError, 'Could not load available dates. The SVP service is unreachable — please try again.');
-                    console.error(e);
+                if (!dateInput.value) {
+                    showError(dateError, 'The selected SVP session did not return an exam date. Please select another session.');
+                    return;
                 }
+
+                temporaryHoldPanel?.classList.remove('hidden');
+                temporaryHoldButton.disabled = false;
             });
         }
     })();

@@ -41,6 +41,35 @@ class SvpHoldController extends Controller
         }
 
         try {
+            // Re-fetch the exact center-scoped sessions immediately before
+            // creating a hold. This ensures the submitted date is the date of
+            // the selected live SVP session—not a category/city-wide date.
+            $sessionsResponse = $this->booking->sessions($token, [
+                'category_id' => $data['category_id'],
+                'city' => $data['city'],
+                'test_center_id' => $data['test_center_id'],
+                'available_seats' => 'greater_than::0',
+            ]);
+            $selectedSession = $this->findSelectedSession(
+                $sessionsResponse->getData(true),
+                $data['exam_session_id']
+            );
+            $selectedSessionDate = $this->sessionDate($selectedSession);
+
+            if ($selectedSession === null || $selectedSessionDate === null) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'The selected SVP session is no longer available. Refresh the session list and choose another session.',
+                ], 422);
+            }
+
+            if ($selectedSessionDate !== $data['exam_date']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'The exam date must match the selected live SVP session date.',
+                ], 422);
+            }
+
             $response = $this->booking->temporarySeat($token, [
                 'exam_session_id' => $data['exam_session_id'],
                 'test_center_id' => $data['test_center_id'],
@@ -90,6 +119,54 @@ class SvpHoldController extends Controller
                 'error' => 'Unable to create a temporary SVP hold.',
             ], 503);
         }
+    }
+
+    /**
+     * Find one selected session in the provider's normalized response.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>|null
+     */
+    private function findSelectedSession(array $payload, string $sessionId): ?array
+    {
+        $sessions = data_get($payload, 'data.sessions')
+            ?? data_get($payload, 'data.exam_sessions')
+            ?? ($payload['sessions'] ?? null)
+            ?? ($payload['exam_sessions'] ?? null)
+            ?? [];
+
+        if (! is_array($sessions)) {
+            return null;
+        }
+
+        foreach ($sessions as $session) {
+            if (is_array($session) && isset($session['id']) && (string) $session['id'] === $sessionId) {
+                return $session;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Return the canonical YYYY-MM-DD date supplied by a normalized SVP session.
+     *
+     * @param array<string, mixed>|null $session
+     */
+    private function sessionDate(?array $session): ?string
+    {
+        if ($session === null) {
+            return null;
+        }
+
+        foreach (['exam_date', 'test_date', 'date', 'start_date_in_browser_time_zone', 'start_date_in_tc_time_zone'] as $key) {
+            $value = $session[$key] ?? null;
+            if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}/', $value) === 1) {
+                return substr($value, 0, 10);
+            }
+        }
+
+        return null;
     }
 
     /**
