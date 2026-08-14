@@ -289,7 +289,15 @@ class BookingController extends Controller
 
         try {
             $response = $this->booking->sessions($token, $params);
-            return response()->json($response->getData(true), $response->getStatusCode());
+            $payload = $response->getData(true);
+
+            $this->holds->rememberSessionLookup($request, [
+                'category_id' => $params['category_id'],
+                'city' => $params['city'],
+                'test_center_id' => $params['test_center_id'],
+            ], $payload);
+
+            return response()->json($payload, $response->getStatusCode());
         } catch (\Throwable $e) {
             Log::error('SVP lookup sessions failed', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Unable to fetch sessions.'], 503);

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\SvpHoldController;
 use App\Services\BookingService;
+use App\Services\SvpTemporaryHoldService;
 use Illuminate\Http\Request;
 use Mockery;
 use Tests\TestCase;
@@ -13,22 +14,7 @@ class SvpHoldControllerTest extends TestCase
     public function test_live_style_hold_response_is_normalized_and_bound_to_the_session(): void
     {
         $booking = Mockery::mock(BookingService::class);
-        $booking->shouldReceive('sessions')
-            ->once()
-            ->with('svp-token', [
-                'category_id' => '159',
-                'city' => 'Dhaka',
-                'test_center_id' => '403',
-                'available_seats' => 'greater_than::0',
-            ])
-            ->andReturn(response()->json([
-                'data' => [
-                    'sessions' => [[
-                        'id' => '2',
-                        'exam_date' => '2026-08-18',
-                    ]],
-                ],
-            ]));
+        $booking->shouldNotReceive('sessions');
         $booking->shouldReceive('temporarySeat')
             ->once()
             ->with('svp-token', [
@@ -56,6 +42,19 @@ class SvpHoldControllerTest extends TestCase
         $request->session()->start();
         $request->session()->put('svp_token', 'svp-token');
 
+        app(SvpTemporaryHoldService::class)->rememberSessionLookup($request, [
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '403',
+        ], [
+            'data' => [
+                'sessions' => [[
+                    'id' => '2',
+                    'exam_date' => '2026-08-18',
+                ]],
+            ],
+        ]);
+
         $response = app(SvpHoldController::class)->store($request);
         $payload = $response->getData(true);
 
@@ -72,16 +71,7 @@ class SvpHoldControllerTest extends TestCase
     public function test_hold_is_rejected_when_submitted_date_does_not_match_the_live_session(): void
     {
         $booking = Mockery::mock(BookingService::class);
-        $booking->shouldReceive('sessions')
-            ->once()
-            ->andReturn(response()->json([
-                'data' => [
-                    'sessions' => [[
-                        'id' => 'live-session',
-                        'exam_date' => '2026-08-31',
-                    ]],
-                ],
-            ]));
+        $booking->shouldNotReceive('sessions');
         $booking->shouldNotReceive('temporarySeat');
         $this->app->instance(BookingService::class, $booking);
 
@@ -97,11 +87,65 @@ class SvpHoldControllerTest extends TestCase
         $request->session()->start();
         $request->session()->put('svp_token', 'svp-token');
 
+        app(SvpTemporaryHoldService::class)->rememberSessionLookup($request, [
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '223',
+        ], [
+            'data' => [
+                'sessions' => [[
+                    'id' => 'live-session',
+                    'exam_date' => '2026-08-31',
+                ]],
+            ],
+        ]);
+
         $response = app(SvpHoldController::class)->store($request);
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertSame(
             'The exam date must match the selected live SVP session date.',
+            $response->getData(true)['error']
+        );
+    }
+
+    public function test_hold_rejects_a_session_id_not_present_in_the_current_browser_lookup_snapshot(): void
+    {
+        $booking = Mockery::mock(BookingService::class);
+        $booking->shouldNotReceive('sessions');
+        $booking->shouldNotReceive('temporarySeat');
+        $this->app->instance(BookingService::class, $booking);
+
+        $request = Request::create('/agency/bookings/temporary-hold', 'POST', [
+            'occupation_id' => '2061',
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '223',
+            'exam_session_id' => 'rotated-session-id',
+            'exam_date' => '2026-08-31',
+        ]);
+        $request->setLaravelSession(app('session.store'));
+        $request->session()->start();
+        $request->session()->put('svp_token', 'svp-token');
+
+        app(SvpTemporaryHoldService::class)->rememberSessionLookup($request, [
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '223',
+        ], [
+            'data' => [
+                'exam_sessions' => [[
+                    'id' => 'different-session-id',
+                    'exam_date' => '2026-08-31',
+                ]],
+            ],
+        ]);
+
+        $response = app(SvpHoldController::class)->store($request);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame(
+            'The selected SVP session is no longer available. Refresh the session list and choose another session.',
             $response->getData(true)['error']
         );
     }

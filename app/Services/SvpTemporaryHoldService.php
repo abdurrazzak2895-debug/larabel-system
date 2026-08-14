@@ -5,12 +5,14 @@ namespace App\Services;
 use Illuminate\Http\Request;
 
 /**
- * Keeps short-lived SVP temporary-seat holds bound to the authenticated
- * browser session and to the exact booking-selection context that created them.
+ * Keeps short-lived SVP temporary-seat holds and the selected live-session
+ * lookup snapshot bound to the authenticated browser session.
  */
 class SvpTemporaryHoldService
 {
     private const SESSION_KEY = 'svp_temporary_holds';
+
+    private const SESSION_LOOKUP_KEY = 'svp_session_lookups';
 
     /**
      * Remember a successfully created upstream hold for later final-booking validation.
@@ -45,6 +47,65 @@ class SvpTemporaryHoldService
         $request->session()->put(self::SESSION_KEY, $holds);
 
         return $hold;
+    }
+
+    /**
+     * Remember the normalized live session list used to populate the wizard.
+     *
+     * SVP session IDs can rotate between two list requests. Holding the exact
+     * list returned to this browser lets the hold endpoint validate the selected
+     * session/date without replacing it with a different upstream list.
+     *
+     * @param array<string, mixed> $context
+     * @param mixed $payload
+     */
+    public function rememberSessionLookup(Request $request, array $context, mixed $payload): void
+    {
+        $sessions = $this->extractSessions($payload);
+        if ($sessions === []) {
+            return;
+        }
+
+        $lookups = $this->sessionLookups($request);
+        $key = $this->lookupKey($context);
+        $lookups[$key] = [
+            'context' => [
+                'category_id' => (string) ($context['category_id'] ?? ''),
+                'city' => (string) ($context['city'] ?? ''),
+                'test_center_id' => (string) ($context['test_center_id'] ?? ''),
+            ],
+            'sessions' => $sessions,
+            'stored_at' => now()->timestamp,
+        ];
+
+        // Keep only a small number of recent center lookups per browser session.
+        if (count($lookups) > 10) {
+            $lookups = array_slice($lookups, -10, null, true);
+        }
+
+        $request->session()->put(self::SESSION_LOOKUP_KEY, $lookups);
+    }
+
+    /**
+     * Resolve a selected session from the exact list previously returned to the browser.
+     *
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>|null
+     */
+    public function findRememberedSession(Request $request, array $context, string $sessionId): ?array
+    {
+        $lookup = $this->sessionLookups($request)[$this->lookupKey($context)] ?? null;
+        if (! is_array($lookup) || ! is_array($lookup['sessions'] ?? null)) {
+            return null;
+        }
+
+        foreach ($lookup['sessions'] as $session) {
+            if (is_array($session) && (string) ($session['id'] ?? '') === $sessionId) {
+                return $session;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -90,6 +151,41 @@ class SvpTemporaryHoldService
     }
 
     /**
+     * @param mixed $payload
+     * @return array<int, array<string, mixed>>
+     */
+    private function extractSessions(mixed $payload): array
+    {
+        if (! is_array($payload)) {
+            return [];
+        }
+
+        $sessions = data_get($payload, 'data.sessions')
+            ?? data_get($payload, 'data.exam_sessions')
+            ?? ($payload['sessions'] ?? null)
+            ?? ($payload['exam_sessions'] ?? null)
+            ?? [];
+
+        if (! is_array($sessions)) {
+            return [];
+        }
+
+        return array_values(array_filter($sessions, static fn ($session): bool => is_array($session)));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function lookupKey(array $context): string
+    {
+        return hash('sha256', implode('|', [
+            (string) ($context['category_id'] ?? ''),
+            (string) ($context['city'] ?? ''),
+            (string) ($context['test_center_id'] ?? ''),
+        ]));
+    }
+
+    /**
      * @return array<string, array<string, mixed>>
      */
     private function holds(Request $request): array
@@ -97,5 +193,15 @@ class SvpTemporaryHoldService
         $holds = $request->session()->get(self::SESSION_KEY, []);
 
         return is_array($holds) ? $holds : [];
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function sessionLookups(Request $request): array
+    {
+        $lookups = $request->session()->get(self::SESSION_LOOKUP_KEY, []);
+
+        return is_array($lookups) ? $lookups : [];
     }
 }

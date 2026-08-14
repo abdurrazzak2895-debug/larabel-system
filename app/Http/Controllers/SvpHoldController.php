@@ -41,19 +41,15 @@ class SvpHoldController extends Controller
         }
 
         try {
-            // Re-fetch the exact center-scoped sessions immediately before
-            // creating a hold. This ensures the submitted date is the date of
-            // the selected live SVP session—not a category/city-wide date.
-            $sessionsResponse = $this->booking->sessions($token, [
+            // Validate against the exact center-scoped session list that was
+            // returned to this browser. SVP can rotate opaque session IDs
+            // between two list requests, so re-fetching the list here can
+            // incorrectly reject a valid selection with a new ID.
+            $selectedSession = $this->holds->findRememberedSession($request, [
                 'category_id' => $data['category_id'],
                 'city' => $data['city'],
                 'test_center_id' => $data['test_center_id'],
-                'available_seats' => 'greater_than::0',
-            ]);
-            $selectedSession = $this->findSelectedSession(
-                $sessionsResponse->getData(true),
-                $data['exam_session_id']
-            );
+            ], $data['exam_session_id']);
             $selectedSessionDate = $this->sessionDate($selectedSession);
 
             if ($selectedSession === null || $selectedSessionDate === null) {
@@ -119,33 +115,6 @@ class SvpHoldController extends Controller
                 'error' => 'Unable to create a temporary SVP hold.',
             ], 503);
         }
-    }
-
-    /**
-     * Find one selected session in the provider's normalized response.
-     *
-     * @param array<string, mixed> $payload
-     * @return array<string, mixed>|null
-     */
-    private function findSelectedSession(array $payload, string $sessionId): ?array
-    {
-        $sessions = data_get($payload, 'data.sessions')
-            ?? data_get($payload, 'data.exam_sessions')
-            ?? ($payload['sessions'] ?? null)
-            ?? ($payload['exam_sessions'] ?? null)
-            ?? [];
-
-        if (! is_array($sessions)) {
-            return null;
-        }
-
-        foreach ($sessions as $session) {
-            if (is_array($session) && isset($session['id']) && (string) $session['id'] === $sessionId) {
-                return $session;
-            }
-        }
-
-        return null;
     }
 
     /**
