@@ -27,19 +27,25 @@ fi
 # 3. Create the public/storage -> storage/app/public symlink
 php artisan storage:link --no-interaction || echo "==> storage:link skipped"
 
-# 4. Run database migrations (creates all tables, including
+# 4. Clear caches from any previous Railway deployment. This is
+#    important when storage is persisted between releases; otherwise
+#    an older compiled Blade view or config cache can remain active.
+echo "==> Clearing Laravel deployment caches..."
+php artisan optimize:clear --no-interaction
+
+# 5. Run database migrations (creates all tables, including
 #    sessions, jobs, cache, job_batches, failed_jobs)
 echo "==> Running migrations..."
 php artisan migrate --force --no-interaction
 
-# 5. Seed roles + permissions + platform admin account.
+# 6. Seed roles + permissions + platform admin account.
 #    This seeder is idempotent (firstOrCreate / sync), so it
 #    is safe to run on every deploy. The admin credentials come
 #    from the ADMIN_EMAIL / ADMIN_PASSWORD environment variables.
 echo "==> Seeding roles, permissions and platform admin..."
 php artisan db:seed --class=RolesAndPermissionsSeeder --force --no-interaction
 
-# 6. Seed the full demo dataset ONLY on the very first deploy.
+# 7. Seed the full demo dataset ONLY on the very first deploy.
 #    DemoSeeder uses ->create() for transactions/bookings, so
 #    running it twice would duplicate data. We guard it by
 #    checking whether agencies already exist.
