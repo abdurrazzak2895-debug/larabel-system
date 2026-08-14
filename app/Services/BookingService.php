@@ -78,6 +78,8 @@ class BookingService
      *     test_center_name?: string,
      *     city?: string,
      *     exam_date?: string,
+     *     temporary_hold_id?: string,
+     *     temporary_hold_expires_at?: string,
      *     amount: float,
      *     user_id?: int|null,
      *     credential_id?: int|null
@@ -100,6 +102,8 @@ class BookingService
             'test_center_id'   => $data['test_center_id'] ?? null,
             'test_center_name' => $data['test_center_name'] ?? null,
             'exam_date'        => $data['exam_date'] ?? null,
+            'temporary_hold_id' => $data['temporary_hold_id'] ?? null,
+            'temporary_hold_expires_at' => $data['temporary_hold_expires_at'] ?? null,
             'notes'            => $data['notes'] ?? null,
             'booking_status'   => 'processing',
             'booking_reference' => Str::uuid()->toString(),

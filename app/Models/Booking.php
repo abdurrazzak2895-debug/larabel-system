@@ -19,6 +19,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $test_center_id
  * @property string|null $test_center_name
  * @property string|null $exam_date
+ * @property string|null $temporary_hold_id
+ * @property string|null $temporary_hold_expires_at
  * @property string|null $reservation_id
  * @property string $booking_status // pending | processing | booked | failed | cancelled | refunded
  * @property string|null $booking_reference
@@ -43,6 +45,8 @@ class Booking extends Model
         'test_center_id',
         'test_center_name',
         'exam_date',
+        'temporary_hold_id',
+        'temporary_hold_expires_at',
         'reservation_id',
         'booking_status',
         'booking_reference',

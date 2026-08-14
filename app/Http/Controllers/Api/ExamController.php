@@ -20,7 +20,18 @@ class ExamController
 
     public function availableDates(Request $request): JsonResponse
     {
-        return $this->booking->availableDates($this->svpToken($request), $request->query('session_id'));
+        $request->validate([
+            'session_id' => ['nullable', 'string', 'max:255'],
+            'category_id' => ['required', 'string', 'max:100'],
+            'city' => ['required', 'string', 'max:120'],
+            'exam_date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        return $this->booking->availableDates(
+            $this->svpToken($request),
+            $request->query('session_id'),
+            $request->only(['category_id', 'city', 'exam_date'])
+        );
     }
 
     public function citiesForOccupation(Request $request): JsonResponse
@@ -46,7 +57,12 @@ class ExamController
      */
     public function temporarySeat(Request $request): JsonResponse
     {
-        return $this->booking->temporarySeat($this->svpToken($request), $request->all());
+        $data = $request->validate([
+            'exam_session_id' => ['required', 'string', 'max:255'],
+            'test_center_id' => ['required', 'string', 'max:100'],
+        ]);
+
+        return $this->booking->temporarySeat($this->svpToken($request), $data);
     }
 
     public function validateReservation(Request $request): JsonResponse

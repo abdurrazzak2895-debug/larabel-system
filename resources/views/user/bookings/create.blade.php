@@ -125,6 +125,9 @@
                         <option value="">Select…</option>
                     </select>
                     <input type="hidden" name="exam_session_name" id="exam_session_name" value="">
+                    <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="">
+                    <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
+                    @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -132,6 +135,18 @@
                     <input type="date" name="exam_date" id="exam_date" value="{{ old('exam_date') }}" required
                         class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                     @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                </div>
+            </div>
+            <div id="temporary-hold-panel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                        <p class="text-sm font-semibold text-amber-900">Temporary SVP seat hold</p>
+                        <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">Select a session and date, then create a temporary hold before confirming the booking.</p>
+                    </div>
+                    <button type="button" id="create-temporary-hold" disabled
+                        class="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition">
+                        Create temporary hold
+                    </button>
                 </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -163,7 +178,7 @@
 
         {{-- Actions --}}
         <div class="flex items-center gap-3">
-            <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
+            <button type="submit" id="confirm-booking-button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
                 Confirm &amp; Book
             </button>
             <a href="{{ route('user.bookings.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition">
@@ -184,6 +199,84 @@
     const sessionNameInput = document.getElementById('exam_session_name');
     const dateInput = document.getElementById('exam_date');
     const testCenterSection = document.getElementById('test-center-section');
+    const temporaryHoldPanel = document.getElementById('temporary-hold-panel');
+    const temporaryHoldButton = document.getElementById('create-temporary-hold');
+    const temporaryHoldStatus = document.getElementById('temporary-hold-status');
+    const temporaryHoldIdInput = document.getElementById('temporary_hold_id');
+    const temporaryHoldExpiresInput = document.getElementById('temporary_hold_expires_at');
+    const confirmBookingButton = document.getElementById('confirm-booking-button');
+    const bookingForm = document.getElementById('booking-form');
+    let temporaryHoldRequest = null;
+
+    function formatHoldExpiry(value) {
+        if (!value) return '';
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
+    }
+
+    function clearTemporaryHold(message) {
+        if (temporaryHoldIdInput) temporaryHoldIdInput.value = '';
+        if (temporaryHoldExpiresInput) temporaryHoldExpiresInput.value = '';
+        if (confirmBookingButton) confirmBookingButton.disabled = true;
+        if (temporaryHoldButton) temporaryHoldButton.disabled = true;
+        if (temporaryHoldStatus && message) temporaryHoldStatus.textContent = message;
+        if (temporaryHoldPanel) temporaryHoldPanel.classList.toggle('hidden', !sessionSelect?.value);
+    }
+
+    async function createTemporaryHold() {
+        if (temporaryHoldRequest) return;
+        const payload = {
+            occupation_id: occupationSelect.value,
+            category_id: categorySelect.value,
+            city: citySelect.value,
+            test_center_id: testCenterSelect.value,
+            test_center_name: testCenterNameInput.value,
+            exam_session_id: sessionSelect.value,
+            exam_date: dateInput.value
+        };
+        if (Object.values(payload).some(value => !value)) {
+            if (temporaryHoldStatus) temporaryHoldStatus.textContent = 'Select occupation, category, city, center, session, and date first.';
+            return;
+        }
+        temporaryHoldButton.disabled = true;
+        temporaryHoldStatus.textContent = 'Creating the live SVP temporary hold…';
+        temporaryHoldRequest = fetch("{{ route('user.bookings.temporary-hold') }}", {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            body: JSON.stringify(payload)
+        }).then(async response => {
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok || body.success === false) throw new Error(body.error || 'SVP could not create the temporary hold.');
+            const hold = body.data || body;
+            const holdId = hold.id ?? hold.hold_id ?? hold.temporary_hold_id;
+            if (!holdId) throw new Error('SVP returned no temporary hold ID.');
+            temporaryHoldIdInput.value = holdId;
+            temporaryHoldExpiresInput.value = hold.expired_at || hold.expires_at || '';
+            temporaryHoldStatus.classList.remove('text-red-700');
+            confirmBookingButton.disabled = false;
+            temporaryHoldStatus.textContent = 'Hold #' + holdId + ' created' + (temporaryHoldExpiresInput.value ? ' — expires ' + formatHoldExpiry(temporaryHoldExpiresInput.value) : '.') + ' You may now confirm the booking.';
+        }).catch(error => {
+            clearTemporaryHold(error.message);
+            if (temporaryHoldStatus) temporaryHoldStatus.classList.add('text-red-700');
+        }).finally(() => {
+            temporaryHoldRequest = null;
+            if (!temporaryHoldIdInput.value && occupationSelect.value && categorySelect.value && citySelect.value && testCenterSelect.value && sessionSelect.value && dateInput.value) temporaryHoldButton.disabled = false;
+        });
+        await temporaryHoldRequest;
+    }
+
+    temporaryHoldButton?.addEventListener('click', createTemporaryHold);
+    bookingForm?.addEventListener('submit', function (event) {
+        if (temporaryHoldIdInput?.value) return;
+
+        event.preventDefault();
+        clearTemporaryHold('Create a live SVP temporary hold before confirming the booking.');
+        temporaryHoldPanel?.classList.remove('hidden');
+    });
 
     function setLoading(select, isLoading) {
         if (!select) return;
@@ -250,6 +343,7 @@
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
             dateInput.value = '';
+            clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
 
             if (!occupationId) {
                 return;
@@ -278,6 +372,7 @@
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
             dateInput.value = '';
+            clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
 
             if (!categoryId) {
                 return;
@@ -306,6 +401,7 @@
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
             dateInput.value = '';
+            clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
 
             if (!city || !categoryId) {
                 return;
@@ -339,6 +435,7 @@
             if (sessionNameInput) sessionNameInput.value = '';
             populateSelect(sessionSelect, []);
             dateInput.value = '';
+            clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
 
             if (!testCenterId || !city || !categoryId) {
                 return;
@@ -368,6 +465,7 @@
             if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || selectedSessionOption?.textContent || '';
             const sessionDate = selectedSessionOption?.dataset?.date || '';
             dateInput.value = sessionDate && /^\d{4}-\d{2}-\d{2}$/.test(sessionDate) ? sessionDate : '';
+            clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
 
             if (!sessionId) {
                 return;
@@ -387,6 +485,8 @@
                 }).find(function (value) { return /^\d{4}-\d{2}-\d{2}/.test(value); });
                 if (firstDate) {
                     dateInput.value = firstDate.substring(0, 10);
+                    temporaryHoldPanel?.classList.remove('hidden');
+                    temporaryHoldButton.disabled = false;
                 }
             } catch (e) {
                 console.error(e);

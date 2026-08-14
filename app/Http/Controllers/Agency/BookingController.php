@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Candidate;
 use App\Services\BookingService;
+use App\Services\SvpTemporaryHoldService;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +25,7 @@ class BookingController extends Controller
 {
     public function __construct(
         private BookingService $booking,
+        private SvpTemporaryHoldService $holds,
         private WalletService $wallet
     ) {
     }
@@ -309,6 +311,7 @@ class BookingController extends Controller
             'exam_session_id'  => ['required', 'string'],
             'exam_session_name'=> ['nullable', 'string', 'max:255'],
             'exam_date'        => ['required', 'date'],
+            'temporary_hold_id' => ['required', 'string', 'max:100'],
             'language_code'    => ['required', 'string', 'max:20'],
             'methodology'      => ['nullable', 'string', 'max:40'],
             'amount'           => ['required', 'numeric', 'min:1'],
@@ -326,6 +329,13 @@ class BookingController extends Controller
         $candidate = Candidate::where('agency_id', $agencyId)
             ->findOrFail($data['candidate_id']);
 
+        $hold = $this->holds->consumeMatching($request, $data);
+        if ($hold === null) {
+            return back()
+                ->withInput()
+                ->withErrors(['temporary_hold_id' => 'Create a new temporary SVP hold for the selected session before confirming the booking.']);
+        }
+
         $result = $this->booking->completeBooking($token, [
             'agency_id'       => $agencyId,
             'user_id'         => Auth::id(),
@@ -338,6 +348,8 @@ class BookingController extends Controller
             'exam_session_id'  => $data['exam_session_id'],
             'exam_session_name'=> $data['exam_session_name'] ?? null,
             'exam_date'        => $data['exam_date'],
+            'temporary_hold_id' => $hold['id'],
+            'temporary_hold_expires_at' => $hold['expires_at'] ?? null,
             'language_code'    => strtoupper(trim($data['language_code'])),
             'methodology'      => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
             'notes'            => $data['notes'] ?? null,

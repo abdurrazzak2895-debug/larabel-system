@@ -242,6 +242,8 @@ class CoreServicesTest extends TestCase
             'exam_session_id' => 'REAL-SESSION-1',
             'exam_session_name' => '2026-09-01 • Dhaka North • Dhaka',
             'exam_date' => '2026-09-01',
+            'temporary_hold_id' => '5143290',
+            'temporary_hold_expires_at' => '14/08/2026 05:30',
             'language_code' => 'LOABB',
             'methodology' => 'in_person',
             'amount' => 1500.00,
@@ -250,6 +252,8 @@ class CoreServicesTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertSame('62', $result['booking']->test_center_id);
         $this->assertSame('Dhaka North', $result['booking']->test_center_name);
+        $this->assertSame('5143290', $result['booking']->temporary_hold_id);
+        $this->assertSame('14/08/2026 05:30', $result['booking']->temporary_hold_expires_at);
 
         Http::assertSent(function ($request): bool {
             $path = (string) parse_url($request->url(), PHP_URL_PATH);
