@@ -3,10 +3,14 @@
   "build": {
     "builder": "NIXPACKS",
     "buildCommand": "npm run build",
-    "buildEnvironment": "V3"
+    "buildEnvironment": "V3",
+    "watchPatterns": ["**"]
   },
   "deploy": {
     "runtime": "V2",
+    "startCommand": "php artisan serve --host=0.0.0.0 --port=$PORT",
+    "healthcheckPath": "/",
+    "healthcheckTimeout": 300,
     "numReplicas": 1,
     "preDeployCommand": [
       "chmod +x ./railway/init-app.sh && sh ./railway/init-app.sh"
