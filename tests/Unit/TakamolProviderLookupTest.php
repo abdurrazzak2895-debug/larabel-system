@@ -147,4 +147,62 @@ class TakamolProviderLookupTest extends TestCase
                 && ($query['category_id'] ?? null) === 'category-4';
         });
     }
+
+    public function test_categories_for_occupation_handles_nested_occupations_envelope(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'data' => [
+                    'occupations' => [
+                        [
+                            'id' => '2061',
+                            'name' => 'Load and Unload Worker',
+                            'categories' => [
+                                ['id' => '159', 'name' => 'Load and unload workers'],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = (new TakamolProvider())->withToken('test-token')->categoriesForOccupation('2061');
+        $categories = $response->getData(true)['data'];
+
+        $this->assertSame([
+            ['id' => '159', 'name' => 'Load and unload workers'],
+        ], $categories);
+    }
+
+    public function test_categories_for_occupation_normalizes_live_singular_category_envelope(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'occupations' => [
+                    [
+                        'id' => 2061,
+                        'occupation_id' => 2061,
+                        'active' => true,
+                        'arabic_name' => 'عامل تحميل و تنزيل',
+                        'category' => [
+                            'id' => 159,
+                            'arabic_name' => 'عمال التحميل والتنزيل',
+                            'english_name' => 'Load and unload workers',
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = (new TakamolProvider())->withToken('test-token')->categoriesForOccupation('2061');
+
+        $this->assertSame([
+            [
+                'id' => 159,
+                'arabic_name' => 'عمال التحميل والتنزيل',
+                'english_name' => 'Load and unload workers',
+                'name' => 'Load and unload workers',
+            ],
+        ], $response->getData(true)['data']);
+    }
 }

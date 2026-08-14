@@ -479,14 +479,74 @@ class TakamolProvider implements BookingProviderInterface
         ], $response->getStatusCode());
     }
 
+    /**
+     * Normalize the SVP occupations envelope, which may be a direct list or
+     * nested under data.occupations depending on the upstream response.
+     */
+    private function extractOccupationRecords(array $payload): array
+    {
+        $container = $payload['data'] ?? $payload;
+
+        if (is_array($container) && is_array($container['occupations'] ?? null)) {
+            return $container['occupations'];
+        }
+
+        if (is_array($payload['occupations'] ?? null)) {
+            return $payload['occupations'];
+        }
+
+        return is_array($container) && array_is_list($container) ? $container : [];
+    }
+
+    /**
+     * Normalize category records returned by SVP. The live occupations endpoint
+     * currently returns one singular `category` object, while older responses
+     * used a plural `categories` list.
+     */
+    private function extractOccupationCategories(array $occupation): array
+    {
+        $rawCategories = $occupation['categories'] ?? null;
+
+        if (! is_array($rawCategories)) {
+            $rawCategories = is_array($occupation['category'] ?? null)
+                ? [$occupation['category']]
+                : [];
+        }
+
+        return collect($rawCategories)
+            ->filter(static fn ($category): bool => is_array($category))
+            ->map(static function (array $category): array {
+                $id = trim((string) ($category['id'] ?? $category['category_id'] ?? ''));
+                $name = trim((string) (
+                    $category['name']
+                    ?? $category['english_name']
+                    ?? $category['arabic_name']
+                    ?? $id
+                ));
+
+                return $category + [
+                    'id'   => $id,
+                    'name' => $name,
+                ];
+            })
+            ->filter(static fn (array $category): bool => $category['id'] !== '' && $category['name'] !== '')
+            ->unique('id')
+            ->values()
+            ->all();
+    }
+
     public function categories(): JsonResponse
     {
-        $occupationsResponse = $this->dispatch('GET', '/individual_labor_space/occupations');
+        $occupationsResponse = $this->dispatch('GET', '/individual_labor_space/occupations', [
+            'page' => 1,
+            'per_page' => 10000,
+        ]);
         $data = json_decode($occupationsResponse->getContent(), true);
-        $occupations = $data['data'] ?? $data ?? [];
+        $occupations = $this->extractOccupationRecords(is_array($data) ? $data : []);
 
         $categories = collect($occupations)
-            ->flatMap(fn ($occupation) => $occupation['categories'] ?? [])
+            ->filter(static fn ($occupation): bool => is_array($occupation))
+            ->flatMap(fn (array $occupation): array => $this->extractOccupationCategories($occupation))
             ->unique('id')
             ->values();
 
@@ -499,12 +559,15 @@ class TakamolProvider implements BookingProviderInterface
             return $this->categories();
         }
 
-        $occupationsResponse = $this->dispatch('GET', '/individual_labor_space/occupations');
+        $occupationsResponse = $this->dispatch('GET', '/individual_labor_space/occupations', [
+            'page' => 1,
+            'per_page' => 10000,
+        ]);
         $data = json_decode($occupationsResponse->getContent(), true);
-        $occupations = $data['data'] ?? $data ?? [];
+        $occupations = $this->extractOccupationRecords(is_array($data) ? $data : []);
 
-        $occupation = collect($occupations)->firstWhere('id', $occupationId);
-        $categories = $occupation['categories'] ?? [];
+        $occupation = collect($occupations)->first(static fn ($item): bool => is_array($item) && (string) ($item['id'] ?? '') === (string) $occupationId);
+        $categories = is_array($occupation) ? $this->extractOccupationCategories($occupation) : [];
 
         return response()->json(['data' => $categories]);
     }
