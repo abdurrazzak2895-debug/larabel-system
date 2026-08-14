@@ -159,6 +159,10 @@ class CoreServicesTest extends TestCase
                 return Http::response(['exam_reservation' => ['id' => 9876]], 201);
             }
 
+            if (str_ends_with($path, '/users/SVP-TEST-USER/balance')) {
+                return Http::response(['reservation_credits' => 1], 200);
+            }
+
             if (str_ends_with($path, '/individual_labor_space/reservation_credits/use')) {
                 return Http::response(['success' => true, 'reservation_id' => 9876], 200);
             }
@@ -174,6 +178,7 @@ class CoreServicesTest extends TestCase
             'full_name'  => 'Rana Khan',
             'national_id' => '1234567890',
             'email'      => $user->email,
+            'svp_user_id' => 'SVP-TEST-USER',
         ]);
 
         app(WalletService::class)->deposit($this->agency->id, 2000.00);
@@ -182,6 +187,7 @@ class CoreServicesTest extends TestCase
             'agency_id'       => $this->agency->id,
             'user_id'         => $user->id,
             'credential_id'   => $candidate->id,
+            'svp_user_id'     => 'SVP-TEST-USER',
             'occupation_id'   => '2279',
             'exam_session_id' => 'SESS-123',
             'amount'          => 1500.00,
@@ -197,11 +203,12 @@ class CoreServicesTest extends TestCase
             'booking_status'  => 'booked',
         ]);
 
-        // Wallet: hold (1500) then final debit (1500) on success.
+        // Local wallet balances no longer fund SVP reservations. SVP determines
+        // whether available reservation credit can complete the booking.
         $this->assertDatabaseHas('agency_wallets', [
-            'agency_id'         => $this->agency->id,
-            'available_balance' => 500.00,
-            'reserved_balance'  => 0.00,
+            'agency_id' => $this->agency->id,
+            'available_balance' => 2000.00,
+            'reserved_balance' => 0.00,
         ]);
     }
 
@@ -212,6 +219,10 @@ class CoreServicesTest extends TestCase
 
             if (str_ends_with($path, '/individual_labor_space/exam_reservations')) {
                 return Http::response(['exam_reservation' => ['id' => 9876]], 201);
+            }
+
+            if (str_ends_with($path, '/users/SVP-TEST-USER/balance')) {
+                return Http::response(['reservation_credits' => 1], 200);
             }
 
             if (str_ends_with($path, '/individual_labor_space/reservation_credits/use')) {
@@ -227,6 +238,7 @@ class CoreServicesTest extends TestCase
             'agency_id' => $this->agency->id,
             'full_name' => 'Rana Khan',
             'email' => $user->email,
+            'svp_user_id' => 'SVP-TEST-USER',
         ]);
         app(WalletService::class)->deposit($this->agency->id, 2000.00);
 
@@ -234,6 +246,7 @@ class CoreServicesTest extends TestCase
             'agency_id' => $this->agency->id,
             'user_id' => $user->id,
             'credential_id' => $candidate->id,
+            'svp_user_id' => 'SVP-TEST-USER',
             'occupation_id' => '2279',
             'category_id' => 'category-4',
             'city' => 'Dhaka',
@@ -282,6 +295,67 @@ class CoreServicesTest extends TestCase
         });
     }
 
+    public function test_booking_service_creates_official_checkout_when_svp_credit_is_unavailable(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/individual_labor_space/exam_reservations')) {
+                return Http::response(['exam_reservation' => ['id' => 7865]], 201);
+            }
+
+            if (str_ends_with($path, '/users/SVP-NO-CREDIT/balance')) {
+                return Http::response(['reservation_credits' => 0], 200);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/payments')) {
+                return Http::response(['hyperpay_url' => 'https://svp.example.test/checkout/7865'], 201);
+            }
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $this->agency->id,
+            'full_name' => 'No Credit Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-NO-CREDIT',
+        ]);
+
+        $result = app(BookingService::class)->completeBooking('test-token', [
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'credential_id' => $candidate->id,
+            'svp_user_id' => 'SVP-NO-CREDIT',
+            'occupation_id' => '2279',
+            'exam_session_id' => 'REAL-SESSION-2',
+            'test_center_id' => '223',
+            'test_center_name' => 'Manikganj Technical Training Center',
+            'city' => 'Dhaka',
+            'exam_date' => '2026-08-31',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['payment_required']);
+        $this->assertSame('pending', $result['booking']->booking_status);
+        $this->assertSame('7865', $result['booking']->reservation_id);
+        $this->assertSame('https://svp.example.test/checkout/7865', $result['checkout_url']);
+
+        Http::assertSent(function ($request): bool {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            if (! str_ends_with($path, '/individual_labor_space/payments')) {
+                return true;
+            }
+
+            $body = json_decode($request->body(), true);
+            return ($body['payment_method'] ?? null) === 'card'
+                && ($body['payable_type'] ?? null) === 'Reservation'
+                && ($body['payable_id'] ?? null) === 7865;
+        });
+    }
+
     public function test_booking_service_marks_failed_and_refunds_on_provider_error(): void
     {
         Http::fake([
@@ -303,6 +377,7 @@ class CoreServicesTest extends TestCase
             'agency_id'       => $this->agency->id,
             'user_id'         => $user->id,
             'credential_id'   => $candidate->id,
+            'svp_user_id'     => 'SVP-TEST-USER',
             'occupation_id'   => '2279',
             'exam_session_id' => 'SESS-123',
             'amount'          => 1500.00,

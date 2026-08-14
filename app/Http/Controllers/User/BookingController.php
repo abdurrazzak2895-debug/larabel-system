@@ -7,6 +7,7 @@ use App\Models\Agency;
 use App\Models\Booking;
 use App\Models\Candidate;
 use App\Services\BookingService;
+use App\Services\SvpReservationCreditService;
 use App\Services\SvpTemporaryHoldService;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class BookingController extends Controller
 {
     public function __construct(
         private BookingService $booking,
+        private SvpReservationCreditService $credits,
         private SvpTemporaryHoldService $holds,
         private WalletService $wallet
     ) {
@@ -261,6 +263,42 @@ class BookingController extends Controller
     }
 
     /**
+     * GET /user/bookings/credit-status?candidate_id=&occupation_id=&methodology=
+     * AJAX: read the selected SVP user's credits for the exact occupation.
+     */
+    public function creditStatus(Request $request)
+    {
+        $data = $request->validate([
+            'candidate_id' => ['required', 'integer', 'exists:candidates,id'],
+            'occupation_id' => ['required', 'string'],
+            'methodology' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        $token = $this->ensureSvpToken($request);
+        if (! $token) {
+            return response()->json(['success' => false, 'error' => 'SVP session expired.'], 401);
+        }
+
+        $candidate = Candidate::where('user_id', Auth::id())
+            ->findOrFail($data['candidate_id']);
+
+        try {
+            $status = $this->credits->status(
+                $token,
+                $candidate,
+                $data['occupation_id'],
+                $data['methodology'] ?? config('svp.default_methodology', 'in_person')
+            );
+
+            return response()->json(['success' => true, 'data' => ['credits' => $status['credits']]]);
+        } catch (\Throwable $e) {
+            Log::warning('SVP credit status lookup failed', ['error' => $e->getMessage()]);
+
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 503);
+        }
+    }
+
+    /**
      * GET /user/bookings/available-dates?session_id=…
      * AJAX: fetch available dates for a chosen exam session.
      */
@@ -315,7 +353,6 @@ class BookingController extends Controller
             'temporary_hold_id' => ['required', 'string', 'max:100'],
             'language_code'    => ['required', 'string', 'max:20'],
             'methodology'      => ['nullable', 'string', 'max:40'],
-            'amount'           => ['required', 'numeric', 'min:1'],
             'notes'           => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -346,6 +383,7 @@ class BookingController extends Controller
             'agency_id'       => $agencyId,
             'user_id'         => Auth::id(),
             'credential_id'   => $candidate->id,
+            'svp_user_id'     => $candidate->svp_user_id,
             'occupation_id'    => $data['occupation_id'],
             'category_id'      => $data['category_id'],
             'city'             => $data['city'],
@@ -359,7 +397,6 @@ class BookingController extends Controller
             'language_code'    => strtoupper(trim($data['language_code'])),
             'methodology'      => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
             'notes'            => $data['notes'] ?? null,
-            'amount'           => (float) $data['amount'],
         ]);
 
         if (! $result['success']) {
@@ -368,9 +405,63 @@ class BookingController extends Controller
                 ->with('error', $result['error'] ?? 'Booking failed.');
         }
 
+        if (! empty($result['payment_required'])) {
+            return redirect()
+                ->route('user.bookings.payment', $result['booking']->id)
+                ->with('success', 'SVP has created a card checkout for this reservation. Complete payment only on the official SVP page.');
+        }
+
         return redirect()
             ->route('user.bookings.show', $result['booking']->id)
-            ->with('success', 'Booking confirmed.');
+            ->with('success', 'Booking confirmed with the available SVP reservation credit.');
+    }
+
+    /**
+     * Show the official SVP card checkout created for a reservation with no credit.
+     */
+    public function payment(Booking $booking)
+    {
+        abort_unless($booking->user_id === Auth::id(), 403);
+        $attempt = $booking->attempts()->latest()->first();
+        $checkoutUrl = data_get($attempt?->provider_response, 'checkout.hyperpay_url');
+
+        if (! is_string($checkoutUrl) || $checkoutUrl === '') {
+            return redirect()
+                ->route('user.bookings.show', $booking->id)
+                ->with('error', 'No active SVP card checkout was found for this booking.');
+        }
+
+        return view('bookings.svp-payment', [
+            'booking' => $booking,
+            'checkoutUrl' => $checkoutUrl,
+            'backRoute' => route('user.bookings.show', $booking->id),
+            'verifyRoute' => route('user.bookings.verify-reservation', $booking->id),
+            'layout' => 'layouts.user',
+        ]);
+    }
+
+    /**
+     * Read the state of the exact selected SVP reservation without modifying it.
+     */
+    public function verifyReservation(Request $request, Booking $booking)
+    {
+        abort_unless($booking->user_id === Auth::id(), 403);
+        $token = $this->ensureSvpToken($request);
+
+        if (! $token || ! $booking->reservation_id) {
+            return back()->with('error', 'An SVP session and reservation ID are required to verify this booking.');
+        }
+
+        try {
+            $response = $this->booking->reservation($token, (string) $booking->reservation_id);
+            $payload = $response->getData(true);
+            Log::info('SVP reservation checked', ['booking_id' => $booking->id, 'reservation_id' => $booking->reservation_id]);
+
+            return back()->with('svp_reservation_check', json_encode($payload, JSON_UNESCAPED_SLASHES));
+        } catch (\Throwable $e) {
+            Log::warning('SVP reservation verification failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'SVP could not verify this reservation. Please try again.');
+        }
     }
 
     public function show(Booking $booking)

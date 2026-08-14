@@ -18,7 +18,7 @@ interface BookingProviderInterface
     public function permissions(): JsonResponse;
     public function certificatePrice(): JsonResponse;
     public function featureFlags(): JsonResponse;
-    public function userBalance(string $userId): JsonResponse;
+    public function userBalance(string $userId, array $params = []): JsonResponse;
 
     // Exam
     public function examSessions(array $params = []): JsonResponse;

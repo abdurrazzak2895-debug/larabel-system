@@ -114,9 +114,9 @@
             </div>
         </div>
 
-        {{-- Session + date + amount --}}
+        {{-- Session, date, and live SVP payment routing --}}
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Session &amp; Amount</p>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Session &amp; SVP payment route</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1">Exam Session</label>
@@ -162,11 +162,10 @@
                 </div>
                 <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
             </div>
-            <div>
-                <label for="amount" class="block text-sm font-medium text-slate-700 mb-1">Amount (SAR)</label>
-                <input type="number" step="0.01" min="1" name="amount" id="amount" value="{{ old('amount') }}" required placeholder="0.00"
-                    class="w-full md:w-64 rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                @error('amount')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            <div id="svp-credit-panel" class="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                <p class="text-sm font-semibold text-sky-900">SVP reservation credit</p>
+                <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Select a candidate and occupation to check the live SVP credit. If no credit is available, confirmation will open the official SVP card-payment page.</p>
+                <p class="text-xs text-sky-700 mt-2">The payable amount is set by SVP after reservation creation; it is not entered in this form.</p>
             </div>
         </div>
 
@@ -192,6 +191,7 @@
 
 <script>
 (function () {
+    const candidateSelect = document.getElementById('candidate_id');
     const occupationSelect = document.getElementById('occupation_id');
     const citySelect = document.getElementById('city_id');
     const categorySelect = document.getElementById('category_id');
@@ -209,7 +209,34 @@
     const temporaryHoldExpiresInput = document.getElementById('temporary_hold_expires_at');
     const confirmBookingButton = document.getElementById('confirm-booking-button');
     const bookingForm = document.getElementById('booking-form');
+    const svpCreditStatus = document.getElementById('svp-credit-status');
     let temporaryHoldRequest = null;
+    let creditStatusRequest = null;
+
+    async function loadCreditStatus() {
+        const candidateId = candidateSelect?.value;
+        const occupationId = occupationSelect?.value;
+        if (!candidateId || !occupationId) {
+            if (svpCreditStatus) svpCreditStatus.textContent = 'Select a candidate and occupation to check the live SVP credit. If no credit is available, confirmation will open the official SVP card-payment page.';
+            return;
+        }
+        if (creditStatusRequest) return;
+        if (svpCreditStatus) svpCreditStatus.textContent = 'Checking the live SVP reservation credit…';
+        const params = new URLSearchParams({ candidate_id: candidateId, occupation_id: occupationId, methodology: document.querySelector('[name="methodology"]')?.value || 'in_person' });
+        creditStatusRequest = fetchJSON("{{ route('user.bookings.credit-status') }}?" + params.toString())
+            .then(data => {
+                const credits = Number(data?.data?.credits ?? 0);
+                if (svpCreditStatus) svpCreditStatus.textContent = credits > 0
+                    ? 'SVP reports ' + credits + ' reservation credit' + (credits === 1 ? '' : 's') + '. Confirming will use one credit; no card-payment page will open.'
+                    : 'No SVP reservation credit is available for this occupation. Confirming after the hold will open the official SVP card-payment page.';
+            })
+            .catch(error => {
+                if (svpCreditStatus) svpCreditStatus.textContent = 'SVP credit status could not be loaded. Please refresh the SVP login before confirming.';
+                console.error(error);
+            })
+            .finally(() => { creditStatusRequest = null; });
+        await creditStatusRequest;
+    }
 
     function formatHoldExpiry(value) {
         if (!value) return '';
@@ -364,6 +391,8 @@
                 return;
             }
 
+            void loadCreditStatus();
+
             try {
                 setLoading(categorySelect, true);
                 const catData = await fetchJSON("{{ route('user.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
@@ -376,6 +405,8 @@
             }
         });
     }
+
+    candidateSelect?.addEventListener('change', () => { void loadCreditStatus(); });
 
     if (categorySelect) {
         categorySelect.addEventListener('change', async function () {

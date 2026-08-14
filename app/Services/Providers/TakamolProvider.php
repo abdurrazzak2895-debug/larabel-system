@@ -126,9 +126,9 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/flipper/feature_flags');
     }
 
-    public function userBalance(string $userId): JsonResponse
+    public function userBalance(string $userId, array $params = []): JsonResponse
     {
-        return $this->dispatch('GET', '/users/'.$userId.'/balance');
+        return $this->dispatch('GET', '/users/'.$userId.'/balance', $params);
     }
 
     // -----------------------------------------------------------------

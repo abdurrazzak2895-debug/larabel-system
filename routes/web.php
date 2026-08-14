@@ -135,12 +135,15 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     // NOTE: /bookings/{booking} is registered LAST so the lookups below
     // (available-dates, lookup/*) are never shadowed by the {booking} wildcard.
     Route::get('/bookings/available-dates', [\App\Http\Controllers\Agency\BookingController::class, 'availableDates'])->name('bookings.available-dates');
+    Route::get('/bookings/credit-status', [\App\Http\Controllers\Agency\BookingController::class, 'creditStatus'])->name('bookings.credit-status');
     Route::post('/bookings/temporary-hold', [\App\Http\Controllers\SvpHoldController::class, 'store'])->name('bookings.temporary-hold');
     Route::get('/bookings/lookup/cities', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCities'])->name('bookings.lookup.cities');
     Route::get('/bookings/lookup/categories', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCategories'])->name('bookings.lookup.categories');
     Route::get('/bookings/lookup/occupations', [\App\Http\Controllers\Agency\BookingController::class, 'lookupOccupations'])->name('bookings.lookup.occupations');
     Route::get('/bookings/lookup/test-centers', [\App\Http\Controllers\Agency\BookingController::class, 'lookupTestCenters'])->name('bookings.lookup.test-centers');
     Route::get('/bookings/lookup/sessions', [\App\Http\Controllers\Agency\BookingController::class, 'lookupSessions'])->name('bookings.lookup.sessions');
+    Route::get('/bookings/{booking}/payment', [\App\Http\Controllers\Agency\BookingController::class, 'payment'])->whereNumber('booking')->name('bookings.payment');
+    Route::post('/bookings/{booking}/verify-reservation', [\App\Http\Controllers\Agency\BookingController::class, 'verifyReservation'])->whereNumber('booking')->name('bookings.verify-reservation');
     Route::get('/bookings/{booking}',   [\App\Http\Controllers\Agency\BookingController::class, 'show'])->whereNumber('booking')->name('bookings.show');
     Route::post('/bookings/{booking}/cancel', [\App\Http\Controllers\Agency\BookingController::class, 'cancel'])->whereNumber('booking')->name('bookings.cancel');
 
@@ -203,12 +206,15 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/create', [UserBookingController::class, 'create'])->name('create');
         Route::post('/', [UserBookingController::class, 'store'])->name('store');
         Route::get('/available-dates', [UserBookingController::class, 'availableDates'])->name('available-dates');
+        Route::get('/credit-status', [UserBookingController::class, 'creditStatus'])->name('credit-status');
         Route::post('/temporary-hold', [\App\Http\Controllers\SvpHoldController::class, 'store'])->name('temporary-hold');
         Route::get('/lookup/cities', [UserBookingController::class, 'lookupCities'])->name('lookup.cities');
         Route::get('/lookup/categories', [UserBookingController::class, 'lookupCategories'])->name('lookup.categories');
         Route::get('/lookup/occupations', [UserBookingController::class, 'lookupOccupations'])->name('lookup.occupations');
         Route::get('/lookup/test-centers', [UserBookingController::class, 'lookupTestCenters'])->name('lookup.test-centers');
         Route::get('/lookup/sessions', [UserBookingController::class, 'lookupSessions'])->name('lookup.sessions');
+        Route::get('/{booking}/payment', [UserBookingController::class, 'payment'])->whereNumber('booking')->name('payment');
+        Route::post('/{booking}/verify-reservation', [UserBookingController::class, 'verifyReservation'])->whereNumber('booking')->name('verify-reservation');
         Route::get('/{booking}', [UserBookingController::class, 'show'])->whereNumber('booking')->name('show');
     });
 

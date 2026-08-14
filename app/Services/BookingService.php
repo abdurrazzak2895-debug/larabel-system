@@ -22,7 +22,7 @@ class BookingService
 {
     public function __construct(
         private BookingProviderInterface $provider,
-        private WalletService $wallet,
+        private SvpReservationCreditService $credits,
         private NotificationService $notifications,
         private AuditService $audit
     ) {}
@@ -80,7 +80,7 @@ class BookingService
      *     exam_date?: string,
      *     temporary_hold_id?: string,
      *     temporary_hold_expires_at?: string,
-     *     amount: float,
+     *     svp_user_id?: string,
      *     user_id?: int|null,
      *     credential_id?: int|null
      * }  $data
@@ -89,7 +89,6 @@ class BookingService
     public function completeBooking(string $token, array $data, ?Booking $booking = null): array
     {
         $agencyId = (int) $data['agency_id'];
-        $amount   = (float) $data['amount'];
 
         $booking = $booking ?? Booking::create([
             'agency_id'        => $agencyId,
@@ -113,24 +112,17 @@ class BookingService
         $this->logEvent($booking, 'booking_started', $data);
 
         try {
-            // 1. Wallet validation & reserve balance
-            $wallet = $this->wallet->getWallet($agencyId);
-            if ((float) $wallet->available_balance < $amount) {
-                throw new \RuntimeException('Insufficient wallet balance to complete booking.');
-            }
-
-            $this->wallet->hold($agencyId, $amount, $booking->booking_reference, [
-                'booking_id' => $booking->id,
-            ]);
-
-            // 2. Persist a booking attempt before the external call
+            // 1. Persist an attempt before the real SVP reservation call. No
+            // Laravel-controlled amount is accepted or held: SVP determines
+            // whether a reservation credit can be used or card checkout is due.
+            //
             $attempt = BookingAttempt::create([
                 'booking_id'     => $booking->id,
                 'status'         => 'processing',
                 'request_payload' => $data,
             ]);
 
-            // 3. Create the real SVP reservation. The selected exam_session_id
+            // 2. Create the real SVP reservation. The selected exam_session_id
             // is the authoritative center assignment; site_id/site_city are
             // included as the wizard does for the selected center context.
             $provider = $this->provider->withToken($token);
@@ -141,54 +133,105 @@ class BookingService
 
             if ($reservationResponse->getStatusCode() < 200 || $reservationResponse->getStatusCode() >= 300 || ! $reservationId) {
                 $attempt->update(['provider_response' => $providerResponse]);
-                return $this->handleBookingFailure($booking, $attempt, $providerResponse, $amount);
+                return $this->handleBookingFailure($booking, $attempt, $providerResponse);
             }
 
-            // 4. SVP discards an unpaid reservation. Persist it only after the
-            // reservation-credit payment succeeds for the same reservation.
-            $paymentResponse = $provider->useReservationCredit([
-                'methodology_type' => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
-                'reservation_id'   => $this->numericOrString($reservationId),
-                'occupation_id'    => $this->numericOrString($data['occupation_id'] ?? null),
+            // 3. Re-read the live credit balance immediately before payment. A
+            // positive balance consumes an SVP reservation credit; zero credit
+            // creates an SVP-hosted card checkout instead. The user never enters
+            // an amount in this application.
+            $methodology = $data['methodology'] ?? config('svp.default_methodology', 'in_person');
+            $creditStatus = $this->credits->statusForUser(
+                $token,
+                (string) ($data['svp_user_id'] ?? ''),
+                (string) ($data['occupation_id'] ?? ''),
+                (string) $methodology
+            );
+            $providerResponse['credit_status'] = ['credits' => $creditStatus['credits']];
+
+            if ($creditStatus['credits'] > 0) {
+                $paymentResponse = $provider->useReservationCredit([
+                    'methodology_type' => $methodology,
+                    'reservation_id' => $this->numericOrString($reservationId),
+                    'occupation_id' => $this->numericOrString($data['occupation_id'] ?? null),
+                ]);
+                $providerResponse['credit_payment'] = $paymentResponse->getData(true);
+                $attempt->update(['provider_response' => $providerResponse]);
+
+                if ($paymentResponse->getStatusCode() >= 200 && $paymentResponse->getStatusCode() < 300) {
+                    return $this->markCreditBookingComplete($booking, $attempt, $reservationId, $providerResponse, $paymentResponse);
+                }
+            }
+
+            // The user has no usable SVP reservation credit (or it was depleted
+            // concurrently), so create an SVP card checkout for this exact reservation.
+            $checkoutResponse = $provider->createPayment([
+                'payment_method' => 'card',
+                'payable_type' => 'Reservation',
+                'payable_id' => $this->numericOrString($reservationId),
             ]);
-            $providerResponse['payment'] = $paymentResponse->getData(true);
+            $providerResponse['checkout'] = $checkoutResponse->getData(true);
             $attempt->update(['provider_response' => $providerResponse]);
 
-            // 5. On success — save booking, wallet debit, notify
-            if ($paymentResponse->getStatusCode() >= 200 && $paymentResponse->getStatusCode() < 300) {
+            $checkoutUrl = data_get($providerResponse, 'checkout.hyperpay_url');
+            if ($checkoutResponse->getStatusCode() >= 200 && $checkoutResponse->getStatusCode() < 300 && is_string($checkoutUrl) && $checkoutUrl !== '') {
                 $booking->update([
-                    'reservation_id' => (string) ($this->extractReservationId($paymentResponse->getData(true)) ?: $reservationId),
-                    'booking_status' => 'booked',
+                    'reservation_id' => (string) $reservationId,
+                    'booking_status' => 'pending',
                 ]);
-                $attempt->update(['status' => 'success']);
+                $attempt->update(['status' => 'payment_required']);
+                $this->logEvent($booking, 'svp_checkout_created', ['reservation_id' => $reservationId], $providerResponse);
 
-                $this->wallet->debit($agencyId, $amount, $booking->booking_reference, [
-                    'booking_id' => $booking->id,
-                ]);
-
-                $this->logEvent($booking, 'booking_completed', ['response' => $providerResponse]);
-                $this->audit->log($agencyId, 'booking', ['booking_id' => $booking->id, 'action' => 'completed']);
-
-                if ($booking->user_id) {
-                    $this->notifications->send(
-                        $booking->user_id,
-                        'Booking confirmed',
-                        'Your booking was completed successfully.'
-                    );
-                }
-
-                return ['booking' => $booking, 'response' => $paymentResponse, 'success' => true];
+                return [
+                    'booking' => $booking,
+                    'response' => $checkoutResponse,
+                    'success' => true,
+                    'payment_required' => true,
+                    'checkout_url' => $checkoutUrl,
+                ];
             }
 
-            // 5. Failure — release hold + refund
-            return $this->handleBookingFailure($booking, $attempt, $providerResponse, $amount);
+            return $this->handleBookingFailure($booking, $attempt, $providerResponse);
         } catch (\Throwable $e) {
             if (isset($attempt)) {
                 $attempt->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
             }
 
-            return $this->handleBookingFailure($booking, null, ['error' => $e->getMessage()], $amount);
+            return $this->handleBookingFailure($booking, null, ['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Persist the completed state after SVP accepted a reservation credit.
+     *
+     * @param array<string, mixed> $providerResponse
+     */
+    protected function markCreditBookingComplete(
+        Booking $booking,
+        BookingAttempt $attempt,
+        string|int $reservationId,
+        array $providerResponse,
+        mixed $paymentResponse
+    ): array {
+        $paymentPayload = $paymentResponse->getData(true);
+        $booking->update([
+            'reservation_id' => (string) ($this->extractReservationId($paymentPayload) ?: $reservationId),
+            'booking_status' => 'booked',
+        ]);
+        $attempt->update(['status' => 'success']);
+
+        $this->logEvent($booking, 'booking_completed_with_svp_credit', ['response' => $providerResponse]);
+        $this->audit->log((int) $booking->agency_id, 'booking', ['booking_id' => $booking->id, 'action' => 'completed_with_svp_credit']);
+
+        if ($booking->user_id) {
+            $this->notifications->send(
+                $booking->user_id,
+                'Booking confirmed',
+                'Your SVP reservation credit was used and the booking was completed successfully.'
+            );
+        }
+
+        return ['booking' => $booking, 'response' => $paymentResponse, 'success' => true];
     }
 
     /**
@@ -249,22 +292,10 @@ class BookingService
      *
      * @return array{booking: Booking, success: bool, error: string}
      */
-    protected function handleBookingFailure(Booking $booking, ?BookingAttempt $attempt, mixed $response, float $amount): array
+    protected function handleBookingFailure(Booking $booking, ?BookingAttempt $attempt, mixed $response): array
     {
         $booking->update(['booking_status' => 'failed']);
         $this->logEvent($booking, 'booking_failed', ['response' => $response]);
-
-        try {
-            $this->wallet->releaseHold((int) $booking->agency_id, $amount, $booking->booking_reference, [
-                'booking_id' => $booking->id,
-            ]);
-
-            $this->wallet->refund((int) $booking->agency_id, $amount, $booking->booking_reference, [
-                'booking_id' => $booking->id,
-            ]);
-        } catch (\Throwable $e) {
-            $this->logEvent($booking, 'refund_failed', ['error' => $e->getMessage()]);
-        }
 
         if ($booking->user_id) {
             $this->notifications->send(
