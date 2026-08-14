@@ -91,7 +91,7 @@
                 </div>
                 <div>
                     <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1">City</label>
-                    <select name="city_id" id="city_id"
+                    <select name="city" id="city_id"
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
                     </select>
@@ -129,6 +129,7 @@
                     class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                     <option value="">Select…</option>
                 </select>
+                <input type="hidden" name="test_center_name" id="test_center_name" value="">
                 <p id="test-center-error" class="hidden text-red-600 text-xs mt-1"></p>
             </div>
         </div>
@@ -143,6 +144,7 @@
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
                     </select>
+                    <input type="hidden" name="exam_session_name" id="exam_session_name" value="">
                     <p id="session-error" class="hidden text-red-600 text-xs mt-1"></p>
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
@@ -153,6 +155,17 @@
                     <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
                     @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP Language Code</label>
+                    <input type="text" name="language_code" id="language_code" required maxlength="20"
+                        value="{{ old('language_code', config('svp.default_language_code', 'LOABB')) }}"
+                        placeholder="e.g. LOABB"
+                        class="w-full rounded-lg border-slate-200 text-sm uppercase focus:border-brand-500 focus:ring-brand-500">
+                    <p class="text-xs text-slate-400 mt-1">Use the SVP Prometric code, not an ISO code such as <code>en</code>.</p>
+                </div>
+                <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
             </div>
             <div>
                 <label for="amount" class="block text-sm font-medium text-slate-700 mb-1">Amount (SAR)</label>
@@ -197,9 +210,11 @@
         const categorySelect = document.getElementById('category_id');
         const categoryError = document.getElementById('category-error');
         const testCenterSelect = document.getElementById('test_center_id');
+        const testCenterNameInput = document.getElementById('test_center_name');
         const testCenterError = document.getElementById('test-center-error');
         const testCenterSection = document.getElementById('test-center-section');
         const sessionSelect = document.getElementById('exam_session_id');
+        const sessionNameInput = document.getElementById('exam_session_name');
         const sessionError = document.getElementById('session-error');
         const dateInput = document.getElementById('exam_date');
         const dateError = document.getElementById('date-error');
@@ -240,8 +255,25 @@
             select.innerHTML = '<option value="">Select…</option>';
             (items || []).forEach(function (item) {
                 const option = document.createElement('option');
-                option.value = item[valueKey] || '';
-                option.textContent = item[labelKey] || item[valueKey] || '';
+                const value = item[valueKey] ?? '';
+                const baseLabel = item[labelKey] || value || '';
+                const centerId = item.test_center_id ?? item.site_id ?? item.id;
+                const centerName = item.test_center_name ?? item.site_name ?? item.test_center?.name;
+                option.value = value;
+                option.dataset.name = item.name || baseLabel;
+                option.dataset.centerName = centerName || '';
+                option.dataset.centerId = centerId || '';
+                option.dataset.date = item.test_date || item.exam_date || item.date || item.start_date_in_browser_time_zone || '';
+                if (select === testCenterSelect && centerId) {
+                    option.textContent = (centerName || baseLabel) + ' — SVP ID: ' + centerId;
+                } else if (select === sessionSelect) {
+                    const sessionCenter = centerName || testCenterNameInput?.value || '';
+                    const sessionCenterId = item.test_center_id ?? item.site_id ?? testCenterSelect?.value ?? '';
+                    const suffix = sessionCenterId ? ' — ' + (sessionCenter || 'Test center') + ' (SVP ID: ' + sessionCenterId + ')' : '';
+                    option.textContent = baseLabel + suffix;
+                } else {
+                    option.textContent = baseLabel;
+                }
                 select.appendChild(option);
             });
             if (current) {
@@ -409,8 +441,12 @@
             occupationSelect.addEventListener('change', async function () {
                 const occupationId = occupationSelect.value;
                 testCenterSection.style.display = 'none';
+                populateSelect(citySelect, []);
+                populateSelect(categorySelect, []);
                 populateSelect(testCenterSelect, []);
                 populateSelect(sessionSelect, []);
+                if (testCenterNameInput) testCenterNameInput.value = '';
+                if (sessionNameInput) sessionNameInput.value = '';
                 dateInput.value = '';
                 clearError(cityError);
                 clearError(categoryError);
@@ -419,69 +455,83 @@
                 clearError(dateError);
 
                 if (!occupationId) {
-                    populateSelect(citySelect, []);
-                    populateSelect(categorySelect, []);
                     return;
                 }
 
-                setLoading(citySelect, true);
-                setLoading(categorySelect, true);
+                try {
+                    setLoading(categorySelect, true);
+                    const catData = await fetchJSON("{{ route('agency.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
+                    const categories = (catData && Array.isArray(catData.data)) ? catData.data : [];
+                    populateSelect(categorySelect, categories, 'id', 'name');
+                    if (categories.length === 0) {
+                        showError(categoryError, 'No categories available for this occupation.');
+                    }
+                } catch (e) {
+                    showError(categoryError, 'Could not load categories. The SVP service is unreachable — please try again.');
+                    console.error(e);
+                } finally {
+                    setLoading(categorySelect, false);
+                }
+            });
+        }
 
-                const cityPromise = fetchJSON("{{ route('agency.bookings.lookup.cities') }}?occupation_id=" + encodeURIComponent(occupationId))
-                    .then(function (cityData) {
-                        const cities = (cityData && Array.isArray(cityData.data)) ? cityData.data : [];
-                        populateSelect(citySelect, cities, 'name', 'name');
-                        if (cities.length === 0) {
-                            showError(cityError, 'No cities available for this occupation.');
-                        }
-                    })
-                    .catch(function (e) {
-                        showError(cityError, 'Could not load cities. The SVP service is unreachable — please try again.');
-                        console.error(e);
-                    })
-                    .finally(function () {
-                        setLoading(citySelect, false);
-                    });
+        if (categorySelect) {
+            categorySelect.addEventListener('change', async function () {
+                const categoryId = categorySelect.value;
+                testCenterSection.style.display = 'none';
+                populateSelect(citySelect, []);
+                populateSelect(testCenterSelect, []);
+                populateSelect(sessionSelect, []);
+                if (testCenterNameInput) testCenterNameInput.value = '';
+                if (sessionNameInput) sessionNameInput.value = '';
+                dateInput.value = '';
+                clearError(cityError);
+                clearError(testCenterError);
+                clearError(sessionError);
+                clearError(dateError);
 
-                const categoryPromise = fetchJSON("{{ route('agency.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId))
-                    .then(function (catData) {
-                        const categories = (catData && Array.isArray(catData.data)) ? catData.data : [];
-                        populateSelect(categorySelect, categories, 'id', 'name');
-                        if (categories.length === 0) {
-                            showError(categoryError, 'No categories available for this occupation.');
-                        }
-                    })
-                    .catch(function (e) {
-                        showError(categoryError, 'Could not load categories. The SVP service is unreachable — please try again.');
-                        console.error(e);
-                    })
-                    .finally(function () {
-                        setLoading(categorySelect, false);
-                    });
+                if (!categoryId) {
+                    return;
+                }
 
-                await Promise.all([cityPromise, categoryPromise]);
+                try {
+                    setLoading(citySelect, true);
+                    const cityData = await fetchJSON("{{ route('agency.bookings.lookup.cities') }}?category_id=" + encodeURIComponent(categoryId));
+                    const cities = (cityData && Array.isArray(cityData.data)) ? cityData.data : [];
+                    populateSelect(citySelect, cities, 'name', 'name');
+                    if (cities.length === 0) {
+                        showError(cityError, 'No cities available for this category.');
+                    }
+                } catch (e) {
+                    showError(cityError, 'Could not load cities. The SVP service is unreachable — please try again.');
+                    console.error(e);
+                } finally {
+                    setLoading(citySelect, false);
+                }
             });
         }
 
         if (citySelect) {
             citySelect.addEventListener('change', async function () {
                 const city = citySelect.value;
-                const occupationId = occupationSelect.value;
+                const categoryId = categorySelect.value;
                 testCenterSection.style.display = 'none';
                 populateSelect(testCenterSelect, []);
                 populateSelect(sessionSelect, []);
+                if (testCenterNameInput) testCenterNameInput.value = '';
+                if (sessionNameInput) sessionNameInput.value = '';
                 dateInput.value = '';
                 clearError(testCenterError);
                 clearError(sessionError);
                 clearError(dateError);
 
-                if (!city) {
+                if (!city || !categoryId) {
                     return;
                 }
 
                 try {
                     setLoading(testCenterSelect, true);
-                    const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + (occupationId ? "&occupation_id=" + encodeURIComponent(occupationId) : '');
+                    const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId);
                     const data = await fetchJSON(url);
                     const centers = (data && Array.isArray(data.data)) ? data.data : [];
                     populateSelect(testCenterSelect, centers, 'id', 'name');
@@ -502,25 +552,30 @@
         if (testCenterSelect) {
             testCenterSelect.addEventListener('change', async function () {
                 const testCenterId = testCenterSelect.value;
+                const selectedCenterOption = testCenterSelect.options[testCenterSelect.selectedIndex];
+                const selectedCenterName = selectedCenterOption?.dataset?.centerName || selectedCenterOption?.textContent?.replace(/\s+—\s+SVP ID:.*$/, '') || '';
                 const city = citySelect.value;
-                const occupationId = occupationSelect.value;
+                const categoryId = categorySelect.value;
+                if (testCenterNameInput) testCenterNameInput.value = selectedCenterName.trim();
+                if (sessionNameInput) sessionNameInput.value = '';
                 populateSelect(sessionSelect, []);
                 dateInput.value = '';
                 clearError(sessionError);
                 clearError(dateError);
 
-                if (!testCenterId) {
+                if (!testCenterId || !city || !categoryId) {
                     return;
                 }
 
                 try {
                     setLoading(sessionSelect, true);
-                    const params = new URLSearchParams();
-                    if (city) params.set('city', city);
-                    if (occupationId) params.set('occupation_id', occupationId);
-                    params.set('test_center_id', testCenterId);
+                    const params = new URLSearchParams({
+                        city: city,
+                        category_id: categoryId,
+                        test_center_id: testCenterId
+                    });
                     const data = await fetchJSON("{{ route('agency.bookings.lookup.sessions') }}?" + params.toString());
-                    const sessions = (data && data.data && data.data.exam_sessions) ? data.data.exam_sessions : [];
+                    const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
                     populateSelect(sessionSelect, sessions, 'id', 'name');
                     if (sessions.length === 0) {
                         showError(sessionError, 'No exam sessions available for the selected test center.');
@@ -537,7 +592,10 @@
         if (sessionSelect) {
             sessionSelect.addEventListener('change', async function () {
                 const sessionId = sessionSelect.value;
-                dateInput.value = '';
+                const selectedSessionOption = sessionSelect.options[sessionSelect.selectedIndex];
+                if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || selectedSessionOption?.textContent || '';
+                const sessionDate = selectedSessionOption?.dataset?.date || '';
+                dateInput.value = sessionDate && /^\d{4}-\d{2}-\d{2}$/.test(sessionDate) ? sessionDate : '';
                 clearError(dateError);
 
                 if (!sessionId) {
@@ -545,10 +603,19 @@
                 }
 
                 try {
-                    const data = await fetchJSON("{{ route('agency.bookings.available-dates') }}?session_id=" + encodeURIComponent(sessionId));
-                    const dates = (data && data.data && data.data.dates) ? data.data.dates : [];
-                    if (dates.length > 0) {
-                        dateInput.value = dates[0];
+                    const dateParams = new URLSearchParams({
+                        session_id: sessionId,
+                        category_id: categorySelect.value,
+                        city: citySelect.value
+                    });
+                    const data = await fetchJSON("{{ route('agency.bookings.available-dates') }}?" + dateParams.toString());
+                    const dates = data?.available_dates || data?.dates || data?.data?.available_dates || data?.data?.dates || data?.data || [];
+                    const firstDate = (Array.isArray(dates) ? dates : []).map(function (item) {
+                        if (typeof item === 'string') return item;
+                        return item?.date || item?.test_date || item?.exam_date || item?.start_date || item?.start_date_in_tc_time_zone || item?.start_date_in_browser_time_zone || '';
+                    }).find(function (value) { return /^\d{4}-\d{2}-\d{2}/.test(value); });
+                    if (firstDate) {
+                        dateInput.value = firstDate.substring(0, 10);
                     } else {
                         showError(dateError, 'No available dates for this session.');
                     }

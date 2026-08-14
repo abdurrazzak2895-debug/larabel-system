@@ -9,7 +9,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
-use App\Models\TestCenter;
 use App\Services\ResponseService;
 
 class TakamolProvider implements BookingProviderInterface
@@ -138,27 +137,106 @@ class TakamolProvider implements BookingProviderInterface
 
     public function examSessions(array $params = []): JsonResponse
     {
+        $params = $this->normalizeQueryParams($params);
+
+        if (empty($params['category_id'])) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'category_id is required',
+            ], 422);
+        }
+
+        // The working SVP wizard always asks for sessions with category_id and
+        // available_seats, then narrows by city and the exact test_center_id.
+        // Omitting the center mixes sessions from every center in a city.
+        $params['available_seats'] ??= 'greater_than::0';
         $response = $this->dispatch('GET', '/individual_labor_space/exam_sessions', $params);
 
-        // SVP session nodes do not carry a `name` (only an opaque id, a
-        // start date and category), yet the wizard renders each option with
-        // `item['name']`. Attach a readable label while keeping the exact
-        // response envelope and every original field intact.
+        // SVP session nodes do not always carry a `name`; the frontend needs a
+        // stable label but must retain the original id and all upstream fields.
         $payload = json_decode($response->getContent(), true);
-        if (! is_array($payload) || ! isset($payload['data'])) {
+        if (! is_array($payload)) {
             return $response;
         }
 
-        $data = $payload['data'];
-        $mapper = static fn ($node): array => self::formatSessionName($node);
-
-        if (isset($data['exam_sessions']) && is_array($data['exam_sessions'])) {
-            $data['exam_sessions'] = array_map($mapper, array_values($data['exam_sessions']));
-        } elseif (is_array($data)) {
-            $data = array_map($mapper, array_values($data));
+        $sessions = $this->extractList($payload, ['exam_sessions', 'sessions', 'available_sessions']);
+        if ($sessions === null) {
+            return $response;
         }
 
-        return response()->json(array_merge($payload, ['data' => $data]), $response->getStatusCode());
+        $requestedCenterId = isset($params['test_center_id']) ? (string) $params['test_center_id'] : null;
+        $sessions = array_map(
+            static fn ($node): array => is_array($node) ? self::formatSessionName($node) : ['id' => (string) $node, 'name' => (string) $node],
+            $sessions
+        );
+
+        // The upstream query is center-scoped, but keep a defensive check here:
+        // a stale/proxy response from another center must never reach the form.
+        if ($requestedCenterId !== null && $requestedCenterId !== '') {
+            $sessions = array_values(array_filter($sessions, static function (array $session) use ($requestedCenterId): bool {
+                $sessionCenterId = $session['test_center_id'] ?? null;
+                return $sessionCenterId === null || (string) $sessionCenterId === $requestedCenterId;
+            }));
+        }
+
+        return response()->json([
+            'success' => $payload['success'] ?? true,
+            'data'    => [
+                'sessions'      => $sessions,
+                'exam_sessions' => $sessions,
+            ],
+        ] + array_diff_key($payload, array_flip(['success', 'data', 'exam_sessions', 'sessions', 'available_sessions'])), $response->getStatusCode());
+    }
+
+    /**
+     * Keep only non-empty query values and coerce the SVP filter names to the
+     * contract used by the working Playwright client.
+     */
+    protected function normalizeQueryParams(array $params): array
+    {
+        $params = array_filter($params, static fn ($value): bool => $value !== null && $value !== '');
+
+        if (isset($params['category']) && ! isset($params['category_id'])) {
+            $params['category_id'] = $params['category'];
+            unset($params['category']);
+        }
+
+        if (isset($params['testCenterId']) && ! isset($params['test_center_id'])) {
+            $params['test_center_id'] = $params['testCenterId'];
+            unset($params['testCenterId']);
+        }
+
+        if (isset($params['reservationId']) && ! isset($params['reservation_id'])) {
+            $params['reservation_id'] = $params['reservationId'];
+            unset($params['reservationId']);
+        }
+
+        return $params;
+    }
+
+    /**
+     * Extract a list from the response envelopes seen in the SVP API.
+     */
+    protected function extractList(array $payload, array $keys): ?array
+    {
+        $candidates = [
+            data_get($payload, 'data.exam_sessions'),
+            data_get($payload, 'data.sessions'),
+            data_get($payload, 'data.available_sessions'),
+            data_get($payload, 'data'),
+        ];
+
+        foreach (array_merge($keys, []) as $key) {
+            $candidates[] = $payload[$key] ?? null;
+        }
+
+        foreach ($candidates as $candidate) {
+            if (is_array($candidate) && array_is_list($candidate)) {
+                return array_values($candidate);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -167,24 +245,47 @@ class TakamolProvider implements BookingProviderInterface
      */
     protected static function formatSessionName(array $node): array
     {
-        if (isset($node['name']) && is_string($node['name']) && $node['name'] !== '') {
-            return $node;
-        }
-
-        $date     = $node['start_date_in_browser_time_zone'] ?? null;
-        $city     = is_array($node['test_center'] ?? null)
-            ? ($node['test_center']['city'] ?? null)
-            : null;
+        $center = is_array($node['test_center'] ?? null) ? $node['test_center'] : [];
+        $centerId = $node['test_center_id']
+            ?? $center['id']
+            ?? $center['test_center_id']
+            ?? $node['site_id']
+            ?? null;
+        $centerName = $node['test_center_name']
+            ?? $node['site_name']
+            ?? $center['name']
+            ?? $center['test_center_name']
+            ?? null;
+        $city = $node['site_city']
+            ?? $center['city']
+            ?? $center['test_center_city']
+            ?? null;
+        $date = $node['test_date']
+            ?? $node['date']
+            ?? $node['start_date_in_browser_time_zone']
+            ?? $node['start_date_in_tc_time_zone']
+            ?? null;
         $category = is_array($node['category'] ?? null)
             ? ($node['category']['english_name'] ?? $node['category']['arabic_name'] ?? null)
             : null;
 
-        $label = trim(implode(' • ', array_filter(
-            [$date, $city, $category],
-            static fn ($v) => is_string($v) && $v !== ''
-        ))) ?: 'Exam session';
+        if ($centerId !== null && $centerId !== '') {
+            $node['test_center_id'] = (string) $centerId;
+        }
+        if (is_string($centerName) && trim($centerName) !== '') {
+            $node['test_center_name'] = trim($centerName);
+        }
+        if (is_string($city) && trim($city) !== '') {
+            $node['test_center_city'] = trim($city);
+        }
 
-        $node['name'] = $label;
+        if (! isset($node['name']) || ! is_string($node['name']) || trim($node['name']) === '') {
+            $label = trim(implode(' • ', array_filter(
+                [$date, $centerName, $city, $category],
+                static fn ($v) => is_string($v) && trim($v) !== ''
+            ))) ?: 'Exam session';
+            $node['name'] = $label;
+        }
 
         return $node;
     }
@@ -194,11 +295,23 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/exam_sessions/'.$id);
     }
 
-    public function availableDates(?string $sessionId = null): JsonResponse
+    public function availableDates(?string $sessionId = null, array $params = []): JsonResponse
     {
-        $params = $sessionId ? ['session_id' => $sessionId] : [];
+        // The working SVP wizard uses category_id + optional city for the
+        // available-date query. Keep the old session_id-only call compatible,
+        // but do not mix session_id into the full-filter contract.
+        if (empty($params) && $sessionId !== null && $sessionId !== '') {
+            $params['session_id'] = $sessionId;
+        }
 
-        return $this->dispatch('GET', '/individual_labor_space/exam_sessions/available_dates', $params);
+        $params['country_id'] ??= (int) config('svp.country_id', 78);
+        $params['per_page'] ??= 10000;
+
+        return $this->dispatch(
+            'GET',
+            '/individual_labor_space/exam_sessions/available_dates',
+            $this->normalizeQueryParams($params)
+        );
     }
 
     public function temporarySeat(array $payload): JsonResponse
@@ -257,82 +370,113 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/occupations', $params);
     }
 
-    public function cities(?string $occupationId = null): JsonResponse
+    public function cities(?string $categoryId = null): JsonResponse
     {
-        $params = $occupationId ? ['occupation_id' => $occupationId] : [];
+        $params = [
+            'country_id' => (int) config('svp.country_id', 78),
+            'per_page'   => 10000,
+        ];
 
-        $cities = collect($this->fetchExamSessions($params))
-            ->pluck('test_center')
+        if ($categoryId) {
+            $params['category_id'] = $categoryId;
+        }
+
+        $response = $this->dispatch('GET', '/individual_labor_space/test_centers/cities', $params);
+        $payload = json_decode($response->getContent(), true);
+        $rawCities = is_array($payload)
+            ? ($payload['cities'] ?? $payload['data']['cities'] ?? $payload['data'] ?? [])
+            : [];
+
+        $cities = collect(is_array($rawCities) ? $rawCities : [])
+            ->map(static function ($city): ?array {
+                if (is_string($city) || is_numeric($city)) {
+                    $name = trim((string) $city);
+                    return $name === '' ? null : ['id' => $name, 'name' => $name];
+                }
+
+                if (! is_array($city)) {
+                    return null;
+                }
+
+                $name = trim((string) ($city['name'] ?? $city['city'] ?? $city['locality'] ?? ''));
+                if ($name === '') {
+                    return null;
+                }
+
+                return [
+                    'id'           => (string) ($city['id'] ?? $name),
+                    'name'         => $name,
+                    'country_code' => $city['country_code'] ?? null,
+                    'country_id'   => $city['country_id'] ?? config('svp.country_id', 78),
+                ];
+            })
             ->filter()
-            ->map(static fn ($tc) => [
-                'name'         => $tc['city'] ?? null,
-                'country_code' => $tc['country_code'] ?? null,
-                'country_id'   => $tc['country_id'] ?? null,
-            ])
-            ->filter(fn (array $city) => (bool) $city['name'])
-            ->unique('name')
+            ->unique(fn (array $city): string => mb_strtolower($city['name']))
             ->values();
 
-        return response()->json(['data' => $cities]);
+        return response()->json([
+            'success' => $payload['success'] ?? true,
+            'data'    => $cities,
+        ], $response->getStatusCode());
     }
 
-    public function testCentersForFilters(?string $city = null, ?string $occupationId = null): JsonResponse
+    public function testCentersForFilters(?string $city = null, ?string $categoryId = null): JsonResponse
     {
-        // The SVP exam_sessions endpoint does not reliably support a `city`
-        // filter, so we always fetch for the occupation and narrow client-side.
-        $params = array_filter(['occupation_id' => $occupationId]);
+        // The official center endpoint carries the real SVP id/name/address.
+        // Do not synthesize a center from the city or read a stale local mirror.
+        $params = [
+            'country_id' => (int) config('svp.country_id', 78),
+            'per_page'   => 10000,
+        ];
 
-        // The session payload only exposes test_center as {city, country_code, …}
-        // with no real id/name, so we derive the cities that actually have
-        // sessions and then map each city to the genuine SVP test centers
-        // maintained in the local test_centers table (real svp_id + name,
-        // seeded from the official dataset via TestCenterSeeder).
-        $sessions = $this->fetchExamSessions($params);
+        if ($categoryId) {
+            $params['category_id'] = $categoryId;
+        }
 
-        $sessionCities = collect($sessions)
-            ->pluck('test_center')
+        $response = $this->dispatch('GET', '/visitor_space/test_centers', $params);
+        $payload = json_decode($response->getContent(), true);
+        $rawCenters = is_array($payload)
+            ? ($payload['test_centers'] ?? $payload['data']['test_centers'] ?? $payload['data'] ?? [])
+            : [];
+
+        $centers = collect(is_array($rawCenters) ? $rawCenters : [])
+            ->filter(fn ($center): bool => is_array($center))
+            ->map(static function (array $center): ?array {
+                $address = is_array($center['address'] ?? null) ? $center['address'] : [];
+                $id = trim((string) ($center['id'] ?? $center['svp_id'] ?? ''));
+                $name = trim((string) ($center['name'] ?? $center['test_center_name'] ?? $id));
+                $centerCity = trim((string) (
+                    $center['city']
+                    ?? $center['locality']
+                    ?? $address['city']
+                    ?? $address['locality']
+                    ?? ''
+                ));
+
+                if ($id === '' || $name === '') {
+                    return null;
+                }
+
+                return [
+                    'id'           => $id,
+                    'name'         => $name,
+                    'city'         => $centerCity,
+                    'address'      => $center['address'] ?? null,
+                    'status'       => $center['status'] ?? null,
+                    'country_code' => $center['country_code'] ?? null,
+                ];
+            })
             ->filter()
-            ->pluck('city')
-            ->filter()
-            ->map('strval')
-            ->unique()
+            ->when($city, static fn ($collection) => $collection->filter(
+                static fn (array $center): bool => mb_strtolower($center['city']) === mb_strtolower(trim($city))
+            ))
+            ->unique('id')
             ->values();
 
-        if (! empty($city)) {
-            // Respect the requested city so the dropdown is never empty.
-            $targetCities = collect([$city]);
-        } elseif ($sessionCities->isNotEmpty()) {
-            $targetCities = $sessionCities;
-        } else {
-            $targetCities = collect([]);
-        }
-
-        $testCenters = collect();
-
-        foreach ($targetCities as $targetCity) {
-            $centers = TestCenter::where('city', $targetCity)
-                ->orderBy('svp_id', 'asc')
-                ->get(['svp_id', 'name', 'city', 'country_code']);
-
-            if ($centers->isEmpty()) {
-                // No seeded center for this city — represent the city itself
-                // so the wizard stays usable (id = city, name = city).
-                $centers = collect([
-                    ['svp_id' => $targetCity, 'name' => $targetCity, 'city' => $targetCity, 'country_code' => null],
-                ]);
-            }
-
-            $testCenters = $testCenters->concat(
-                $centers->map(fn ($c) => [
-                    'id'           => (string) ($c['svp_id'] ?? $targetCity),
-                    'name'         => (string) ($c['name'] ?? $c['svp_id'] ?? $targetCity),
-                    'city'         => (string) ($c['city'] ?? $targetCity),
-                    'country_code' => $c['country_code'] ?? null,
-                ])
-            );
-        }
-
-        return response()->json(['data' => $testCenters->values()]);
+        return response()->json([
+            'success' => $payload['success'] ?? true,
+            'data'    => $centers,
+        ], $response->getStatusCode());
     }
 
     public function categories(): JsonResponse

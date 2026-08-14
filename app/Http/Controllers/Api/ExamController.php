@@ -20,22 +20,22 @@ class ExamController
 
     public function availableDates(Request $request): JsonResponse
     {
-        return $this->booking->availableDates($this->svpToken($request));
+        return $this->booking->availableDates($this->svpToken($request), $request->query('session_id'));
     }
 
     public function citiesForOccupation(Request $request): JsonResponse
     {
-        $occupationId = $request->query('occupation_id');
+        $categoryId = $request->query('category_id');
 
-        return $this->booking->cities($this->svpToken($request), $occupationId);
+        return $this->booking->cities($this->svpToken($request), $categoryId);
     }
 
     public function testCenters(Request $request): JsonResponse
     {
         $city = $request->query('city');
-        $occupationId = $request->query('occupation_id');
+        $categoryId = $request->query('category_id');
 
-        return $this->booking->testCenters($this->svpToken($request), $city, $occupationId);
+        return $this->booking->testCenters($this->svpToken($request), $city, $categoryId);
     }
 
     /**

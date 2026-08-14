@@ -23,7 +23,7 @@ interface BookingProviderInterface
     // Exam
     public function examSessions(array $params = []): JsonResponse;
     public function examSession(string $id): JsonResponse;
-    public function availableDates(): JsonResponse;
+    public function availableDates(?string $sessionId = null, array $params = []): JsonResponse;
     public function temporarySeat(array $payload): JsonResponse;
     public function validateReservation(): JsonResponse;
     public function reservationDetails(?string $id = null): JsonResponse;
@@ -33,9 +33,9 @@ interface BookingProviderInterface
     public function useReservationCredit(array $payload): JsonResponse;
     public function occupations(): JsonResponse;
     public function occupationsSearch(?string $search = null, int $page = 1, int $perPage = 1000): JsonResponse;
-    public function cities(?string $occupationId = null): JsonResponse;
+    public function cities(?string $categoryId = null): JsonResponse;
     public function countries(): JsonResponse;
-    public function testCentersForFilters(?string $city = null, ?string $occupationId = null): JsonResponse;
+    public function testCentersForFilters(?string $city = null, ?string $categoryId = null): JsonResponse;
     public function categories(): JsonResponse;
     public function categoriesForOccupation(?string $occupationId = null): JsonResponse;
     public function examConstraints(): JsonResponse;

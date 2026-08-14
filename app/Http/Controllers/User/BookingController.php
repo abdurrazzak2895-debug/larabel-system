@@ -140,7 +140,7 @@ class BookingController extends Controller
 
     public function lookupCities(Request $request)
     {
-        $request->validate(['occupation_id' => 'nullable|string']);
+        $request->validate(['category_id' => 'required|string']);
 
         $token = $this->ensureSvpToken($request);
         if (! $token) {
@@ -148,7 +148,7 @@ class BookingController extends Controller
         }
 
         try {
-            $response = $this->booking->cities($token, $request->query('occupation_id'));
+            $response = $this->booking->cities($token, $request->query('category_id'));
             return response()->json($response->getData(true), $response->getStatusCode());
         } catch (\Throwable $e) {
             Log::error('SVP lookup cities failed', ['error' => $e->getMessage()]);
@@ -203,8 +203,8 @@ class BookingController extends Controller
     public function lookupTestCenters(Request $request)
     {
         $request->validate([
-            'city' => 'nullable|string',
-            'occupation_id' => 'nullable|string',
+            'city' => 'required|string',
+            'category_id' => 'required|string',
         ]);
 
         $token = $this->ensureSvpToken($request);
@@ -213,7 +213,7 @@ class BookingController extends Controller
         }
 
         try {
-            $response = $this->booking->testCenters($token, $request->query('city'), $request->query('occupation_id'));
+            $response = $this->booking->testCenters($token, $request->query('city'), $request->query('category_id'));
             return response()->json($response->getData(true), $response->getStatusCode());
         } catch (\Throwable $e) {
             Log::error('SVP lookup test-centers failed', ['error' => $e->getMessage()]);
@@ -224,9 +224,11 @@ class BookingController extends Controller
     public function lookupSessions(Request $request)
     {
         $request->validate([
-            'city' => 'nullable|string',
-            'occupation_id' => 'nullable|string',
-            'test_center_id' => 'nullable|string',
+            'city' => 'required|string',
+            'category_id' => 'required|string',
+            'test_center_id' => 'required|string',
+            'exam_date' => 'nullable|date_format:Y-m-d',
+            'reservation_id' => 'nullable|string',
         ]);
 
         $token = $this->ensureSvpToken($request);
@@ -234,8 +236,10 @@ class BookingController extends Controller
             return response()->json(['error' => 'SVP session expired.'], 401);
         }
 
-        $params = $request->only(['city', 'occupation_id', 'test_center_id']);
-        $params = array_filter($params);
+        $params = $request->only([
+            'city', 'category_id', 'test_center_id', 'exam_date', 'reservation_id', 'available_seats',
+        ]);
+        $params = array_filter($params, static fn ($value) => $value !== null && $value !== '');
 
         try {
             $response = $this->booking->sessions($token, $params);
@@ -252,7 +256,11 @@ class BookingController extends Controller
      */
     public function availableDates(Request $request)
     {
-        $request->validate(['session_id' => 'required|string']);
+        $request->validate([
+            'session_id'  => 'nullable|string',
+            'category_id' => 'required|string',
+            'city'        => 'required|string',
+        ]);
 
         $token = $this->ensureSvpToken($request);
         if (! $token) {
@@ -261,7 +269,11 @@ class BookingController extends Controller
 
         try {
             $sessionId = $request->query('session_id');
-            $response = $this->booking->availableDates($token, $sessionId);
+            $response = $this->booking->availableDates(
+                $token,
+                $sessionId,
+                $request->only(['category_id', 'city'])
+            );
             return response()->json($response->getData(true), $response->getStatusCode());
         } catch (\Throwable $e) {
             Log::error('SVP availableDates failed', ['error' => $e->getMessage()]);
@@ -282,10 +294,17 @@ class BookingController extends Controller
 
         $data = $request->validate([
             'candidate_id'    => ['required', 'integer', 'exists:candidates,id'],
-            'occupation_id'   => ['required', 'string'],
-            'exam_session_id' => ['required', 'string'],
-            'exam_date'       => ['required', 'date'],
-            'amount'          => ['required', 'numeric', 'min:1'],
+            'occupation_id'    => ['required', 'string'],
+            'category_id'      => ['required', 'string'],
+            'city'             => ['required', 'string', 'max:120'],
+            'test_center_id'   => ['required', 'string'],
+            'test_center_name' => ['required', 'string', 'max:255'],
+            'exam_session_id'  => ['required', 'string'],
+            'exam_session_name'=> ['nullable', 'string', 'max:255'],
+            'exam_date'        => ['required', 'date'],
+            'language_code'    => ['required', 'string', 'max:20'],
+            'methodology'      => ['nullable', 'string', 'max:40'],
+            'amount'           => ['required', 'numeric', 'min:1'],
             'notes'           => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -309,9 +328,18 @@ class BookingController extends Controller
             'agency_id'       => $agencyId,
             'user_id'         => Auth::id(),
             'credential_id'   => $candidate->id,
-            'occupation_id'   => $data['occupation_id'],
-            'exam_session_id' => $data['exam_session_id'],
-            'amount'          => (float) $data['amount'],
+            'occupation_id'    => $data['occupation_id'],
+            'category_id'      => $data['category_id'],
+            'city'             => $data['city'],
+            'test_center_id'   => $data['test_center_id'],
+            'test_center_name' => $data['test_center_name'],
+            'exam_session_id'  => $data['exam_session_id'],
+            'exam_session_name'=> $data['exam_session_name'] ?? null,
+            'exam_date'        => $data['exam_date'],
+            'language_code'    => strtoupper(trim($data['language_code'])),
+            'methodology'      => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
+            'notes'            => $data['notes'] ?? null,
+            'amount'           => (float) $data['amount'],
         ]);
 
         if (! $result['success']) {

@@ -70,7 +70,25 @@
             </div>
             <div class="px-6 py-3 grid grid-cols-3 gap-4">
                 <dt class="text-xs font-medium text-slate-400 uppercase tracking-wide">Exam Session</dt>
-                <dd class="col-span-2 text-sm text-slate-700">{{ $booking->exam_session_id ?? '—' }}</dd>
+                <dd class="col-span-2 text-sm text-slate-700">
+                    <span class="font-mono">{{ $booking->exam_session_id ?? '—' }}</span>
+                    @if ($booking->exam_session_name)<span class="block text-xs text-slate-500 mt-1">{{ $booking->exam_session_name }}</span>@endif
+                </dd>
+            </div>
+            <div class="px-6 py-3 grid grid-cols-3 gap-4">
+                <dt class="text-xs font-medium text-slate-400 uppercase tracking-wide">Category</dt>
+                <dd class="col-span-2 text-sm text-slate-700">{{ $booking->category_id ?? '—' }}</dd>
+            </div>
+            <div class="px-6 py-3 grid grid-cols-3 gap-4">
+                <dt class="text-xs font-medium text-slate-400 uppercase tracking-wide">Test Center</dt>
+                <dd class="col-span-2 text-sm text-slate-700">
+                    {{ $booking->test_center_name ?? '—' }}
+                    @if ($booking->test_center_id)<span class="block text-xs text-slate-500 mt-1">SVP ID: {{ $booking->test_center_id }}</span>@endif
+                </dd>
+            </div>
+            <div class="px-6 py-3 grid grid-cols-3 gap-4">
+                <dt class="text-xs font-medium text-slate-400 uppercase tracking-wide">City / Exam Date</dt>
+                <dd class="col-span-2 text-sm text-slate-700">{{ $booking->city ?? '—' }} @if ($booking->exam_date) · {{ $booking->exam_date->format('Y-m-d') }} @endif</dd>
             </div>
             <div class="px-6 py-3 grid grid-cols-3 gap-4">
                 <dt class="text-xs font-medium text-slate-400 uppercase tracking-wide">Occupation</dt>

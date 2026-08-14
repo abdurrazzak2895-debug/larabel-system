@@ -32,7 +32,7 @@ class BookingService
     // -----------------------------------------------------------------
 
     public function sessions(string $token, array $params = []) { return $this->provider->withToken($token)->examSessions($params); }
-    public function availableDates(string $token, ?string $sessionId = null) { return $this->provider->withToken($token)->availableDates($sessionId); }
+    public function availableDates(string $token, ?string $sessionId = null, array $params = []) { return $this->provider->withToken($token)->availableDates($sessionId, $params); }
     public function validateReservation(string $token) { return $this->provider->withToken($token)->validateReservation(); }
     public function reservations(string $token) { return $this->provider->withToken($token)->reservationDetails(); }
     public function reservation(string $token, string $id) { return $this->provider->withToken($token)->reservationDetails($id); }
@@ -43,8 +43,8 @@ class BookingService
     public function examSession(string $token, string $id) { return $this->provider->withToken($token)->examSession($id); }
     public function occupations(string $token) { return $this->provider->withToken($token)->occupations(); }
     public function occupationsSearch(string $token, ?string $search = null, int $page = 1, int $perPage = 1000) { return $this->provider->withToken($token)->occupationsSearch($search, $page, $perPage); }
-    public function cities(string $token, ?string $occupationId = null) { return $this->provider->withToken($token)->cities($occupationId); }
-    public function testCenters(string $token, ?string $city = null, ?string $occupationId = null) { return $this->provider->withToken($token)->testCentersForFilters($city, $occupationId); }
+    public function cities(string $token, ?string $categoryId = null) { return $this->provider->withToken($token)->cities($categoryId); }
+    public function testCenters(string $token, ?string $city = null, ?string $categoryId = null) { return $this->provider->withToken($token)->testCentersForFilters($city, $categoryId); }
     public function categories(string $token) { return $this->provider->withToken($token)->categories(); }
     public function countries(string $token) { return $this->provider->withToken($token)->countries(); }
     public function categoriesForOccupation(string $token, ?string $occupationId = null) { return $this->provider->withToken($token)->categoriesForOccupation($occupationId); }
@@ -71,7 +71,13 @@ class BookingService
      * @param  array{
      *     agency_id: int,
      *     occupation_id?: string,
+     *     category_id?: string,
      *     exam_session_id?: string,
+     *     exam_session_name?: string,
+     *     test_center_id?: string,
+     *     test_center_name?: string,
+     *     city?: string,
+     *     exam_date?: string,
      *     amount: float,
      *     user_id?: int|null,
      *     credential_id?: int|null
@@ -88,7 +94,13 @@ class BookingService
             'user_id'          => $data['user_id'] ?? null,
             'credential_id'    => $data['credential_id'] ?? null,
             'occupation_id'    => $data['occupation_id'] ?? null,
+            'category_id'      => $data['category_id'] ?? null,
             'exam_session_id'  => $data['exam_session_id'] ?? null,
+            'exam_session_name' => $data['exam_session_name'] ?? null,
+            'test_center_id'   => $data['test_center_id'] ?? null,
+            'test_center_name' => $data['test_center_name'] ?? null,
+            'exam_date'        => $data['exam_date'] ?? null,
+            'notes'            => $data['notes'] ?? null,
             'booking_status'   => 'processing',
             'booking_reference' => Str::uuid()->toString(),
         ]);
@@ -114,22 +126,43 @@ class BookingService
                 'request_payload' => $data,
             ]);
 
-            // 3. Call external API to complete the booking
-            $response = $this->provider->withToken($token)->temporarySeat($data);
-            $attempt->update([
-                'provider_response' => $response->getData(true),
-            ]);
+            // 3. Create the real SVP reservation. The selected exam_session_id
+            // is the authoritative center assignment; site_id/site_city are
+            // included as the wizard does for the selected center context.
+            $provider = $this->provider->withToken($token);
+            $reservationResponse = $provider->createReservation($this->reservationPayload($data));
+            $reservationPayload = $reservationResponse->getData(true);
+            $reservationId = $this->extractReservationId($reservationPayload);
+            $providerResponse = ['reservation' => $reservationPayload];
 
-            // 4. On success — save booking, wallet debit, notify
-            if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
-                $booking->update(['booking_status' => 'booked']);
+            if ($reservationResponse->getStatusCode() < 200 || $reservationResponse->getStatusCode() >= 300 || ! $reservationId) {
+                $attempt->update(['provider_response' => $providerResponse]);
+                return $this->handleBookingFailure($booking, $attempt, $providerResponse, $amount);
+            }
+
+            // 4. SVP discards an unpaid reservation. Persist it only after the
+            // reservation-credit payment succeeds for the same reservation.
+            $paymentResponse = $provider->useReservationCredit([
+                'methodology_type' => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
+                'reservation_id'   => $this->numericOrString($reservationId),
+                'occupation_id'    => $this->numericOrString($data['occupation_id'] ?? null),
+            ]);
+            $providerResponse['payment'] = $paymentResponse->getData(true);
+            $attempt->update(['provider_response' => $providerResponse]);
+
+            // 5. On success — save booking, wallet debit, notify
+            if ($paymentResponse->getStatusCode() >= 200 && $paymentResponse->getStatusCode() < 300) {
+                $booking->update([
+                    'reservation_id' => (string) ($this->extractReservationId($paymentResponse->getData(true)) ?: $reservationId),
+                    'booking_status' => 'booked',
+                ]);
                 $attempt->update(['status' => 'success']);
 
                 $this->wallet->debit($agencyId, $amount, $booking->booking_reference, [
                     'booking_id' => $booking->id,
                 ]);
 
-                $this->logEvent($booking, 'booking_completed', ['response' => $response->getData(true)]);
+                $this->logEvent($booking, 'booking_completed', ['response' => $providerResponse]);
                 $this->audit->log($agencyId, 'booking', ['booking_id' => $booking->id, 'action' => 'completed']);
 
                 if ($booking->user_id) {
@@ -140,11 +173,11 @@ class BookingService
                     );
                 }
 
-                return ['booking' => $booking, 'response' => $response, 'success' => true];
+                return ['booking' => $booking, 'response' => $paymentResponse, 'success' => true];
             }
 
             // 5. Failure — release hold + refund
-            return $this->handleBookingFailure($booking, $attempt, $response->getData(true), $amount);
+            return $this->handleBookingFailure($booking, $attempt, $providerResponse, $amount);
         } catch (\Throwable $e) {
             if (isset($attempt)) {
                 $attempt->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
@@ -152,6 +185,59 @@ class BookingService
 
             return $this->handleBookingFailure($booking, null, ['error' => $e->getMessage()], $amount);
         }
+    }
+
+    /**
+     * Build the SVP reservation payload. The real session token determines the
+     * center/date; test_center_id is therefore translated to SVP's site_id.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    protected function reservationPayload(array $data): array
+    {
+        return array_filter([
+            'exam_session_id'       => (string) ($data['exam_session_id'] ?? ''),
+            'occupation_id'         => $this->numericOrString($data['occupation_id'] ?? null),
+            'language_code'         => strtoupper((string) ($data['language_code'] ?? config('svp.default_language_code', 'LOABB'))),
+            'methodology'           => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
+            'site_id'               => isset($data['test_center_id']) ? (string) $data['test_center_id'] : null,
+            'site_city'             => $data['city'] ?? null,
+            'country_id'            => (int) config('svp.country_id', 78),
+            'accept_declaration'    => true,
+            'info_confirmation'    => true,
+            'practical_confirmation' => true,
+        ], static fn ($value): bool => $value !== null && $value !== '');
+    }
+
+    protected function numericOrString(mixed $value): mixed
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        return is_numeric($value) ? (int) $value : $value;
+    }
+
+    protected function extractReservationId(mixed $payload): string|int|null
+    {
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        foreach ([
+            data_get($payload, 'exam_reservation.id'),
+            data_get($payload, 'reservation.id'),
+            $payload['reservation_id'] ?? null,
+            $payload['reservationId'] ?? null,
+            $payload['id'] ?? null,
+        ] as $id) {
+            if ($id !== null && $id !== '') {
+                return is_scalar($id) ? $id : null;
+            }
+        }
+
+        return null;
     }
 
     /**

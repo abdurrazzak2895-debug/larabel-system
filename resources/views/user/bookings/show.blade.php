@@ -74,13 +74,32 @@
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Exam Session</p>
-            <p class="text-sm font-semibold text-slate-800 mt-1">{{ $booking->exam_session_id ?? '—' }}</p>
+            <p class="text-sm font-semibold text-slate-800 mt-1 font-mono">{{ $booking->exam_session_id ?? '—' }}</p>
+            @if ($booking->exam_session_name)
+            <p class="text-xs text-slate-500 mt-1">{{ $booking->exam_session_name }}</p>
+            @endif
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Test Center</p>
+            <p class="text-sm font-semibold text-slate-800 mt-1">{{ $booking->test_center_name ?? '—' }}</p>
+            @if ($booking->test_center_id)
+            <p class="text-xs text-slate-500 mt-1">SVP ID: {{ $booking->test_center_id }}</p>
+            @endif
+            @if ($booking->city)
+            <p class="text-xs text-slate-400 mt-1">{{ $booking->city }}</p>
+            @endif
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Candidate</p>
             <p class="text-sm font-semibold text-slate-800 mt-1">{{ $booking->credential->full_name ?? '—' }}</p>
             @if ($booking->occupation_id)
             <p class="text-xs text-slate-400 mt-0.5">Occupation: {{ $booking->occupation_id }}</p>
+            @endif
+            @if ($booking->category_id)
+            <p class="text-xs text-slate-400 mt-0.5">Category: {{ $booking->category_id }}</p>
+            @endif
+            @if ($booking->exam_date)
+            <p class="text-xs text-slate-400 mt-0.5">Exam date: {{ $booking->exam_date->format('Y-m-d') }}</p>
             @endif
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">

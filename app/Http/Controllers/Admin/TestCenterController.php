@@ -62,7 +62,7 @@ class TestCenterController extends Controller
             $response = $this->booking->testCenters($token);
             $data = $response->getData(true);
 
-            $centers = data_get($data, 'data.test_centers', []);
+            $centers = data_get($data, 'data.test_centers', data_get($data, 'data', data_get($data, 'test_centers', [])));
 
             if (! is_array($centers) || count($centers) === 0) {
                 return back()->with('error', 'The SVP API returned no test centers for the current session.');

@@ -152,9 +152,19 @@ class CoreServicesTest extends TestCase
 
     public function test_booking_service_persists_booking_with_candidate_credential(): void
     {
-        Http::fake([
-            '*' => Http::response(['success' => true], 200),
-        ]);
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/individual_labor_space/exam_reservations')) {
+                return Http::response(['exam_reservation' => ['id' => 9876]], 201);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/reservation_credits/use')) {
+                return Http::response(['success' => true, 'reservation_id' => 9876], 200);
+            }
+
+            return Http::response(['success' => true], 200);
+        });
 
         $user = User::factory()->create(['agency_id' => $this->agency->id]);
 
@@ -193,6 +203,79 @@ class CoreServicesTest extends TestCase
             'available_balance' => 500.00,
             'reserved_balance'  => 0.00,
         ]);
+    }
+
+    public function test_booking_payload_keeps_real_center_and_prometric_language(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/individual_labor_space/exam_reservations')) {
+                return Http::response(['exam_reservation' => ['id' => 9876]], 201);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/reservation_credits/use')) {
+                return Http::response(['success' => true, 'reservation_id' => 9876], 200);
+            }
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $this->agency->id,
+            'full_name' => 'Rana Khan',
+            'email' => $user->email,
+        ]);
+        app(WalletService::class)->deposit($this->agency->id, 2000.00);
+
+        $result = app(BookingService::class)->completeBooking('test-token', [
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'credential_id' => $candidate->id,
+            'occupation_id' => '2279',
+            'category_id' => 'category-4',
+            'city' => 'Dhaka',
+            'test_center_id' => '62',
+            'test_center_name' => 'Dhaka North',
+            'exam_session_id' => 'REAL-SESSION-1',
+            'exam_session_name' => '2026-09-01 • Dhaka North • Dhaka',
+            'exam_date' => '2026-09-01',
+            'language_code' => 'LOABB',
+            'methodology' => 'in_person',
+            'amount' => 1500.00,
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('62', $result['booking']->test_center_id);
+        $this->assertSame('Dhaka North', $result['booking']->test_center_name);
+
+        Http::assertSent(function ($request): bool {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            if (! str_ends_with($path, '/individual_labor_space/exam_reservations')) {
+                return true;
+            }
+
+            $body = json_decode($request->body(), true);
+            return ($body['exam_session_id'] ?? null) === 'REAL-SESSION-1'
+                && ($body['site_id'] ?? null) === '62'
+                && ($body['site_city'] ?? null) === 'Dhaka'
+                && ($body['language_code'] ?? null) === 'LOABB'
+                && ($body['methodology'] ?? null) === 'in_person';
+        });
+
+        Http::assertSent(function ($request): bool {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            if (! str_ends_with($path, '/individual_labor_space/reservation_credits/use')) {
+                return true;
+            }
+
+            $body = json_decode($request->body(), true);
+            return ($body['reservation_id'] ?? null) === 9876
+                && ($body['occupation_id'] ?? null) === 2279
+                && ($body['methodology_type'] ?? null) === 'in_person';
+        });
     }
 
     public function test_booking_service_marks_failed_and_refunds_on_provider_error(): void
