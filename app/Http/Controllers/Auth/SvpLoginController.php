@@ -217,16 +217,29 @@ class SvpLoginController extends Controller
         }
 
         // Auto-create / update candidate from SVP profile after successful login.
+        // Some SVP deployments intermittently fail the follow-up profile request,
+        // while the OTP response already contains a usable user/profile envelope.
+        // Fall back to that response so a verified account is not left without a
+        // candidate row and the booking wizard does not remain unusable.
+        $profile = [];
         try {
             $profileResponse = $this->profile->profile($token);
             $profileData = $profileResponse->getData(true);
             $profile = $this->extractProfileRecord(is_array($profileData) ? $profileData : []);
-
-            if ($profile !== []) {
-                $this->syncCandidateFromProfile($user, $profile);
-            }
         } catch (\Throwable $e) {
-            Log::warning('SVP profile sync after login failed', ['error' => $e->getMessage()]);
+            Log::warning('SVP profile sync after login failed; trying OTP response fallback', ['error' => $e->getMessage()]);
+        }
+
+        if ($profile === []) {
+            $profile = $this->extractProfileRecord(is_array($result['body'] ?? null) ? $result['body'] : []);
+        }
+
+        if ($profile !== []) {
+            try {
+                $this->syncCandidateFromProfile($user, $profile);
+            } catch (\Throwable $e) {
+                Log::warning('SVP candidate persistence after login failed', ['error' => $e->getMessage()]);
+            }
         }
 
         // Agency staff land on the agency panel; standalone SVP users on the user panel.
