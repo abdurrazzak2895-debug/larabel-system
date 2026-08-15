@@ -159,8 +159,6 @@ class TakamolProviderLookupTest extends TestCase
                         ['id' => 220, 'name' => 'Kishoreganj Technical Training Centre', 'city' => 'Dhaka'],
                         ['id' => 218, 'name' => 'Narsingdi Technical Training Center', 'city' => 'Dhaka'],
                         ['id' => 102, 'name' => 'Tangail Technical Training Center', 'city' => 'Dhaka'],
-                        ['id' => 45, 'name' => 'Bangladesh German TTC', 'city' => 'Dhaka'],
-                        ['id' => 17, 'name' => 'Bangladesh Korea TTC Dhaka', 'city' => 'Dhaka'],
                     ],
                 ],
             ], 200),
@@ -171,6 +169,7 @@ class TakamolProviderLookupTest extends TestCase
 
         $this->assertCount(7, $centers);
         $this->assertSame(['403', '223', '220', '218', '102', '45', '17'], array_column($centers, 'id'));
+        $this->assertSame('Bangladesh German TTC', $centers[5]['name']);
         $this->assertSame('Bangladesh Korea TTC Dhaka', $centers[6]['name']);
     }
 
