@@ -148,6 +148,32 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_dhaka_returns_all_seven_supplied_svp_centers_with_real_ids(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'data' => [
+                    'test_centers' => [
+                        ['id' => 403, 'name' => 'Arkan Al-Taameer for professional classification - Dhaka', 'city' => 'Dhaka'],
+                        ['id' => 223, 'name' => 'Manikganj Technical Training Center', 'city' => 'Dhaka'],
+                        ['id' => 220, 'name' => 'Kishoreganj Technical Training Centre', 'city' => 'Dhaka'],
+                        ['id' => 218, 'name' => 'Narsingdi Technical Training Center', 'city' => 'Dhaka'],
+                        ['id' => 102, 'name' => 'Tangail Technical Training Center', 'city' => 'Dhaka'],
+                        ['id' => 45, 'name' => 'Bangladesh German TTC', 'city' => 'Dhaka'],
+                        ['id' => 17, 'name' => 'Bangladesh Korea TTC Dhaka', 'city' => 'Dhaka'],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = (new TakamolProvider())->withToken('test-token')->testCentersForFilters('Dhaka', 'category-4');
+        $centers = $response->getData(true)['data'];
+
+        $this->assertCount(7, $centers);
+        $this->assertSame(['403', '223', '220', '218', '102', '45', '17'], array_column($centers, 'id'));
+        $this->assertSame('Bangladesh Korea TTC Dhaka', $centers[6]['name']);
+    }
+
     public function test_categories_for_occupation_handles_nested_occupations_envelope(): void
     {
         Http::fake([

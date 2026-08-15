@@ -87,26 +87,86 @@ class SvpTemporaryHoldService
     }
 
     /**
-     * Resolve a selected session from the exact list previously returned to the browser.
+     * Resolve the selected session from the exact center-scoped list returned
+     * to this browser. If the upstream session carries a different center,
+     * choose the next dated session from this same center-scoped snapshot.
+     * Never fall back to another center.
      *
      * @param array<string, mixed> $context
      * @return array<string, mixed>|null
      */
-    public function findRememberedSession(Request $request, array $context, string $sessionId): ?array
+    public function resolveCenterSession(Request $request, array $context, string $sessionId, string $preferredDate): ?array
     {
         $lookup = $this->sessionLookups($request)[$this->lookupKey($context)] ?? null;
         if (! is_array($lookup) || ! is_array($lookup['sessions'] ?? null)) {
             return null;
         }
 
+        $selected = null;
         foreach ($lookup['sessions'] as $session) {
             if (is_array($session) && (string) ($session['id'] ?? '') === $sessionId) {
-                return $session;
+                $selected = $session;
+                break;
+            }
+        }
+
+        $requestedCenter = (string) ($context['test_center_id'] ?? '');
+        $selectedCenter = $this->sessionCenterId($selected);
+        if ($selected !== null && ($selectedCenter === '' || $selectedCenter === $requestedCenter)) {
+            return $selected;
+        }
+
+        // PACC may rotate opaque session IDs between lookup and hold. If the
+        // submitted ID is missing, or points to another center, resolve the
+        // earliest date on or after the requested date from this same
+        // center-scoped snapshot. Never fall back to another center.
+        $candidates = array_values(array_filter($lookup['sessions'], function ($session) use ($requestedCenter, $preferredDate): bool {
+            if (! is_array($session)) {
+                return false;
+            }
+            $center = $this->sessionCenterId($session);
+            $date = $this->sessionDate($session);
+            return ($center === '' || $center === $requestedCenter)
+                && $date !== null
+                && $date >= $preferredDate;
+        }));
+
+        usort($candidates, function (array $left, array $right): int {
+            return strcmp($this->sessionDate($left) ?? '9999-99-99', $this->sessionDate($right) ?? '9999-99-99');
+        });
+
+        return $candidates[0] ?? null;
+    }
+
+    /**
+     * Resolve a selected session without applying a fallback.
+     *
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>|null
+     */
+    public function findRememberedSession(Request $request, array $context, string $sessionId): ?array
+    {
+        return $this->resolveCenterSession($request, $context, $sessionId, '0000-00-00');
+    }
+
+    private function sessionCenterId(?array $session): string
+    {
+        $center = is_array($session['test_center'] ?? null) ? $session['test_center'] : [];
+        return (string) ($session['test_center_id'] ?? $session['site_id'] ?? $center['id'] ?? '');
+    }
+
+    private function sessionDate(array $session): ?string
+    {
+        foreach (['exam_date', 'test_date', 'date', 'start_date_in_browser_time_zone', 'start_date_in_tc_time_zone'] as $key) {
+            $value = $session[$key] ?? null;
+            if (is_string($value) && preg_match('/^\\d{4}-\\d{2}-\\d{2}/', $value) === 1) {
+                return substr($value, 0, 10);
             }
         }
 
         return null;
     }
+
 
     /**
      * Consume a hold only when it was created in this session for the exact

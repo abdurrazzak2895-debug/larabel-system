@@ -109,7 +109,61 @@ class SvpHoldControllerTest extends TestCase
         );
     }
 
-    public function test_hold_rejects_a_session_id_not_present_in_the_current_browser_lookup_snapshot(): void
+    public function test_rotated_session_id_resolves_to_the_next_date_at_the_same_center(): void
+    {
+        $booking = Mockery::mock(BookingService::class);
+        $booking->shouldNotReceive('sessions');
+        $booking->shouldReceive('temporarySeat')
+            ->once()
+            ->with('svp-token', [
+                'exam_session_id' => 'different-session-id',
+                'test_center_id' => '223',
+            ])
+            ->andReturn(response()->json([
+                'id' => 5144550,
+                'exam_session_id' => 'different-session-id',
+                'expired_at' => '14/08/2026 06:00',
+            ], 201));
+        $this->app->instance(BookingService::class, $booking);
+
+        $request = Request::create('/agency/bookings/temporary-hold', 'POST', [
+            'occupation_id' => '2061',
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '223',
+            'exam_session_id' => 'rotated-session-id',
+            'exam_date' => '2026-08-30',
+        ]);
+        $request->setLaravelSession(app('session.store'));
+        $request->session()->start();
+        $request->session()->put('svp_token', 'svp-token');
+
+        app(SvpTemporaryHoldService::class)->rememberSessionLookup($request, [
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '223',
+        ], [
+            'data' => [
+                'exam_sessions' => [[
+                    'id' => 'different-session-id',
+                    'test_center_id' => '223',
+                    'exam_date' => '2026-08-31',
+                ]],
+            ],
+        ]);
+
+        $response = app(SvpHoldController::class)->store($request);
+        $payload = $response->getData(true);
+
+        $this->assertSame(201, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+        $this->assertSame('different-session-id', $payload['selection']['exam_session_id']);
+        $this->assertSame('2026-08-31', $payload['selection']['exam_date']);
+        $this->assertSame('223', $payload['selection']['test_center_id']);
+        $this->assertSame('rotated-session-id', $payload['resolved_from_session_id']);
+    }
+
+    public function test_rotated_session_id_is_rejected_when_no_same_center_date_remains(): void
     {
         $booking = Mockery::mock(BookingService::class);
         $booking->shouldNotReceive('sessions');
@@ -135,8 +189,9 @@ class SvpHoldControllerTest extends TestCase
         ], [
             'data' => [
                 'exam_sessions' => [[
-                    'id' => 'different-session-id',
-                    'exam_date' => '2026-08-31',
+                    'id' => 'earlier-session-id',
+                    'test_center_id' => '223',
+                    'exam_date' => '2026-08-30',
                 ]],
             ],
         ]);
@@ -145,7 +200,7 @@ class SvpHoldControllerTest extends TestCase
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertSame(
-            'The selected SVP session is no longer available. Refresh the session list and choose another session.',
+            'No available SVP session remains at the selected test center on or after the requested date.',
             $response->getData(true)['error']
         );
     }

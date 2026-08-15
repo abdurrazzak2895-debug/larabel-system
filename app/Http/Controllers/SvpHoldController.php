@@ -42,24 +42,39 @@ class SvpHoldController extends Controller
 
         try {
             // Validate against the exact center-scoped session list that was
-            // returned to this browser. SVP can rotate opaque session IDs
-            // between two list requests, so re-fetching the list here can
-            // incorrectly reject a valid selection with a new ID.
-            $selectedSession = $this->holds->findRememberedSession($request, [
+            // returned to this browser. If an upstream session unexpectedly
+            // carries another center, resolve the next dated session from the
+            // requested center only. Never silently switch centers.
+            $context = [
                 'category_id' => $data['category_id'],
                 'city' => $data['city'],
                 'test_center_id' => $data['test_center_id'],
-            ], $data['exam_session_id']);
+            ];
+            $selectedSession = $this->holds->resolveCenterSession(
+                $request,
+                $context,
+                $data['exam_session_id'],
+                $data['exam_date']
+            );
             $selectedSessionDate = $this->sessionDate($selectedSession);
+            $resolvedSessionId = (string) ($selectedSession['id'] ?? '');
 
-            if ($selectedSession === null || $selectedSessionDate === null) {
+            if ($selectedSession === null || $selectedSessionDate === null || $resolvedSessionId === '') {
                 return response()->json([
                     'success' => false,
-                    'error' => 'The selected SVP session is no longer available. Refresh the session list and choose another session.',
+                    'error' => 'No available SVP session remains at the selected test center on or after the requested date.',
                 ], 422);
             }
 
-            if ($selectedSessionDate !== $data['exam_date']) {
+            $selectedCenterId = $this->sessionCenterId($selectedSession);
+            if ($selectedCenterId !== '' && $selectedCenterId !== (string) $data['test_center_id']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'SVP returned no session at the selected test center. Choose another date from this same center.',
+                ], 422);
+            }
+
+            if ($resolvedSessionId === (string) $data['exam_session_id'] && $selectedSessionDate !== $data['exam_date']) {
                 return response()->json([
                     'success' => false,
                     'error' => 'The exam date must match the selected live SVP session date.',
@@ -67,7 +82,7 @@ class SvpHoldController extends Controller
             }
 
             $response = $this->booking->temporarySeat($token, [
-                'exam_session_id' => $data['exam_session_id'],
+                'exam_session_id' => $resolvedSessionId,
                 'test_center_id' => $data['test_center_id'],
             ]);
 
@@ -87,8 +102,9 @@ class SvpHoldController extends Controller
                 'city' => $data['city'],
                 'test_center_id' => $data['test_center_id'],
                 'test_center_name' => $data['test_center_name'] ?? null,
-                'exam_session_id' => $data['exam_session_id'],
-                'exam_date' => $data['exam_date'],
+                'exam_session_id' => $resolvedSessionId,
+                'exam_session_name' => $selectedSession['name'] ?? $selectedSession['session_name'] ?? null,
+                'exam_date' => $selectedSessionDate,
             ];
 
             $rememberedHold = $this->holds->remember(
@@ -102,6 +118,7 @@ class SvpHoldController extends Controller
                 'success' => true,
                 'data' => $rememberedHold,
                 'selection' => $selection,
+                'resolved_from_session_id' => $data['exam_session_id'] !== $resolvedSessionId ? $data['exam_session_id'] : null,
             ], $response->getStatusCode());
         } catch (\Throwable $e) {
             Log::error('SVP temporary hold failed', [
@@ -115,6 +132,16 @@ class SvpHoldController extends Controller
                 'error' => 'Unable to create a temporary SVP hold.',
             ], 503);
         }
+    }
+
+    private function sessionCenterId(?array $session): string
+    {
+        if ($session === null) {
+            return '';
+        }
+
+        $center = is_array($session['test_center'] ?? null) ? $session['test_center'] : [];
+        return (string) ($session['test_center_id'] ?? $session['site_id'] ?? $center['id'] ?? '');
     }
 
     /**

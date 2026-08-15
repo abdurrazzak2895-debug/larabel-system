@@ -131,15 +131,16 @@
                 </select>
                 <input type="hidden" name="test_center_name" id="test_center_name" value="">
                 <p id="test-center-error" class="hidden text-red-600 text-xs mt-1"></p>
+                <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Select a city to load the live SVP test centers.</p>
             </div>
         </div>
 
         {{-- Session, date, and live SVP payment routing --}}
         <div class="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Session &amp; SVP payment route</p>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC booking</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1">Exam Session</label>
+                    <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1">Available Session Date</label>
                     <select name="exam_session_id" id="exam_session_id" required
                         class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
@@ -156,7 +157,7 @@
                     <input type="date" name="exam_date" id="exam_date" required readonly
                         class="w-full rounded-lg border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
                     <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
-                    <p class="text-xs text-slate-400 mt-1">The date is supplied by the exact center-specific SVP session and cannot be changed.</p>
+                    <p class="text-xs text-slate-400 mt-1">PACC assigns the exact start time and session at reservation. We reserve only at the selected center; if the selected session is unavailable there, the next available date at that same center is used.</p>
                     @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
             </div>
@@ -228,6 +229,7 @@
         const testCenterSelect = document.getElementById('test_center_id');
         const testCenterNameInput = document.getElementById('test_center_name');
         const testCenterError = document.getElementById('test-center-error');
+        const dhakaCenterSummary = document.getElementById('dhaka-center-summary');
         const testCenterSection = document.getElementById('test-center-section');
         const sessionSelect = document.getElementById('exam_session_id');
         const sessionNameInput = document.getElementById('exam_session_name');
@@ -318,6 +320,15 @@
             }).then(async response => {
                 const body = await response.json().catch(() => ({}));
                 if (!response.ok || body.success === false) throw new Error(body.error || 'SVP could not create the temporary hold.');
+                const resolved = body.selection || {};
+                if (resolved.exam_session_id && resolved.exam_session_id !== sessionSelect.value) {
+                    sessionSelect.value = resolved.exam_session_id;
+                    sessionSelect.dispatchEvent(new Event('change'));
+                    temporaryHoldStatus.textContent = 'PACC matched the next available date at the selected center: ' + (resolved.exam_date || dateInput.value) + '. Creating the hold…';
+                }
+                if (resolved.exam_date && resolved.exam_date !== dateInput.value) {
+                    dateInput.value = resolved.exam_date;
+                }
                 const hold = body.data || body;
                 const holdId = hold.id ?? hold.hold_id ?? hold.temporary_hold_id;
                 if (!holdId) throw new Error('SVP returned no temporary hold ID.');
@@ -388,10 +399,7 @@
                 if (select === testCenterSelect && centerId) {
                     option.textContent = (centerName || baseLabel) + ' — SVP ID: ' + centerId;
                 } else if (select === sessionSelect) {
-                    const sessionCenter = centerName || testCenterNameInput?.value || '';
-                    const sessionCenterId = item.test_center_id ?? item.site_id ?? testCenterSelect?.value ?? '';
-                    const suffix = sessionCenterId ? ' — ' + (sessionCenter || 'Test center') + ' (SVP ID: ' + sessionCenterId + ')' : '';
-                    option.textContent = baseLabel + suffix;
+                    option.textContent = option.dataset.date || baseLabel;
                 } else {
                     option.textContent = baseLabel;
                 }
@@ -661,8 +669,13 @@
                     setLoading(testCenterSelect, true);
                     const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId);
                     const data = await fetchJSON(url);
-                    const centers = (data && Array.isArray(data.data)) ? data.data : [];
+                    const centers = data?.data?.test_centers || (data && Array.isArray(data.data) ? data.data : []);
                     populateSelect(testCenterSelect, centers, 'id', 'name');
+                    if (dhakaCenterSummary) {
+                        dhakaCenterSummary.textContent = city.toLowerCase() === 'dhaka'
+                            ? 'SVP returned ' + centers.length + ' Dhaka test centers. Booking is locked to the selected center.'
+                            : 'SVP returned ' + centers.length + ' live test centers for ' + city + '.';
+                    }
                     if (centers.length > 0) {
                         testCenterSection.style.display = '';
                     } else {
