@@ -14,6 +14,15 @@
         'refunded'   => ['bg-purple-50 text-purple-700 border-purple-200', 'Refunded'],
     ];
     [$statusStyle, $statusLabel] = $statusStyles[$booking->booking_status] ?? [['bg-slate-50 text-slate-700 border-slate-200'], ucfirst($booking->booking_status)];
+    $latestAttempt = $attempts?->sortByDesc('id')->first();
+    $requestPayload = is_array($latestAttempt?->request_payload) ? $latestAttempt->request_payload : [];
+    $displayCenterId = $booking->test_center_id
+        ?: data_get($requestPayload, 'test_center_id')
+        ?: data_get($requestPayload, 'site_id');
+    $displayCenterName = $booking->test_center_name
+        ?: data_get($requestPayload, 'test_center_name')
+        ?: data_get($requestPayload, 'site_name')
+        ?: data_get($requestPayload, 'test_center.name');
     $statusSteps = ['pending', 'processing', 'booked'];
     $currentStep = array_search($booking->booking_status, $statusSteps);
 @endphp
@@ -81,9 +90,11 @@
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Test Center</p>
-            <p class="text-sm font-semibold text-slate-800 mt-1">{{ $booking->test_center_name ?? '—' }}</p>
-            @if ($booking->test_center_id)
-            <p class="text-xs text-slate-500 mt-1">SVP ID: {{ $booking->test_center_id }}</p>
+            <p class="text-sm font-semibold text-slate-800 mt-1">{{ $displayCenterName ?: 'Center data unavailable' }}</p>
+            @if ($displayCenterId)
+            <p class="text-xs text-slate-500 mt-1">SVP ID: {{ $displayCenterId }}</p>
+            @elseif (! $displayCenterName)
+            <p class="text-xs text-amber-600 mt-1">SVP center was not saved with this legacy booking.</p>
             @endif
             @if ($booking->city)
             <p class="text-xs text-slate-400 mt-1">{{ $booking->city }}</p>

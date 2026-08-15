@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Admin;
+use App\Models\Booking;
 use App\Models\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -148,6 +149,39 @@ class AdminAuthTest extends TestCase
         foreach ($pages as $url) {
             $this->get($url)->assertOk();
         }
+    }
+
+    public function test_agency_booking_pages_render_and_show_confirmed_svp_center(): void
+    {
+        $agencyUser = \App\Models\User::whereNotNull('agency_id')->firstOrFail();
+        Auth::guard('web')->login($agencyUser);
+
+        $booking = Booking::where('agency_id', $agencyUser->agency_id)
+            ->where('booking_status', 'booked')
+            ->firstOrFail();
+        $booking->update([
+            'test_center_id' => null,
+            'test_center_name' => null,
+            'exam_session_name' => '2026-08-25',
+        ]);
+        $booking->attempts()->create([
+            'status' => 'success',
+            'request_payload' => [
+                'test_center_id' => '17',
+                'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+            ],
+        ]);
+
+        $this->assertSame(
+            '17',
+            data_get($booking->fresh()->attempts()->latest('id')->first()?->request_payload, 'test_center_id')
+        );
+
+        $this->get(route('agency.bookings.index'))->assertOk();
+        $this->get(route('agency.bookings.show', $booking))
+            ->assertOk()
+            ->assertSee('Bangladesh Korea TTC Dhaka')
+            ->assertSee('SVP ID: 17');
     }
 
     public function test_guest_is_redirected_to_login(): void

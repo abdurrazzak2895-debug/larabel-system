@@ -3,6 +3,17 @@
 @section('title', 'Booking ' . $booking->booking_reference)
 
 @section('content')
+@php
+    $latestAttempt = $booking->attempts?->sortByDesc('id')->first();
+    $requestPayload = is_array($latestAttempt?->request_payload) ? $latestAttempt->request_payload : [];
+    $displayCenterId = $booking->test_center_id
+        ?: data_get($requestPayload, 'test_center_id')
+        ?: data_get($requestPayload, 'site_id');
+    $displayCenterName = $booking->test_center_name
+        ?: data_get($requestPayload, 'test_center_name')
+        ?: data_get($requestPayload, 'site_name')
+        ?: data_get($requestPayload, 'test_center.name');
+@endphp
 <div class="max-w-4xl">
     <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-3">
@@ -82,8 +93,12 @@
             <div class="px-6 py-3 grid grid-cols-3 gap-4">
                 <dt class="text-xs font-medium text-slate-400 uppercase tracking-wide">Test Center</dt>
                 <dd class="col-span-2 text-sm text-slate-700">
-                    {{ $booking->test_center_name ?? '—' }}
-                    @if ($booking->test_center_id)<span class="block text-xs text-slate-500 mt-1">SVP ID: {{ $booking->test_center_id }}</span>@endif
+                    {{ $displayCenterName ?: 'Center data unavailable' }}
+                    @if ($displayCenterId)
+                        <span class="block text-xs text-slate-500 mt-1">SVP ID: {{ $displayCenterId }}</span>
+                    @elseif (! $displayCenterName)
+                        <span class="block text-xs text-amber-600 mt-1">SVP center was not saved with this legacy booking.</span>
+                    @endif
                 </dd>
             </div>
             <div class="px-6 py-3 grid grid-cols-3 gap-4">
@@ -155,9 +170,3 @@
     @endif
 </div>
 @endsection
-</content>
-<task_progress>
-- [x] Built Agency/BookingController + routes + sidebar + listing + wizard views
-- [x] Write agency/booking-show.blade.php detail
-- [ ] Verify pages render (200)
-- [ ] Report
