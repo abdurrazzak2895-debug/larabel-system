@@ -220,9 +220,9 @@ class SvpLoginController extends Controller
         try {
             $profileResponse = $this->profile->profile($token);
             $profileData = $profileResponse->getData(true);
-            $profile = data_get($profileData, 'data', $profileData);
+            $profile = $this->extractProfileRecord(is_array($profileData) ? $profileData : []);
 
-            if (is_array($profile) && ! empty($profile)) {
+            if ($profile !== []) {
                 $this->syncCandidateFromProfile($user, $profile);
             }
         } catch (\Throwable $e) {
@@ -261,29 +261,76 @@ class SvpLoginController extends Controller
 
     private function syncCandidateFromProfile(User $user, array $profile): void
     {
-        $svpUserId = (string) data_get($profile, 'id', data_get($profile, 'user_id', ''));
+        $svpUserId = $this->extractSvpUserId($profile);
+        $candidate = $svpUserId !== ''
+            ? Candidate::where('user_id', $user->id)->where('svp_user_id', $svpUserId)->first()
+            : null;
 
-        Candidate::updateOrCreate(
-            [
-                'user_id'    => $user->id,
-                'svp_user_id' => $svpUserId ?: null,
-            ],
-            [
-                'agency_id'  => $user->agency_id,
-                'full_name'  => data_get($profile, 'full_name')
-                    ?? trim((data_get($profile, 'first_name', '') . ' ' . data_get($profile, 'last_name', '')))
-                    ?? $user->name,
-                'national_id'=> data_get($profile, 'national_id')
-                    ?? data_get($profile, 'iqama')
-                    ?? data_get($profile, 'id_number')
-                    ?? null,
-                'phone'      => data_get($profile, 'phone')
-                    ?? data_get($profile, 'mobile')
-                    ?? data_get($profile, 'phone_number')
-                    ?? null,
-                'email'      => data_get($profile, 'email') ?? $user->email,
-                'svp_data'   => $profile,
-            ]
-        );
+        // Reuse the existing candidate created before SVP profile sync. This is
+        // important because a nullable unique key allows multiple null-ID rows,
+        // and updateOrCreate([user_id, null]) cannot reliably select the row shown
+        // in the booking dropdown.
+        $candidate ??= Candidate::where('user_id', $user->id)
+            ->whereNull('svp_user_id')
+            ->latest('id')
+            ->first();
+        $candidate ??= new Candidate(['user_id' => $user->id]);
+
+        $candidate->fill([
+            'agency_id'   => $user->agency_id,
+            'svp_user_id' => $svpUserId !== '' ? $svpUserId : $candidate->svp_user_id,
+            'full_name'   => data_get($profile, 'full_name')
+                ?: trim((string) data_get($profile, 'first_name', '') . ' ' . (string) data_get($profile, 'last_name', ''))
+                ?: $user->name,
+            'national_id' => data_get($profile, 'national_id')
+                ?? data_get($profile, 'iqama')
+                ?? data_get($profile, 'id_number'),
+            'phone'       => data_get($profile, 'phone')
+                ?? data_get($profile, 'mobile')
+                ?? data_get($profile, 'phone_number'),
+            'email'       => data_get($profile, 'email') ?? $user->email,
+            'svp_data'    => $profile,
+        ]);
+        $candidate->user_id = $user->id;
+        $candidate->save();
+    }
+
+    /**
+     * Normalize the profile envelope returned by different SVP deployments.
+     * Live responses have appeared as data, data.profile, data.user, profile,
+     * and user; the booking payload needs the actual profile record.
+     */
+    private function extractProfileRecord(array $payload): array
+    {
+        foreach (['data.profile', 'data.user', 'profile', 'user', 'data'] as $path) {
+            $value = data_get($payload, $path);
+            if (is_array($value) && ($this->extractSvpUserId($value) !== '' || data_get($value, 'full_name'))) {
+                return $value;
+            }
+        }
+
+        return $this->extractSvpUserId($payload) !== '' ? $payload : [];
+    }
+
+    private function extractSvpUserId(array $profile): string
+    {
+        foreach (['svp_user_id', 'user_id', 'id', 'user.id', 'profile.id'] as $path) {
+            $value = data_get($profile, $path);
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return trim((string) $value);
+            }
+        }
+
+        foreach (['data', 'user', 'profile', 'account', 'individual'] as $key) {
+            $nested = data_get($profile, $key);
+            if (is_array($nested)) {
+                $id = $this->extractSvpUserId($nested);
+                if ($id !== '') {
+                    return $id;
+                }
+            }
+        }
+
+        return '';
     }
 }
