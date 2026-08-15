@@ -339,14 +339,35 @@ class SvpLoginController extends Controller
 
     private function extractSvpUserId(array $profile): string
     {
-        foreach (['svp_user_id', 'user_id', 'id', 'user.id', 'profile.id'] as $path) {
+        foreach ([
+            'svp_user_id',
+            'svpUserId',
+            'user_id',
+            'account_id',
+            'individual_id',
+            'id',
+            'user.id',
+            'profile.id',
+            'profile.user_id',
+            'profile.svp_user_id',
+            'account.id',
+            'individual.id',
+            'access_payload.user.id',
+            'access_payload.user_id',
+            'access_payload.account_id',
+            'access_payload.id',
+            'access.user.id',
+            'access.user_id',
+            'data.user.id',
+            'data.profile.id',
+        ] as $path) {
             $value = data_get($profile, $path);
             if (is_scalar($value) && trim((string) $value) !== '') {
                 return trim((string) $value);
             }
         }
 
-        foreach (['data', 'user', 'profile', 'account', 'individual'] as $key) {
+        foreach (['data', 'user', 'profile', 'account', 'individual', 'access_payload', 'access'] as $key) {
             $nested = data_get($profile, $key);
             if (is_array($nested)) {
                 $id = $this->extractSvpUserId($nested);

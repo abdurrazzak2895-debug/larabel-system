@@ -95,4 +95,17 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertSame('', $extractId->invoke($controller, $profile));
         $this->assertSame('SVP-USER-6643', $loginId);
     }
+
+    public function test_account_id_is_extracted_from_access_payload_and_profile_aliases(): void
+    {
+        $controller = app(SvpLoginController::class);
+        $extractId = new ReflectionMethod($controller, 'extractSvpUserId');
+
+        $this->assertSame('SVP-ACCESS-17', $extractId->invoke($controller, [
+            'access_payload' => ['user' => ['id' => 'SVP-ACCESS-17']],
+        ]));
+        $this->assertSame('SVP-ALIAS-45', $extractId->invoke($controller, [
+            'profile' => ['svp_user_id' => 'SVP-ALIAS-45'],
+        ]));
+    }
 }
