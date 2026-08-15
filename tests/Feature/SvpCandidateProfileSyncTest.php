@@ -68,4 +68,31 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertSame(98765, $profile['id']);
         $this->assertSame('Rana', $profile['first_name']);
     }
+
+    public function test_id_free_profile_payload_can_be_supplemented_from_otp_identity(): void
+    {
+        $controller = app(SvpLoginController::class);
+        $extractProfile = new ReflectionMethod($controller, 'extractProfileRecord');
+        $extractId = new ReflectionMethod($controller, 'extractSvpUserId');
+
+        // This mirrors the live database payload: complete personal data, but
+        // no account ID in the follow-up /profile response.
+        $profile = $extractProfile->invoke($controller, [
+            'data' => [
+                'profile' => [
+                    'full_name' => 'Rifat Ahamed',
+                    'email' => 'rifatahmedsvp6643@yopmail.com',
+                    'national_id' => '6932403097',
+                ],
+            ],
+        ]);
+        $loginId = $extractId->invoke($controller, [
+            'data' => [
+                'user' => ['id' => 'SVP-USER-6643'],
+            ],
+        ]);
+
+        $this->assertSame('', $extractId->invoke($controller, $profile));
+        $this->assertSame('SVP-USER-6643', $loginId);
+    }
 }

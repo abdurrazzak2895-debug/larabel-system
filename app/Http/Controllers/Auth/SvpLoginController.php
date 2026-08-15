@@ -230,8 +230,20 @@ class SvpLoginController extends Controller
             Log::warning('SVP profile sync after login failed; trying OTP response fallback', ['error' => $e->getMessage()]);
         }
 
+        $loginPayload = is_array($result['body'] ?? null) ? $result['body'] : [];
+        $loginProfile = $this->extractProfileRecord($loginPayload);
+        $loginSvpUserId = $this->extractSvpUserId($loginPayload);
+
+        // The live /profile response contains the complete personal profile but
+        // omits the SVP account ID. Preserve that profile, then supplement its
+        // missing ID from the OTP response envelope. Previously the non-empty
+        // profile prevented the OTP fallback from running, leaving candidates
+        // persisted with a null svp_user_id and unusable for reservations.
         if ($profile === []) {
-            $profile = $this->extractProfileRecord(is_array($result['body'] ?? null) ? $result['body'] : []);
+            $profile = $loginProfile;
+        }
+        if ($loginSvpUserId !== '' && $this->extractSvpUserId($profile) === '') {
+            $profile['svp_user_id'] = $loginSvpUserId;
         }
 
         if ($profile !== []) {
