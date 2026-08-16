@@ -245,21 +245,10 @@ class TakamolProvider implements BookingProviderInterface
      */
     protected static function formatSessionName(array $node): array
     {
-        $center = is_array($node['test_center'] ?? null) ? $node['test_center'] : [];
-        $centerId = $node['test_center_id']
-            ?? $center['id']
-            ?? $center['test_center_id']
-            ?? $node['site_id']
-            ?? null;
-        $centerName = $node['test_center_name']
-            ?? $node['site_name']
-            ?? $center['name']
-            ?? $center['test_center_name']
-            ?? null;
-        $city = $node['site_city']
-            ?? $center['city']
-            ?? $center['test_center_city']
-            ?? null;
+        $center = self::extractCenterMetadata($node);
+        $centerId = $center['id'] ?? null;
+        $centerName = $center['name'] ?? null;
+        $city = $center['city'] ?? null;
         $date = $node['test_date']
             ?? $node['date']
             ?? $node['start_date_in_browser_time_zone']
@@ -295,6 +284,85 @@ class TakamolProvider implements BookingProviderInterface
         }
 
         return $node;
+    }
+
+    /**
+     * Normalize center metadata from the aliases used by different SVP
+     * session envelopes. Some responses use test_center, some use site or
+     * center, and some wrap those objects under data/attributes.
+     *
+     * @return array{id: ?string, name: ?string, city: ?string}
+     */
+    protected static function extractCenterMetadata(array $node, int $depth = 0): array
+    {
+        $id = self::firstScalar($node, [
+            'test_center_id', 'testCenterId', 'center_id', 'centerId',
+            'site_id', 'siteId', 'test_center_code', 'center_code',
+        ]);
+        $name = self::firstText($node, [
+            'test_center_name', 'testCenterName', 'center_name', 'centerName',
+            'site_name', 'siteName',
+        ]);
+        $city = self::firstText($node, [
+            'test_center_city', 'testCenterCity', 'center_city', 'centerCity',
+            'site_city', 'siteCity',
+        ]);
+
+        $objects = [];
+        foreach ([
+            'test_center', 'testCenter', 'center', 'site', 'exam_center',
+            'test_center_data', 'test_center_details', 'center_data',
+            'location', 'data', 'attributes',
+        ] as $key) {
+            if (is_array($node[$key] ?? null)) {
+                $objects[] = $node[$key];
+            }
+        }
+
+        foreach ($objects as $object) {
+            if ($id === null || $name === null || $city === null) {
+                $nested = self::extractCenterMetadata($object, $depth + 1);
+                $id ??= $nested['id'];
+                $name ??= $nested['name'];
+                $city ??= $nested['city'];
+            }
+        }
+
+        // A center object commonly exposes its own generic id/name fields.
+        if ($id === null && $depth > 0) {
+            $id = self::firstScalar($node, ['id', 'value']);
+        }
+        if ($name === null && $depth > 0) {
+            $name = self::firstText($node, ['name', 'english_name', 'title', 'label']);
+        }
+        if ($city === null && $depth > 0) {
+            $city = self::firstText($node, ['city', 'english_city', 'location_name']);
+        }
+
+        return [
+            'id' => $id !== null ? (string) $id : null,
+            'name' => $name !== null ? trim((string) $name) : null,
+            'city' => $city !== null ? trim((string) $city) : null,
+        ];
+    }
+
+    protected static function firstScalar(array $node, array $keys): string|int|float|null
+    {
+        foreach ($keys as $key) {
+            $value = $node[$key] ?? null;
+            if (is_scalar($value) && (string) $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    protected static function firstText(array $node, array $keys): ?string
+    {
+        $value = self::firstScalar($node, $keys);
+
+        return $value !== null ? trim((string) $value) : null;
     }
 
     public function examSession(string $id): JsonResponse

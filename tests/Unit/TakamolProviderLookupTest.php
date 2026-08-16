@@ -65,6 +65,39 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_sessions_extract_nested_site_center_metadata(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'data' => [
+                    'exam_sessions' => [[
+                        'id' => 'opaque-session-1',
+                        'start_date_in_browser_time_zone' => '2026-08-27',
+                        'site' => [
+                            'data' => [
+                                'id' => 17,
+                                'name' => 'Bangladesh Korea TTC Dhaka',
+                                'city' => 'Dhaka',
+                            ],
+                        ],
+                    ]],
+                ],
+            ], 200),
+        ]);
+
+        $payload = (new TakamolProvider())->withToken('test-token')->examSessions([
+            'city' => 'Dhaka',
+            'category_id' => 'category-4',
+            'test_center_id' => '17',
+        ])->getData(true);
+
+        $session = $payload['data']['sessions'][0];
+        $this->assertSame('17', $session['test_center_id']);
+        $this->assertSame('Bangladesh Korea TTC Dhaka', $session['test_center_name']);
+        $this->assertSame('Dhaka', $session['test_center_city']);
+        $this->assertSame('2026-08-27', $session['exam_date']);
+    }
+
     public function test_cities_are_normalized_and_scoped_to_the_configured_country(): void
     {
         Http::fake([
