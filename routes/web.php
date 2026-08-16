@@ -22,6 +22,7 @@ use App\Http\Controllers\Agency\WalletController as AgencyWalletController;
 use App\Http\Controllers\AgencyPanelController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SvpLoginController;
+use App\Http\Controllers\SvpSessionVerificationController;
 use App\Http\Controllers\User\BookingController as UserBookingController;
 use App\Http\Controllers\User\DashboardController as UserDashboardController;
 use App\Http\Controllers\User\DepositController as UserDepositController;
@@ -142,6 +143,8 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::get('/bookings/lookup/occupations', [\App\Http\Controllers\Agency\BookingController::class, 'lookupOccupations'])->name('bookings.lookup.occupations');
     Route::get('/bookings/lookup/test-centers', [\App\Http\Controllers\Agency\BookingController::class, 'lookupTestCenters'])->name('bookings.lookup.test-centers');
     Route::get('/bookings/lookup/sessions', [\App\Http\Controllers\Agency\BookingController::class, 'lookupSessions'])->name('bookings.lookup.sessions');
+    Route::get('/bookings/lookup/verify-session-center', [SvpSessionVerificationController::class, 'show'])->name('bookings.lookup.verify-session-center');
+    Route::post('/bookings/lookup/verify-session-center', [SvpSessionVerificationController::class, 'verify'])->name('bookings.lookup.verify-session-center.post');
     Route::get('/bookings/{booking}/payment', [\App\Http\Controllers\Agency\BookingController::class, 'payment'])->whereNumber('booking')->name('bookings.payment');
     Route::post('/bookings/{booking}/verify-reservation', [\App\Http\Controllers\Agency\BookingController::class, 'verifyReservation'])->whereNumber('booking')->name('bookings.verify-reservation');
     Route::get('/bookings/{booking}',   [\App\Http\Controllers\Agency\BookingController::class, 'show'])->whereNumber('booking')->name('bookings.show');
@@ -213,6 +216,8 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/lookup/occupations', [UserBookingController::class, 'lookupOccupations'])->name('lookup.occupations');
         Route::get('/lookup/test-centers', [UserBookingController::class, 'lookupTestCenters'])->name('lookup.test-centers');
         Route::get('/lookup/sessions', [UserBookingController::class, 'lookupSessions'])->name('lookup.sessions');
+        Route::get('/lookup/verify-session-center', [SvpSessionVerificationController::class, 'show'])->name('lookup.verify-session-center');
+        Route::post('/lookup/verify-session-center', [SvpSessionVerificationController::class, 'verify'])->name('lookup.verify-session-center.post');
         Route::get('/{booking}/payment', [UserBookingController::class, 'payment'])->whereNumber('booking')->name('payment');
         Route::post('/{booking}/verify-reservation', [UserBookingController::class, 'verifyReservation'])->whereNumber('booking')->name('verify-reservation');
         Route::get('/{booking}', [UserBookingController::class, 'show'])->whereNumber('booking')->name('show');
