@@ -112,21 +112,27 @@ class SvpTemporaryHoldService
 
         $requestedCenter = (string) ($context['test_center_id'] ?? '');
         $selectedCenter = $this->sessionCenterId($selected);
-        if ($selected !== null && ($selectedCenter === '' || $selectedCenter === $requestedCenter)) {
-            return $selected;
+        if ($selected !== null) {
+            // A session returned with an explicit center must match the
+            // selected center exactly. Never silently repair a real mismatch.
+            return $selectedCenter !== '' && $selectedCenter === $requestedCenter
+                ? $selected
+                : null;
         }
 
-        // PACC may rotate opaque session IDs between lookup and hold. If the
-        // submitted ID is missing, or points to another center, resolve the
-        // earliest date on or after the requested date from this same
-        // center-scoped snapshot. Never fall back to another center.
+        // PACC may rotate opaque session IDs between lookup and hold. Only
+        // when the submitted ID is no longer present may we resolve the
+        // earliest date on or after the requested date from this same,
+        // center-scoped snapshot. Never accept a center-less or other-center
+        // candidate as a fallback.
         $candidates = array_values(array_filter($lookup['sessions'], function ($session) use ($requestedCenter, $preferredDate): bool {
             if (! is_array($session)) {
                 return false;
             }
             $center = $this->sessionCenterId($session);
             $date = $this->sessionDate($session);
-            return ($center === '' || $center === $requestedCenter)
+            return $center !== ''
+                && $center === $requestedCenter
                 && $date !== null
                 && $date >= $preferredDate;
         }));

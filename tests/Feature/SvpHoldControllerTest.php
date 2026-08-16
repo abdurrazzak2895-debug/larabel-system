@@ -50,6 +50,7 @@ class SvpHoldControllerTest extends TestCase
             'data' => [
                 'sessions' => [[
                     'id' => '2',
+                    'test_center_id' => '403',
                     'exam_date' => '2026-08-18',
                 ]],
             ],
@@ -95,6 +96,7 @@ class SvpHoldControllerTest extends TestCase
             'data' => [
                 'sessions' => [[
                     'id' => 'live-session',
+                    'test_center_id' => '223',
                     'exam_date' => '2026-08-31',
                 ]],
             ],

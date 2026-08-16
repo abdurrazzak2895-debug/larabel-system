@@ -148,6 +148,8 @@
                     <input type="hidden" name="exam_session_name" id="exam_session_name" value="">
                     <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="">
                     <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
+                    <div id="session-shift-summary" class="hidden mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"></div>
+                    <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
                     @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                     <p id="session-error" class="hidden text-red-600 text-xs mt-1"></p>
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
@@ -233,6 +235,8 @@
         const testCenterSection = document.getElementById('test-center-section');
         const sessionSelect = document.getElementById('exam_session_id');
         const sessionNameInput = document.getElementById('exam_session_name');
+        const sessionShiftSummary = document.getElementById('session-shift-summary');
+        const sessionCenterError = document.getElementById('session-center-error');
         const sessionError = document.getElementById('session-error');
         const dateInput = document.getElementById('exam_date');
         const dateError = document.getElementById('date-error');
@@ -283,6 +287,59 @@
             return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
         }
 
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>\"']/g, function (character) {
+                return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#039;' })[character];
+            });
+        }
+
+        function sessionDate(session) {
+            return String(session?.exam_date || session?.test_date || session?.date || session?.start_date_in_browser_time_zone || session?.start_date_in_tc_time_zone || '').substring(0, 10);
+        }
+
+        function sessionCenterId(session) {
+            return String(session?.test_center_id ?? session?.site_id ?? session?.center_id ?? session?.test_center?.id ?? session?.site?.id ?? session?.center?.id ?? '');
+        }
+
+        function sessionCenterName(session) {
+            return session?.test_center_name || session?.site_name || session?.center_name || session?.test_center?.name || session?.site?.name || session?.center?.name || 'Unknown center';
+        }
+
+        function shiftLabel(session, sameDateIndex) {
+            const source = String(session?.shift || session?.session_name || session?.name || '').toLowerCase();
+            const match = source.match(/(?:shift|session)\s*([1-9][0-9]*)/);
+            const number = match ? Number(match[1]) : sameDateIndex + 1;
+            return number === 1 ? 'First Shift' : number === 2 ? 'Second Shift' : number === 3 ? 'Third Shift' : number === 4 ? 'Fourth Shift' : 'Shift ' + number;
+        }
+
+        function renderSessionShiftSummary(sessions) {
+            if (!sessionShiftSummary) return;
+            const selectedCenterId = String(testCenterSelect?.value || '');
+            const grouped = {};
+            (sessions || []).forEach(function (session) {
+                const date = sessionDate(session) || 'Unknown date';
+                if (!grouped[date]) grouped[date] = [];
+                grouped[date].push(session);
+            });
+            const html = Object.keys(grouped).sort().map(function (date) {
+                const rows = grouped[date].map(function (session, index) {
+                    const centerId = sessionCenterId(session);
+                    const matches = centerId !== '' && centerId === selectedCenterId;
+                    const sessionId = session.id || session.exam_session_id || '';
+                    return '<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + escapeHtml(shiftLabel(session, index)) + '</span> · Session ' + escapeHtml(String(sessionId).slice(0, 18)) + ' · Center ' + escapeHtml(centerId || 'unknown') + ' — ' + escapeHtml(sessionCenterName(session)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>';
+                }).join('');
+                return '<div class="mb-2 last:mb-0"><div class="font-semibold text-slate-700">' + escapeHtml(date) + '</div>' + rows + '</div>';
+            }).join('');
+            sessionShiftSummary.innerHTML = '<div class="mb-1 font-medium text-slate-700">Sessions grouped by date and shift</div>' + (html || '<div>No sessions returned.</div>');
+            sessionShiftSummary.classList.remove('hidden');
+        }
+
+        function clearSessionCenterError() {
+            if (!sessionCenterError) return;
+            sessionCenterError.textContent = '';
+            sessionCenterError.classList.add('hidden');
+        }
+
         function clearTemporaryHold(message) {
             if (temporaryHoldIdInput) temporaryHoldIdInput.value = '';
             if (temporaryHoldExpiresInput) temporaryHoldExpiresInput.value = '';
@@ -294,6 +351,15 @@
 
         async function createTemporaryHold() {
             if (temporaryHoldRequest) return;
+            const selectedSessionOption = sessionSelect.options[sessionSelect.selectedIndex];
+            if (selectedSessionOption?.dataset?.centerId && selectedSessionOption.dataset.centerId !== String(testCenterSelect.value)) {
+                clearTemporaryHold('The selected session belongs to another test center and is blocked.');
+                if (sessionCenterError) {
+                    sessionCenterError.textContent = 'Blocked: session center ID ' + selectedSessionOption.dataset.centerId + ' does not match selected center ID ' + testCenterSelect.value + '.';
+                    sessionCenterError.classList.remove('hidden');
+                }
+                return;
+            }
             const payload = {
                 occupation_id: occupationSelect.value,
                 category_id: categorySelect.value,
@@ -385,6 +451,7 @@
             if (!select) return;
             const current = select.value;
             select.innerHTML = '<option value="">Select…</option>';
+            const sessionDateCounts = {};
             (items || []).forEach(function (item) {
                 const option = document.createElement('option');
                 const value = item[valueKey] ?? '';
@@ -399,7 +466,12 @@
                 if (select === testCenterSelect && centerId) {
                     option.textContent = (centerName || baseLabel) + ' — SVP ID: ' + centerId;
                 } else if (select === sessionSelect) {
-                    option.textContent = option.dataset.date || baseLabel;
+                    const date = option.dataset.date || 'Unknown date';
+                    const sameDateIndex = sessionDateCounts[date] || 0;
+                    sessionDateCounts[date] = sameDateIndex + 1;
+                    const centerText = centerId ? ' · Center ' + centerId : ' · Center metadata unavailable';
+                    option.textContent = date + ' — ' + shiftLabel(item, sameDateIndex) + centerText;
+                    option.disabled = !centerId || (testCenterSelect?.value && String(centerId) !== String(testCenterSelect.value));
                 } else {
                     option.textContent = baseLabel;
                 }
@@ -718,6 +790,7 @@
                     });
                     const data = await fetchJSON("{{ route('agency.bookings.lookup.sessions') }}?" + params.toString());
                     const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
+                    renderSessionShiftSummary(sessions);
                     populateSelect(sessionSelect, sessions, 'id', 'name');
                     if (sessions.length === 0) {
                         showError(sessionError, 'No exam sessions available for the selected test center.');
@@ -735,6 +808,16 @@
             sessionSelect.addEventListener('change', function () {
                 const sessionId = sessionSelect.value;
                 const selectedSessionOption = sessionSelect.options[sessionSelect.selectedIndex];
+                clearSessionCenterError();
+                if (selectedSessionOption?.dataset?.centerId && selectedSessionOption.dataset.centerId !== String(testCenterSelect.value)) {
+                    sessionSelect.value = '';
+                    clearTemporaryHold('The selected session belongs to another center and has been blocked.');
+                    if (sessionCenterError) {
+                        sessionCenterError.textContent = 'Blocked: selected session center ID ' + selectedSessionOption.dataset.centerId + ' does not match selected center ID ' + testCenterSelect.value + '.';
+                        sessionCenterError.classList.remove('hidden');
+                    }
+                    return;
+                }
                 if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || selectedSessionOption?.textContent || '';
 
                 // A session lookup is already scoped to the selected center. Its
