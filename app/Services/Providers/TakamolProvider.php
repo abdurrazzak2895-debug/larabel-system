@@ -415,7 +415,21 @@ class TakamolProvider implements BookingProviderInterface
 
     public function temporarySeat(array $payload): JsonResponse
     {
-        return $this->dispatch('POST', '/individual_labor_space/temporary_seats', $payload);
+        // The official PACC contract requires locale=en, a one-or-more-item
+        // exam_session_id array, and methodology. The Laravel wizard performs
+        // center validation before this call; test_center_id is intentionally
+        // not sent because it is not part of the upstream hold contract.
+        $rawSessionIds = $payload['exam_session_id'] ?? [];
+        $sessionIds = is_array($rawSessionIds) ? $rawSessionIds : [$rawSessionIds];
+        $sessionIds = array_values(array_filter(array_map(
+            static fn ($id): mixed => is_numeric($id) ? (int) $id : trim((string) $id),
+            $sessionIds
+        ), static fn ($id): bool => $id !== '' && $id !== null));
+
+        return $this->dispatch('POST', '/individual_labor_space/temporary_seats?locale=en', [
+            'exam_session_id' => $sessionIds,
+            'methodology' => $payload['methodology'] ?? config('svp.default_methodology', 'in_person'),
+        ]);
     }
 
     public function validateReservation(): JsonResponse

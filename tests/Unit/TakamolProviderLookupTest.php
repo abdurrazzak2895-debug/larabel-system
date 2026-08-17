@@ -179,6 +179,38 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_temporary_seat_uses_the_official_array_body_and_locale(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'id' => 5203034,
+                'exam_session_id' => [1536060],
+                'expired_at' => '2026-08-17T12:00:00Z',
+            ], 201),
+        ]);
+
+        $response = (new TakamolProvider())->withToken('test-token')->temporarySeat([
+            'exam_session_id' => '1536060',
+            'methodology' => 'in_person',
+            // This Laravel-only field must not leak into the upstream body.
+            'test_center_id' => '223',
+        ]);
+
+        $this->assertSame(201, $response->getStatusCode());
+
+        Http::assertSent(function ($request): bool {
+            $body = json_decode($request->body(), true);
+
+            return $request->method() === 'POST'
+                && str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/v1/individual_labor_space/temporary_seats')
+                && parse_url($request->url(), PHP_URL_QUERY) === 'locale=en'
+                && $request->hasHeader('Authorization', 'Bearer test-token')
+                && ($body['exam_session_id'] ?? null) === [1536060]
+                && ($body['methodology'] ?? null) === 'in_person'
+                && ! array_key_exists('test_center_id', $body);
+        });
+    }
+
     public function test_centers_keep_the_upstream_id_and_filter_by_city(): void
     {
         Http::fake([

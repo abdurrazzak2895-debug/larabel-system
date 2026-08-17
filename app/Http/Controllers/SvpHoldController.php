@@ -19,9 +19,10 @@ class SvpHoldController extends Controller
     /**
      * Create one temporary seat hold through SVP.
      *
-     * The upstream temporary_seats endpoint accepts only the selected
-     * session and center identifiers. The other fields are validated here
-     * so the UI cannot create a hold for an unrelated selection.
+     * The upstream temporary_seats endpoint accepts the selected session
+     * as an array plus methodology. The center is validated locally against
+     * the browser's exact center-scoped session snapshot and is not sent as
+     * an unsupported upstream field.
      */
     public function store(Request $request): JsonResponse
     {
@@ -82,8 +83,10 @@ class SvpHoldController extends Controller
             }
 
             $response = $this->booking->temporarySeat($token, [
-                'exam_session_id' => $resolvedSessionId,
-                'test_center_id' => $data['test_center_id'],
+                // PACC's official contract accepts an array even for a
+                // one-session final-only hold attempt.
+                'exam_session_id' => [$resolvedSessionId],
+                'methodology' => config('svp.default_methodology', 'in_person'),
             ]);
 
             $payload = $response->getData(true);

@@ -18,8 +18,8 @@ class SvpHoldControllerTest extends TestCase
         $booking->shouldReceive('temporarySeat')
             ->once()
             ->with('svp-token', [
-                'exam_session_id' => '2',
-                'test_center_id' => '403',
+                'exam_session_id' => ['2'],
+                'methodology' => 'in_person',
             ])
             ->andReturn(response()->json([
                 'id' => 5143290,
@@ -118,8 +118,8 @@ class SvpHoldControllerTest extends TestCase
         $booking->shouldReceive('temporarySeat')
             ->once()
             ->with('svp-token', [
-                'exam_session_id' => 'different-session-id',
-                'test_center_id' => '223',
+                'exam_session_id' => ['different-session-id'],
+                'methodology' => 'in_person',
             ])
             ->andReturn(response()->json([
                 'id' => 5144550,
