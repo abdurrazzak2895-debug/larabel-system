@@ -482,6 +482,7 @@ class CoreServicesTest extends TestCase
 
             if (str_ends_with($path, '/individual_labor_space/payments')) {
                 return Http::response([
+                    'hyperpay_url' => 'https://eu-prod.oppwa.com',
                     'payment' => [
                         'id' => 2997943,
                         'ndc' => '0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13',
@@ -528,6 +529,8 @@ class CoreServicesTest extends TestCase
             'resourcePath=%2Fv1%2Fcheckouts%2F0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13%2Fpayment',
             $checkoutQuery['redirectUrl'] ?? null
         );
+        $storedCheckoutUrl = data_get($result['booking']->attempts()->latest()->first()->provider_response, 'checkout_url');
+        $this->assertSame($result['checkout_url'], $storedCheckoutUrl);
 
         Http::assertSent(function ($request): bool {
             $path = (string) parse_url($request->url(), PHP_URL_PATH);

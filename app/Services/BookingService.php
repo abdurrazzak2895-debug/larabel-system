@@ -194,9 +194,16 @@ class BookingService
                 'payable_id' => $this->numericOrString($reservationId),
             ]);
             $providerResponse['checkout'] = $checkoutResponse->getData(true);
+
+            // Persist the exact transaction-specific URL that the handoff page
+            // must use. A provider response may also contain a generic
+            // eu-prod.oppwa.com host; that host is never a usable checkout.
+            $checkoutUrl = $this->extractCheckoutUrl($providerResponse);
+            if (is_string($checkoutUrl) && $checkoutUrl !== '') {
+                $providerResponse['checkout_url'] = $checkoutUrl;
+            }
             $attempt->update(['provider_response' => $providerResponse]);
 
-            $checkoutUrl = $this->extractCheckoutUrl($providerResponse);
             if ($checkoutResponse->getStatusCode() >= 200 && $checkoutResponse->getStatusCode() < 300 && is_string($checkoutUrl) && $checkoutUrl !== '') {
                 $booking->update([
                     'reservation_id' => (string) $reservationId,
@@ -381,6 +388,11 @@ class BookingService
      * Normalize the official SVP/HyperPay checkout URL from supported response
      * shapes, including the identifiers shown in the supplied Postman flow.
      */
+    public function checkoutUrlFromProviderResponse(array $providerResponse): ?string
+    {
+        return $this->extractCheckoutUrl($providerResponse);
+    }
+
     protected function extractCheckoutUrl(array $providerResponse): ?string
     {
         foreach ([
@@ -399,7 +411,7 @@ class BookingService
             'redirect_url',
         ] as $path) {
             $value = data_get($providerResponse, $path);
-            if (is_string($value) && trim($value) !== '') {
+            if (is_string($value) && $this->isTransactionSpecificCheckoutUrl($value)) {
                 return trim($value);
             }
         }
@@ -449,6 +461,35 @@ class BookingService
             'method' => 'GET',
             'shopOrigin' => $svpWeb,
         ], '', '&', PHP_QUERY_RFC3986);
+    }
+
+    protected function isTransactionSpecificCheckoutUrl(string $url): bool
+    {
+        $parts = parse_url(trim($url));
+        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'], $parts['path'])) {
+            return false;
+        }
+
+        $redirectBase = (string) config('svp.hyperpay_redirect_url', 'https://eu-prod.oppwa.com/v1/redirect.html');
+        $redirectParts = parse_url($redirectBase);
+        if (! is_array($redirectParts)) {
+            return false;
+        }
+
+        $expectedHost = strtolower((string) ($redirectParts['host'] ?? ''));
+        $expectedPath = rtrim((string) ($redirectParts['path'] ?? ''), '/');
+        $actualHost = strtolower((string) $parts['host']);
+        $actualPath = rtrim((string) $parts['path'], '/');
+        if ($expectedHost === '' || $expectedPath === '' || $actualHost !== $expectedHost || $actualPath !== $expectedPath) {
+            return false;
+        }
+
+        parse_str((string) ($parts['query'] ?? ''), $query);
+
+        return is_string($query['redirectUrl'] ?? null)
+            && trim($query['redirectUrl']) !== ''
+            && is_string($query['ndc'] ?? null)
+            && trim($query['ndc']) !== '';
     }
 
     /**

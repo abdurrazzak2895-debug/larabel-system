@@ -425,7 +425,8 @@ class BookingController extends Controller
     {
         $this->authorizeOwnership($booking);
         $attempt = $booking->attempts()->latest()->first();
-        $checkoutUrl = data_get($attempt?->provider_response, 'checkout.hyperpay_url');
+        $providerResponse = (array) ($attempt?->provider_response ?? []);
+        $checkoutUrl = $this->booking->checkoutUrlFromProviderResponse($providerResponse);
 
         if (! is_string($checkoutUrl) || $checkoutUrl === '') {
             return redirect()
