@@ -385,7 +385,11 @@
                 body: JSON.stringify(payload)
             }).then(async response => {
                 const body = await response.json().catch(() => ({}));
-                if (!response.ok || body.success === false) throw new Error(body.error || 'SVP could not create the temporary hold.');
+                if (!response.ok || body.success === false) {
+                    const error = new Error(body.error || 'SVP could not create the temporary hold.');
+                    if (body.requires_svp_login && body.login_url) error.loginUrl = body.login_url;
+                    throw error;
+                }
                 const resolved = body.selection || {};
                 if (resolved.exam_session_id && resolved.exam_session_id !== sessionSelect.value) {
                     sessionSelect.value = resolved.exam_session_id;
@@ -404,8 +408,14 @@
                 confirmBookingButton.disabled = false;
                 temporaryHoldStatus.textContent = 'Hold #' + holdId + ' created' + (temporaryHoldExpiresInput.value ? ' — expires ' + formatHoldExpiry(temporaryHoldExpiresInput.value) : '.') + ' You may now confirm the booking.';
             }).catch(error => {
-                clearTemporaryHold(error.message);
-                if (temporaryHoldStatus) temporaryHoldStatus.classList.add('text-red-700');
+                if (error.loginUrl && temporaryHoldStatus) {
+                    clearTemporaryHold('');
+                    temporaryHoldStatus.innerHTML = escapeHtml(error.message) + ' <a class="underline font-semibold" href="' + escapeHtml(error.loginUrl) + '">Sign in with SVP again</a>.';
+                    temporaryHoldStatus.classList.add('text-red-700');
+                } else {
+                    clearTemporaryHold(error.message);
+                    if (temporaryHoldStatus) temporaryHoldStatus.classList.add('text-red-700');
+                }
             }).finally(() => {
                 temporaryHoldRequest = null;
                 if (!temporaryHoldIdInput.value && occupationSelect.value && categorySelect.value && citySelect.value && testCenterSelect.value && sessionSelect.value && dateInput.value) temporaryHoldButton.disabled = false;

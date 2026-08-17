@@ -165,6 +165,57 @@ class SvpHoldControllerTest extends TestCase
         $this->assertSame('rotated-session-id', $payload['resolved_from_session_id']);
     }
 
+    public function test_expired_svp_session_returns_reauthentication_instruction_without_a_hold(): void
+    {
+        $booking = Mockery::mock(BookingService::class);
+        $booking->shouldReceive('temporarySeat')
+            ->once()
+            ->with('expired-token', [
+                'exam_session_id' => ['223-session'],
+                'methodology' => 'in_person',
+            ])
+            ->andReturn(response()->json([
+                'message' => 'Signature has expired',
+            ], 401));
+        $this->app->instance(BookingService::class, $booking);
+
+        $request = Request::create('/agency/bookings/temporary-hold', 'POST', [
+            'occupation_id' => '2061',
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '223',
+            'exam_session_id' => '223-session',
+            'exam_date' => '2026-08-31',
+        ]);
+        $request->setLaravelSession(app('session.store'));
+        $request->session()->start();
+        $request->session()->put('svp_token', 'expired-token');
+
+        app(SvpTemporaryHoldService::class)->rememberSessionLookup($request, [
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '223',
+        ], [
+            'data' => [
+                'sessions' => [[
+                    'id' => '223-session',
+                    'test_center_id' => '223',
+                    'exam_date' => '2026-08-31',
+                ]],
+            ],
+        ]);
+
+        $response = app(SvpHoldController::class)->store($request);
+        $payload = $response->getData(true);
+
+        $this->assertSame(401, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertTrue($payload['requires_svp_login']);
+        $this->assertSame('Your SVP session has expired. Sign in with SVP again, then retry this same session.', $payload['error']);
+        $this->assertStringContainsString('force=1', $payload['login_url']);
+        $this->assertSame([], $request->session()->get('svp_temporary_holds', []));
+    }
+
     public function test_rotated_session_id_is_rejected_when_no_same_center_date_remains(): void
     {
         $booking = Mockery::mock(BookingService::class);

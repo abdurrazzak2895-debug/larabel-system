@@ -92,6 +92,15 @@ class SvpHoldController extends Controller
             $payload = $response->getData(true);
             $hold = $this->extractHold($payload);
 
+            if ($response->getStatusCode() === 401) {
+                return response()->json([
+                    'success' => false,
+                    'requires_svp_login' => true,
+                    'login_url' => route('svp.login.form', ['force' => 1]),
+                    'error' => 'Your SVP session has expired. Sign in with SVP again, then retry this same session.',
+                ], 401);
+            }
+
             if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300 || $hold === null) {
                 return response()->json([
                     'success' => false,
