@@ -295,13 +295,185 @@ class CoreServicesTest extends TestCase
         });
     }
 
+    public function test_booking_service_submits_center_17_booking_with_real_session_and_site_id(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/individual_labor_space/exam_reservations')) {
+                return Http::response([
+                    'exam_reservation' => [
+                        'id' => 17817,
+                        'test_center' => [
+                            'test_center_id' => 17,
+                            'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+                        ],
+                    ],
+                ], 201);
+            }
+
+            if (str_ends_with($path, '/users/SVP-CENTER-17/balance')) {
+                return Http::response(['reservation_credits' => 1], 200);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/reservation_credits/use')) {
+                return Http::response(['success' => true, 'reservation_id' => 17817], 200);
+            }
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $this->agency->id,
+            'full_name' => 'Center 17 Smoke Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-CENTER-17',
+        ]);
+
+        $result = app(BookingService::class)->completeBooking('smoke-token', [
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'credential_id' => $candidate->id,
+            'svp_user_id' => 'SVP-CENTER-17',
+            'occupation_id' => '2279',
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '17',
+            'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+            'exam_session_id' => 'CENTER-17-LIVE-SESSION',
+            'exam_session_name' => '2026-08-31 • First Shift • Center 17',
+            'exam_date' => '2026-08-31',
+            'temporary_hold_id' => 'CENTER-17-HOLD',
+            'temporary_hold_expires_at' => '2026-08-17 12:00:00',
+            'language_code' => 'LOABB',
+            'methodology' => 'in_person',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('booked', $result['booking']->booking_status);
+        $this->assertSame('17', $result['booking']->test_center_id);
+        $this->assertSame('Bangladesh Korea TTC Dhaka', $result['booking']->test_center_name);
+        $this->assertSame('CENTER-17-HOLD', $result['booking']->temporary_hold_id);
+        $this->assertDatabaseHas('bookings', [
+            'id' => $result['booking']->id,
+            'test_center_id' => '17',
+            'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+            'exam_session_id' => 'CENTER-17-LIVE-SESSION',
+            'booking_status' => 'booked',
+        ]);
+
+        Http::assertSent(function ($request): bool {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            if (! str_ends_with($path, '/individual_labor_space/exam_reservations')) {
+                return true;
+            }
+
+            $body = json_decode($request->body(), true);
+            return ($body['exam_session_id'] ?? null) === 'CENTER-17-LIVE-SESSION'
+                && ($body['site_id'] ?? null) === '17'
+                && ($body['site_city'] ?? null) === 'Dhaka'
+                && ($body['hold_id'] ?? null) === 'CENTER-17-HOLD'
+                && ($body['language_code'] ?? null) === 'LOABB'
+                && ! array_key_exists('amount', $body);
+        });
+
+        Http::assertSent(function ($request): bool {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            if (! str_ends_with($path, '/individual_labor_space/reservation_credits/use')) {
+                return true;
+            }
+
+            $body = json_decode($request->body(), true);
+            return ($body['reservation_id'] ?? null) === 17817
+                && ($body['occupation_id'] ?? null) === 2279
+                && ($body['methodology_type'] ?? null) === 'in_person';
+        });
+    }
+
+    public function test_booking_service_rejects_and_cancels_when_svp_returns_a_different_physical_center(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/individual_labor_space/exam_reservations') && $request->method() === 'POST') {
+                return Http::response([
+                    'exam_reservation' => [
+                        'id' => 5351764,
+                        'prometric_data' => ['site_id' => '17'],
+                        'test_center' => [
+                            'test_center_id' => 223,
+                            'test_center_name' => 'Manikganj Technical Training Center',
+                        ],
+                    ],
+                ], 201);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/exam_reservations/5351764') && $request->method() === 'DELETE') {
+                return Http::response(['success' => true, 'cancelled' => true], 200);
+            }
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $this->agency->id,
+            'full_name' => 'Center Mismatch Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-CENTER-MISMATCH',
+        ]);
+
+        $result = app(BookingService::class)->completeBooking('test-token', [
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'credential_id' => $candidate->id,
+            'svp_user_id' => 'SVP-CENTER-MISMATCH',
+            'occupation_id' => '2061',
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '17',
+            'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+            'exam_session_id' => 'OPAQUE-SESSION-17',
+            'exam_date' => '2026-08-31',
+            'temporary_hold_id' => '5201071',
+            'language_code' => 'LOABB',
+            'methodology' => 'in_person',
+        ]);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('failed', $result['booking']->booking_status);
+        $this->assertStringContainsString('assigned test center 223', $result['error']);
+
+        Http::assertSent(function ($request): bool {
+            return $request->method() === 'DELETE'
+                && str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/individual_labor_space/exam_reservations/5351764');
+        });
+        Http::assertNotSent(function ($request): bool {
+            return str_contains((string) parse_url($request->url(), PHP_URL_PATH), '/balance');
+        });
+        Http::assertNotSent(function ($request): bool {
+            return str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/individual_labor_space/payments');
+        });
+    }
+
     public function test_booking_service_creates_official_checkout_when_svp_credit_is_unavailable(): void
     {
         Http::fake(function ($request) {
             $path = (string) parse_url($request->url(), PHP_URL_PATH);
 
             if (str_ends_with($path, '/individual_labor_space/exam_reservations')) {
-                return Http::response(['exam_reservation' => ['id' => 7865]], 201);
+                return Http::response([
+                    'exam_reservation' => [
+                        'id' => 7865,
+                        'test_center' => [
+                            'test_center_id' => 223,
+                            'test_center_name' => 'Manikganj Technical Training Center',
+                        ],
+                    ],
+                ], 201);
             }
 
             if (str_ends_with($path, '/users/SVP-NO-CREDIT/balance')) {
@@ -309,7 +481,13 @@ class CoreServicesTest extends TestCase
             }
 
             if (str_ends_with($path, '/individual_labor_space/payments')) {
-                return Http::response(['hyperpay_url' => 'https://svp.example.test/checkout/7865'], 201);
+                return Http::response([
+                    'payment' => [
+                        'id' => 2997943,
+                        'ndc' => '0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13',
+                        'resource_path' => '/v1/checkouts/0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13/payment',
+                    ],
+                ], 201);
             }
 
             return Http::response(['success' => true], 200);
@@ -341,7 +519,15 @@ class CoreServicesTest extends TestCase
         $this->assertTrue($result['payment_required']);
         $this->assertSame('pending', $result['booking']->booking_status);
         $this->assertSame('7865', $result['booking']->reservation_id);
-        $this->assertSame('https://svp.example.test/checkout/7865', $result['checkout_url']);
+        $this->assertStringStartsWith('https://eu-prod.oppwa.com/v1/redirect.html?', $result['checkout_url']);
+        parse_str((string) parse_url($result['checkout_url'], PHP_URL_QUERY), $checkoutQuery);
+        $this->assertSame('0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13', $checkoutQuery['ndc'] ?? null);
+        $this->assertSame(
+            'https://svp-international.pacc.sa/labor/confirmation?paymentId=2997943&'.
+            'id=0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13&'.
+            'resourcePath=%2Fv1%2Fcheckouts%2F0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13%2Fpayment',
+            $checkoutQuery['redirectUrl'] ?? null
+        );
 
         Http::assertSent(function ($request): bool {
             $path = (string) parse_url($request->url(), PHP_URL_PATH);
@@ -350,9 +536,10 @@ class CoreServicesTest extends TestCase
             }
 
             $body = json_decode($request->body(), true);
-            return ($body['payment_method'] ?? null) === 'card'
-                && ($body['payable_type'] ?? null) === 'Reservation'
-                && ($body['payable_id'] ?? null) === 7865;
+            return ($body['payment']['payment_method'] ?? null) === 'card'
+                && ($body['payment']['payable_type'] ?? null) === 'Reservation'
+                && ($body['payment']['payable_id'] ?? null) === 7865
+                && parse_url($request->url(), PHP_URL_QUERY) === 'locale=en';
         });
     }
 

@@ -738,7 +738,18 @@ class TakamolProvider implements BookingProviderInterface
 
     public function createPayment(array $payload): JsonResponse
     {
-        return $this->dispatch('POST', '/individual_labor_space/payments', $payload);
+        // The official SVP/HyperPay contract documented in the supplied
+        // Postman collection requires locale=en and wraps the payment fields
+        // in a top-level `payment` object.
+        $payment = is_array($payload['payment'] ?? null) ? $payload['payment'] : $payload;
+
+        return $this->dispatch('POST', '/individual_labor_space/payments?locale=en', [
+            'payment' => [
+                'payment_method' => $payment['payment_method'] ?? 'card',
+                'payable_type' => $payment['payable_type'] ?? 'Reservation',
+                'payable_id' => $payment['payable_id'] ?? null,
+            ],
+        ]);
     }
 
     public function updatePayment(string $id, array $payload): JsonResponse

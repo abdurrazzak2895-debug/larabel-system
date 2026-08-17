@@ -136,6 +136,29 @@ class BookingService
                 return $this->handleBookingFailure($booking, $attempt, $providerResponse);
             }
 
+            // SVP may echo the requested site_id in prometric_data while
+            // assigning a different physical test_center. The physical center
+            // returned by SVP is authoritative; never continue to payment when
+            // it differs from the center selected in the Laravel wizard.
+            $centerValidation = $this->validateReturnedReservationCenter(
+                $reservationPayload,
+                $data['test_center_id'] ?? null
+            );
+            $providerResponse['center_validation'] = $centerValidation;
+
+            if (! $centerValidation['valid']) {
+                $cancelResponse = $provider->cancelReservation((string) $reservationId);
+                $providerResponse['cancel_after_center_mismatch'] = $cancelResponse->getData(true);
+                $error = $centerValidation['error'];
+                $attempt->update([
+                    'status' => 'failed',
+                    'provider_response' => $providerResponse,
+                    'error_message' => $error,
+                ]);
+
+                return $this->handleBookingFailure($booking, $attempt, $providerResponse, $error);
+            }
+
             // 3. Re-read the live credit balance immediately before payment. A
             // positive balance consumes an SVP reservation credit; zero credit
             // creates an SVP-hosted card checkout instead. The user never enters
@@ -173,7 +196,7 @@ class BookingService
             $providerResponse['checkout'] = $checkoutResponse->getData(true);
             $attempt->update(['provider_response' => $providerResponse]);
 
-            $checkoutUrl = data_get($providerResponse, 'checkout.hyperpay_url');
+            $checkoutUrl = $this->extractCheckoutUrl($providerResponse);
             if ($checkoutResponse->getStatusCode() >= 200 && $checkoutResponse->getStatusCode() < 300 && is_string($checkoutUrl) && $checkoutUrl !== '') {
                 $booking->update([
                     'reservation_id' => (string) $reservationId,
@@ -250,6 +273,7 @@ class BookingService
             'methodology'           => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
             'site_id'               => isset($data['test_center_id']) ? (string) $data['test_center_id'] : null,
             'site_city'             => $data['city'] ?? null,
+            'hold_id'               => isset($data['temporary_hold_id']) ? $this->numericOrString($data['temporary_hold_id']) : null,
             'country_id'            => (int) config('svp.country_id', 78),
             'accept_declaration'    => true,
             'info_confirmation'    => true,
@@ -288,11 +312,151 @@ class BookingService
     }
 
     /**
+     * Validate the physical center returned by SVP after reservation creation.
+     * `prometric_data.site_id` is only a request echo in some responses, so a
+     * nested `test_center` value is preferred whenever SVP provides it.
+     *
+     * @return array{valid: bool, selected_center_id: ?string, returned_center_id: ?string, metadata_present: bool, error?: string}
+     */
+    protected function validateReturnedReservationCenter(array $payload, mixed $selectedCenterId): array
+    {
+        $selected = trim((string) ($selectedCenterId ?? ''));
+        $returned = null;
+
+        foreach ([
+            'reservation.test_center.test_center_id',
+            'reservation.test_center.id',
+            'exam_reservation.test_center.test_center_id',
+            'exam_reservation.test_center.id',
+            'test_center.test_center_id',
+            'test_center.id',
+        ] as $path) {
+            $value = data_get($payload, $path);
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                $returned = trim((string) $value);
+                break;
+            }
+        }
+
+        // If SVP returns no physical center object, use site_id only as a
+        // fallback. It is still better than silently accepting a different
+        // center, while a detailed center object always takes precedence.
+        if ($returned === null) {
+            foreach ([
+                'reservation.prometric_data.site_id',
+                'exam_reservation.prometric_data.site_id',
+                'prometric_data.site_id',
+            ] as $path) {
+                $value = data_get($payload, $path);
+                if (is_scalar($value) && trim((string) $value) !== '') {
+                    $returned = trim((string) $value);
+                    break;
+                }
+            }
+        }
+
+        if ($selected === '' || $returned === null) {
+            return [
+                'valid' => true,
+                'selected_center_id' => $selected !== '' ? $selected : null,
+                'returned_center_id' => $returned,
+                'metadata_present' => $returned !== null,
+            ];
+        }
+
+        $valid = $returned === $selected;
+
+        return [
+            'valid' => $valid,
+            'selected_center_id' => $selected,
+            'returned_center_id' => $returned,
+            'metadata_present' => true,
+            ...(! $valid ? [
+                'error' => "SVP assigned test center {$returned}, but the selected center was {$selected}. The reservation was canceled for safety.",
+            ] : []),
+        ];
+    }
+
+    /**
+     * Normalize the official SVP/HyperPay checkout URL from supported response
+     * shapes, including the identifiers shown in the supplied Postman flow.
+     */
+    protected function extractCheckoutUrl(array $providerResponse): ?string
+    {
+        foreach ([
+            'checkout.hyperpay_url',
+            'checkout.checkout_url',
+            'checkout.redirect_url',
+            'checkout.url',
+            'data.hyperpay_url',
+            'data.checkout_url',
+            'data.redirect_url',
+            'payment.hyperpay_url',
+            'payment.checkout_url',
+            'payment.redirect_url',
+            'hyperpay_url',
+            'checkout_url',
+            'redirect_url',
+        ] as $path) {
+            $value = data_get($providerResponse, $path);
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        $paymentId = data_get($providerResponse, 'checkout.payment_id')
+            ?? data_get($providerResponse, 'checkout.paymentId')
+            ?? data_get($providerResponse, 'checkout.payment.id')
+            ?? data_get($providerResponse, 'payment.id')
+            ?? data_get($providerResponse, 'payment_id')
+            ?? data_get($providerResponse, 'paymentId');
+        $ndc = data_get($providerResponse, 'checkout.ndc')
+            ?? data_get($providerResponse, 'checkout.id')
+            ?? data_get($providerResponse, 'checkout.payment.ndc')
+            ?? data_get($providerResponse, 'payment.ndc')
+            ?? data_get($providerResponse, 'ndc');
+        $resourcePath = data_get($providerResponse, 'checkout.resource_path')
+            ?? data_get($providerResponse, 'checkout.resourcePath')
+            ?? data_get($providerResponse, 'checkout.payment.resource_path')
+            ?? data_get($providerResponse, 'checkout.payment.resourcePath')
+            ?? data_get($providerResponse, 'payment.resource_path')
+            ?? data_get($providerResponse, 'payment.resourcePath')
+            ?? data_get($providerResponse, 'resource_path')
+            ?? data_get($providerResponse, 'resourcePath');
+
+        if (! is_scalar($paymentId) || ! is_scalar($ndc) || ! is_scalar($resourcePath)) {
+            return null;
+        }
+
+        $paymentId = trim((string) $paymentId);
+        $ndc = trim((string) $ndc);
+        $resourcePath = trim((string) $resourcePath);
+        if ($paymentId === '' || $ndc === '' || $resourcePath === '') {
+            return null;
+        }
+
+        $svpWeb = rtrim((string) config('svp.web_base_url', 'https://svp-international.pacc.sa'), '/');
+        $confirmationUrl = $svpWeb.'/labor/confirmation?'.http_build_query([
+            'paymentId' => $paymentId,
+            'id' => $ndc,
+            'resourcePath' => $resourcePath,
+        ], '', '&', PHP_QUERY_RFC3986);
+
+        return rtrim((string) config('svp.hyperpay_redirect_url', 'https://eu-prod.oppwa.com/v1/redirect.html'), '?').'?' . http_build_query([
+            'redirectUrl' => $confirmationUrl,
+            'ndc' => $ndc,
+            'target' => '_top',
+            'method' => 'GET',
+            'shopOrigin' => $svpWeb,
+        ], '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /**
      * Release reserved balance, mark booking failed, notify user.
      *
      * @return array{booking: Booking, success: bool, error: string}
      */
-    protected function handleBookingFailure(Booking $booking, ?BookingAttempt $attempt, mixed $response): array
+    protected function handleBookingFailure(Booking $booking, ?BookingAttempt $attempt, mixed $response, ?string $error = null): array
     {
         $booking->update(['booking_status' => 'failed']);
         $this->logEvent($booking, 'booking_failed', ['response' => $response]);
@@ -307,7 +471,7 @@ class BookingService
 
         $this->audit->log((int) $booking->agency_id, 'booking', ['booking_id' => $booking->id, 'action' => 'failed']);
 
-        return ['booking' => $booking, 'success' => false, 'error' => 'Booking failed.'];
+        return ['booking' => $booking, 'success' => false, 'error' => $error ?? 'Booking failed.'];
     }
 
     /**
