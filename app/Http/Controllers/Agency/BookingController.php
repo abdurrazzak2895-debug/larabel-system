@@ -427,8 +427,9 @@ class BookingController extends Controller
         $attempt = $booking->attempts()->latest()->first();
         $providerResponse = (array) ($attempt?->provider_response ?? []);
         $checkoutUrl = $this->booking->checkoutUrlFromProviderResponse($providerResponse);
+        $widgetCheckout = $this->booking->widgetCheckoutFromProviderResponse($providerResponse);
 
-        if (! is_string($checkoutUrl) || $checkoutUrl === '') {
+        if ((! is_string($checkoutUrl) || $checkoutUrl === '') && $widgetCheckout === null) {
             return redirect()
                 ->route('agency.bookings.show', $booking->id)
                 ->with('error', 'No active SVP card checkout was found for this booking.');
@@ -437,10 +438,66 @@ class BookingController extends Controller
         return view('bookings.svp-payment', [
             'booking' => $booking,
             'checkoutUrl' => $checkoutUrl,
+            'widgetCheckoutId' => $widgetCheckout['checkout_id'] ?? null,
+            'widgetIntegrity' => $widgetCheckout['integrity'] ?? null,
+            'widgetScriptUrl' => config('svp.hyperpay_widget_url'),
+            'shopperResultUrl' => route('agency.bookings.payment-return', $booking->id),
             'backRoute' => route('agency.bookings.show', $booking->id),
             'verifyRoute' => route('agency.bookings.verify-reservation', $booking->id),
             'layout' => 'layouts.panel',
         ]);
+    }
+
+    /**
+     * Receive HyperPay's COPYandPAY shopper result and verify it server-side.
+     */
+    public function paymentReturn(Request $request, Booking $booking)
+    {
+        $this->authorizeOwnership($booking);
+        $resourcePath = trim((string) $request->query('resourcePath', ''));
+        $showRoute = route('agency.bookings.show', $booking->id);
+
+        if ($resourcePath === '') {
+            return redirect($showRoute)->with('error', 'SVP did not return a payment status path.');
+        }
+
+        $token = $this->ensureSvpToken($request);
+        if (! $token) {
+            return redirect()->route('svp.login.form')->with('status', 'Please sign in with SVP again to verify this payment.');
+        }
+
+        try {
+            $response = $this->booking->getPaymentStatus($token, $resourcePath);
+            $payload = $response->getData(true);
+            $resultCode = data_get($payload, 'result.code')
+                ?? data_get($payload, 'response.result.code')
+                ?? data_get($payload, 'checkout.response.result.code');
+
+            if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300 || ! is_string($resultCode) || ! str_starts_with($resultCode, '000.')) {
+                Log::warning('SVP HyperPay payment verification failed', [
+                    'booking_id' => $booking->id,
+                    'resource_path' => $resourcePath,
+                    'result_code' => $resultCode,
+                    'status' => $response->getStatusCode(),
+                ]);
+
+                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. Please review the payment result and try again if needed.');
+            }
+
+            $booking->update(['booking_status' => 'booked']);
+            $attempt = $booking->attempts()->latest()->first();
+            if ($attempt) {
+                $providerResponse = (array) ($attempt->provider_response ?? []);
+                $providerResponse['payment_status'] = $payload;
+                $attempt->update(['status' => 'success', 'provider_response' => $providerResponse]);
+            }
+
+            return redirect($showRoute)->with('success', 'SVP card payment was confirmed and the booking is now complete.');
+        } catch (\Throwable $e) {
+            Log::warning('SVP HyperPay payment verification exception', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+
+            return redirect($showRoute)->with('error', 'SVP could not verify the card payment. Please try again.');
+        }
     }
 
     /**

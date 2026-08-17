@@ -766,6 +766,19 @@ class TakamolProvider implements BookingProviderInterface
         ]);
     }
 
+    public function getPaymentStatus(string $resourcePath): JsonResponse
+    {
+        $resourcePath = trim($resourcePath);
+
+        // HyperPay returns a relative resourcePath. Never allow a callback to
+        // turn this proxy into an arbitrary URL fetcher.
+        if ($resourcePath === '' || ! str_starts_with($resourcePath, '/') || str_starts_with($resourcePath, '//') || filter_var($resourcePath, FILTER_VALIDATE_URL)) {
+            return response()->json(['message' => 'Invalid payment resource path.'], 422);
+        }
+
+        return $this->dispatch('GET', $resourcePath);
+    }
+
     public function updatePayment(string $id, array $payload): JsonResponse
     {
         return $this->dispatch('PUT', '/individual_labor_space/payments/'.$id, $payload);

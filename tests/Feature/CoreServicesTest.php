@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Admin;
 use App\Models\Agency;
+use App\Models\Booking;
+use App\Models\BookingAttempt;
 use App\Models\Candidate;
 use App\Models\Permission;
 use App\Models\Role;
@@ -547,6 +549,146 @@ class CoreServicesTest extends TestCase
                 && ($body['payment']['payable_id'] ?? null) === 7865
                 && parse_url($request->url(), PHP_URL_QUERY) === 'locale=en';
         });
+    }
+
+    public function test_widget_checkout_helper_extracts_actual_svp_ndc_and_integrity(): void
+    {
+        $providerResponse = [
+            'checkout' => [
+                'id' => 3277685,
+                'hyperpay_url' => 'https://eu-prod.oppwa.com',
+                'response' => [
+                    'result' => ['code' => '000.200.100'],
+                    'ndc' => 'D8A7400764D49C59388A0D997CDAE47A.prod02-vm-tx05',
+                    'id' => 'D8A7400764D49C59388A0D997CDAE47A.prod02-vm-tx05',
+                    'integrity' => 'sha384-v7It9NnCWutsL14cPNz3twZzFeXC0lsc/z6Mq1JJDwsSD8yrRvcf/frkkIuhaznS',
+                ],
+            ],
+        ];
+
+        $widget = app(BookingService::class)->widgetCheckoutFromProviderResponse($providerResponse);
+
+        $this->assertSame([
+            'checkout_id' => 'D8A7400764D49C59388A0D997CDAE47A.prod02-vm-tx05',
+            'integrity' => 'sha384-v7It9NnCWutsL14cPNz3twZzFeXC0lsc/z6Mq1JJDwsSD8yrRvcf/frkkIuhaznS',
+        ], $widget);
+        $this->assertNull(app(BookingService::class)->checkoutUrlFromProviderResponse($providerResponse));
+    }
+
+    public function test_booking_service_accepts_widget_only_svp_checkout_response(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/individual_labor_space/exam_reservations')) {
+                return Http::response(['exam_reservation' => ['id' => 32701, 'test_center' => ['test_center_id' => 223]]], 201);
+            }
+
+            if (str_ends_with($path, '/users/SVP-WIDGET-USER/balance')) {
+                return Http::response(['reservation_credits' => 0], 200);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/payments')) {
+                return Http::response([
+                    'checkout' => [
+                        'id' => 3277685,
+                        'hyperpay_url' => 'https://eu-prod.oppwa.com',
+                        'response' => [
+                            'result' => ['code' => '000.200.100'],
+                            'ndc' => 'WIDGET-NDC.prod02-vm-tx05',
+                            'id' => 'WIDGET-NDC.prod02-vm-tx05',
+                            'integrity' => 'sha384-widget-integrity',
+                        ],
+                    ],
+                ], 201);
+            }
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $this->agency->id,
+            'full_name' => 'Widget Checkout Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-WIDGET-USER',
+        ]);
+
+        $result = app(BookingService::class)->completeBooking('widget-token', [
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'credential_id' => $candidate->id,
+            'svp_user_id' => 'SVP-WIDGET-USER',
+            'occupation_id' => '2279',
+            'exam_session_id' => 'WIDGET-SESSION',
+            'test_center_id' => '223',
+            'test_center_name' => 'Manikganj Technical Training Center',
+            'city' => 'Dhaka',
+            'exam_date' => '2026-08-31',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['payment_required']);
+        $this->assertSame('pending', $result['booking']->booking_status);
+        $this->assertNull($result['checkout_url']);
+        $this->assertSame([
+            'checkout_id' => 'WIDGET-NDC.prod02-vm-tx05',
+            'integrity' => 'sha384-widget-integrity',
+        ], $result['widget_checkout']);
+        $this->assertSame(
+            $result['widget_checkout'],
+            data_get($result['booking']->attempts()->latest()->first()->provider_response, 'widget_checkout')
+        );
+    }
+
+    public function test_user_payment_return_marks_pending_booking_booked_after_successful_svp_status(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/v1/checkouts/TEST-NDC/payment')) {
+                return Http::response(['result' => ['code' => '000.100.110', 'description' => 'Request successfully processed']], 200);
+            }
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $booking = Booking::create([
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'reservation_id' => '7865',
+            'booking_status' => 'pending',
+            'booking_reference' => 'PAYMENT-RETURN-TEST',
+        ]);
+        BookingAttempt::create([
+            'booking_id' => $booking->id,
+            'status' => 'payment_required',
+            'provider_response' => [
+                'checkout' => [
+                    'response' => ['ndc' => 'TEST-NDC', 'integrity' => 'sha384-test'],
+                ],
+            ],
+        ]);
+
+        $response = $this->actingAs($user, 'web')
+            ->withSession(['svp_token' => 'test-token'])
+            ->get(route('user.bookings.payment-return', [
+                'booking' => $booking->id,
+                'resourcePath' => '/v1/checkouts/TEST-NDC/payment',
+            ]));
+
+        $response->assertRedirect(route('user.bookings.show', $booking->id));
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('bookings', [
+            'id' => $booking->id,
+            'booking_status' => 'booked',
+        ]);
+        $this->assertDatabaseHas('booking_attempts', [
+            'booking_id' => $booking->id,
+            'status' => 'success',
+        ]);
     }
 
     public function test_booking_service_marks_failed_and_refunds_on_provider_error(): void

@@ -146,6 +146,7 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::get('/bookings/lookup/verify-session-center', [SvpSessionVerificationController::class, 'show'])->name('bookings.lookup.verify-session-center');
     Route::post('/bookings/lookup/verify-session-center', [SvpSessionVerificationController::class, 'verify'])->name('bookings.lookup.verify-session-center.post');
     Route::get('/bookings/{booking}/payment', [\App\Http\Controllers\Agency\BookingController::class, 'payment'])->whereNumber('booking')->name('bookings.payment');
+    Route::get('/bookings/{booking}/payment-return', [\App\Http\Controllers\Agency\BookingController::class, 'paymentReturn'])->whereNumber('booking')->name('bookings.payment-return');
     Route::post('/bookings/{booking}/verify-reservation', [\App\Http\Controllers\Agency\BookingController::class, 'verifyReservation'])->whereNumber('booking')->name('bookings.verify-reservation');
     Route::get('/bookings/{booking}',   [\App\Http\Controllers\Agency\BookingController::class, 'show'])->whereNumber('booking')->name('bookings.show');
     Route::post('/bookings/{booking}/cancel', [\App\Http\Controllers\Agency\BookingController::class, 'cancel'])->whereNumber('booking')->name('bookings.cancel');
@@ -219,6 +220,7 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/lookup/verify-session-center', [SvpSessionVerificationController::class, 'show'])->name('lookup.verify-session-center');
         Route::post('/lookup/verify-session-center', [SvpSessionVerificationController::class, 'verify'])->name('lookup.verify-session-center.post');
         Route::get('/{booking}/payment', [UserBookingController::class, 'payment'])->whereNumber('booking')->name('payment');
+        Route::get('/{booking}/payment-return', [UserBookingController::class, 'paymentReturn'])->whereNumber('booking')->name('payment-return');
         Route::post('/{booking}/verify-reservation', [UserBookingController::class, 'verifyReservation'])->whereNumber('booking')->name('verify-reservation');
         Route::get('/{booking}', [UserBookingController::class, 'show'])->whereNumber('booking')->name('show');
     });

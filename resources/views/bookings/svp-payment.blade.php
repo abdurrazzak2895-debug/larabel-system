@@ -32,7 +32,7 @@
         </dl>
 
         <div class="mx-6 mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Opening the checkout is not a payment confirmation. The charge can be completed only on SVP's official, secure payment page.
+            The secure card fields below are hosted by HyperPay. Card number, CVV, and expiry are sent directly to HyperPay and are not collected or stored by this application.
         </div>
 
         @if (session('svp_reservation_check'))
@@ -42,10 +42,31 @@
             </div>
         @endif
 
+        @if (!empty($widgetCheckoutId))
+            <div class="mx-6 mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div class="mb-4">
+                    <p class="text-sm font-semibold text-slate-900">Pay securely with HyperPay</p>
+                    <p class="mt-1 text-xs leading-5 text-slate-600">This is the official SVP COPYandPAY card form. The payment result will return to this booking automatically.</p>
+                </div>
+                <form action="{{ $shopperResultUrl }}" class="paymentWidgets" data-brands="VISA MASTER AMEX"></form>
+                <script
+                    src="{{ rtrim($widgetScriptUrl ?? config('svp.hyperpay_widget_url'), '?') }}?checkoutId={{ rawurlencode($widgetCheckoutId) }}"
+                    @if (!empty($widgetIntegrity)) integrity="{{ $widgetIntegrity }}" crossorigin="anonymous" @endif
+                ></script>
+            </div>
+        @endif
+
+        @if (!empty($checkoutUrl))
+            <div class="mx-6 mb-6 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+                <p class="text-sm font-semibold text-indigo-900">Alternative official checkout</p>
+                <p class="mt-1 text-xs leading-5 text-indigo-800">Use this transaction-specific fallback only if the embedded HyperPay form is unavailable.</p>
+                <a href="{{ $checkoutUrl }}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex justify-center items-center px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition">
+                    Open official SVP card-payment page
+                </a>
+            </div>
+        @endif
+
         <div class="flex flex-col sm:flex-row gap-3 p-6 bg-slate-50 border-t border-slate-100">
-            <a href="{{ $checkoutUrl }}" target="_blank" rel="noopener noreferrer" class="inline-flex justify-center items-center px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition">
-                Open official SVP card-payment page
-            </a>
             <form method="POST" action="{{ $verifyRoute }}">
                 @csrf
                 <button type="submit" class="w-full inline-flex justify-center items-center px-5 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-sm font-semibold transition">

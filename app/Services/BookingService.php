@@ -40,6 +40,7 @@ class BookingService
     public function cancelReservation(string $token, string $id) { return $this->provider->withToken($token)->cancelReservation($id); }
     public function rescheduleReservation(string $token, string $id, array $payload) { return $this->provider->withToken($token)->rescheduleReservation($id, $payload); }
     public function useReservationCredit(string $token, array $payload) { return $this->provider->withToken($token)->useReservationCredit($payload); }
+    public function getPaymentStatus(string $token, string $resourcePath) { return $this->provider->withToken($token)->getPaymentStatus($resourcePath); }
     public function examSession(string $token, string $id) { return $this->provider->withToken($token)->examSession($id); }
     public function occupations(string $token) { return $this->provider->withToken($token)->occupations(); }
     public function occupationsSearch(string $token, ?string $search = null, int $page = 1, int $perPage = 1000) { return $this->provider->withToken($token)->occupationsSearch($search, $page, $perPage); }
@@ -193,18 +194,29 @@ class BookingService
                 'payable_type' => 'Reservation',
                 'payable_id' => $this->numericOrString($reservationId),
             ]);
-            $providerResponse['checkout'] = $checkoutResponse->getData(true);
+            $checkoutPayload = $checkoutResponse->getData(true);
+            $providerResponse['checkout'] = is_array($checkoutPayload['checkout'] ?? null)
+                ? $checkoutPayload['checkout']
+                : $checkoutPayload;
 
-            // Persist the exact transaction-specific URL that the handoff page
-            // must use. A provider response may also contain a generic
-            // eu-prod.oppwa.com host; that host is never a usable checkout.
+            // Persist the exact transaction-specific URL when SVP provides one.
+            // Some SVP responses intentionally return only a generic
+            // eu-prod.oppwa.com host and the official COPYandPAY widget data.
             $checkoutUrl = $this->extractCheckoutUrl($providerResponse);
+            $widgetCheckout = $this->widgetCheckoutFromProviderResponse($providerResponse);
             if (is_string($checkoutUrl) && $checkoutUrl !== '') {
                 $providerResponse['checkout_url'] = $checkoutUrl;
             }
+            if ($widgetCheckout !== null) {
+                $providerResponse['widget_checkout'] = $widgetCheckout;
+            }
             $attempt->update(['provider_response' => $providerResponse]);
 
-            if ($checkoutResponse->getStatusCode() >= 200 && $checkoutResponse->getStatusCode() < 300 && is_string($checkoutUrl) && $checkoutUrl !== '') {
+            $checkoutCreated = $checkoutResponse->getStatusCode() >= 200
+                && $checkoutResponse->getStatusCode() < 300
+                && ((is_string($checkoutUrl) && $checkoutUrl !== '') || $widgetCheckout !== null);
+
+            if ($checkoutCreated) {
                 $booking->update([
                     'reservation_id' => (string) $reservationId,
                     'booking_status' => 'pending',
@@ -218,6 +230,7 @@ class BookingService
                     'success' => true,
                     'payment_required' => true,
                     'checkout_url' => $checkoutUrl,
+                    'widget_checkout' => $widgetCheckout,
                 ];
             }
 
@@ -391,6 +404,42 @@ class BookingService
     public function checkoutUrlFromProviderResponse(array $providerResponse): ?string
     {
         return $this->extractCheckoutUrl($providerResponse);
+    }
+
+    /**
+     * Extract the HyperPay COPYandPAY widget payload from an SVP checkout.
+     *
+     * SVP nests the HyperPay checkout identifier under checkout.response.ndc
+     * (and mirrors it under checkout.response.id) and returns the SHA-384
+     * integrity token alongside it. The local SVP checkout.id is not the
+     * identifier required by paymentWidgets.js.
+     *
+     * @return array{checkout_id: string, integrity: ?string}|null
+     */
+    public function widgetCheckoutFromProviderResponse(array $providerResponse): ?array
+    {
+        $checkoutId = data_get($providerResponse, 'checkout.response.ndc')
+            ?? data_get($providerResponse, 'checkout.response.id')
+            ?? data_get($providerResponse, 'data.checkout.response.ndc')
+            ?? data_get($providerResponse, 'data.checkout.response.id')
+            ?? data_get($providerResponse, 'checkout.ndc')
+            ?? data_get($providerResponse, 'checkout.checkout_id')
+            ?? data_get($providerResponse, 'checkout.checkoutId');
+
+        if (! is_scalar($checkoutId) || trim((string) $checkoutId) === '') {
+            return null;
+        }
+
+        $integrity = data_get($providerResponse, 'checkout.response.integrity')
+            ?? data_get($providerResponse, 'data.checkout.response.integrity')
+            ?? data_get($providerResponse, 'checkout.integrity');
+
+        return [
+            'checkout_id' => trim((string) $checkoutId),
+            'integrity' => is_scalar($integrity) && trim((string) $integrity) !== ''
+                ? trim((string) $integrity)
+                : null,
+        ];
     }
 
     protected function extractCheckoutUrl(array $providerResponse): ?string
