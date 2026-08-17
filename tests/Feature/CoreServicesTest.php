@@ -522,6 +522,9 @@ class CoreServicesTest extends TestCase
         $this->assertSame('7865', $result['booking']->reservation_id);
         $this->assertStringStartsWith('https://eu-prod.oppwa.com/v1/redirect.html?', $result['checkout_url']);
         parse_str((string) parse_url($result['checkout_url'], PHP_URL_QUERY), $checkoutQuery);
+        $this->assertSame('2997943', $checkoutQuery['paymentId'] ?? null);
+        $this->assertSame('0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13', $checkoutQuery['id'] ?? null);
+        $this->assertSame('/v1/checkouts/0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13/payment', $checkoutQuery['resourcePath'] ?? null);
         $this->assertSame('0BC8EC7E741E3BDEDC474E8CF89BF356.prod01-vm-tx13', $checkoutQuery['ndc'] ?? null);
         $this->assertSame(
             'https://svp-international.pacc.sa/labor/confirmation?paymentId=2997943&'.

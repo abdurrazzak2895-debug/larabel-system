@@ -455,7 +455,13 @@ class BookingService
         ], '', '&', PHP_QUERY_RFC3986);
 
         return rtrim((string) config('svp.hyperpay_redirect_url', 'https://eu-prod.oppwa.com/v1/redirect.html'), '?').'?' . http_build_query([
+            // HyperPay receives the transaction identifiers both as the
+            // official SVP confirmation redirect and as top-level query
+            // parameters. Do not reduce this to the generic HyperPay host.
             'redirectUrl' => $confirmationUrl,
+            'paymentId' => $paymentId,
+            'id' => $ndc,
+            'resourcePath' => $resourcePath,
             'ndc' => $ndc,
             'target' => '_top',
             'method' => 'GET',
