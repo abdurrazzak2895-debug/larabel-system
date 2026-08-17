@@ -435,7 +435,7 @@ class BookingService
             return null;
         }
 
-        $svpWeb = rtrim((string) config('svp.web_base_url', 'https://svp-international.pacc.sa'), '/');
+        $svpWeb = rtrim((string) config('svp.web_base_url'), '/');
         $confirmationUrl = $svpWeb.'/labor/confirmation?'.http_build_query([
             'paymentId' => $paymentId,
             'id' => $ndc,

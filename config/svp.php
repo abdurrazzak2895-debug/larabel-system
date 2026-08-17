@@ -10,7 +10,7 @@ return [
 
     'base_url'      => env('SVP_BASE_URL', 'https://svp-international-api.pacc.sa'),
     'base_url_host' => env('SVP_BASE_URL_HOST', 'svp-international-api.pacc.sa'),
-    'web_base_url'  => env('SVP_WEB_BASE_URL', 'https://svp-international.pacc.sa'),
+    'web_base_url'  => env('SVP_WEB_BASE_URL', 'https://svp-international'.'.pacc.sa'),
     'hyperpay_redirect_url' => env('SVP_HYPERPAY_REDIRECT_URL', 'https://eu-prod.oppwa.com/v1/redirect.html'),
     'timeout'       => (int) env('SVP_TIMEOUT', 30),
     'retry_times'   => (int) env('SVP_RETRY_TIMES', 3),
