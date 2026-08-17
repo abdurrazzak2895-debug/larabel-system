@@ -170,6 +170,30 @@ class TakamolProvider implements BookingProviderInterface
             $sessions
         );
 
+        // The session lookup is already scoped to the requested center. SVP
+        // sometimes returns only an opaque session id and date, without any
+        // embedded center metadata. In that response shape, the requested
+        // center is authoritative; never let the session id become a false
+        // center id.
+        if ($requestedCenterId !== null && $requestedCenterId !== '') {
+            $dhakaCanonical = collect(config('svp.dhaka_test_centers', []))->keyBy('id');
+            $sessions = array_map(static function (array $session) use ($requestedCenterId, $dhakaCanonical): array {
+                if ((string) ($session['test_center_id'] ?? '') === '') {
+                    $session['test_center_id'] = $requestedCenterId;
+
+                    if ((string) ($session['test_center_name'] ?? '') === '') {
+                        $canonical = $dhakaCanonical->get($requestedCenterId);
+                        if (is_array($canonical)) {
+                            $session['test_center_name'] = $canonical['name'] ?? null;
+                            $session['test_center_city'] = $canonical['city'] ?? 'Dhaka';
+                        }
+                    }
+                }
+
+                return $session;
+            }, $sessions);
+        }
+
         // The upstream query is center-scoped, but keep a defensive check here:
         // a stale/proxy response from another center must never reach the form.
         if ($requestedCenterId !== null && $requestedCenterId !== '') {

@@ -419,7 +419,7 @@
             const option = document.createElement('option');
             const value = item[valueKey] ?? '';
             const baseLabel = item[labelKey] || value || '';
-            const centerId = item.test_center_id ?? item.site_id ?? item.id;
+            const centerId = item.test_center_id ?? item.site_id ?? null;
             const centerName = item.test_center_name ?? item.site_name ?? item.test_center?.name;
             option.value = value;
             option.dataset.name = item.name || baseLabel;
