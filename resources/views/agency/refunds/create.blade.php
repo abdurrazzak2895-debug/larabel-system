@@ -37,9 +37,9 @@
             </div>
 
             <div>
-                <label for="amount" class="block text-sm font-medium text-slate-700 mb-1">Amount <span class="text-slate-400">(SAR)</span></label>
+                <label for="amount" class="block text-sm font-medium text-slate-700 mb-1">Amount <span class="text-slate-400">(BDT)</span></label>
                 <div class="relative">
-                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">SAR</span>
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">BDT</span>
                     <input type="number" name="amount" id="amount" step="0.01" min="1" required value="{{ old('amount') }}"
                         placeholder="0.00"
                         class="w-full rounded-xl pl-14 pr-4 py-3 border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">

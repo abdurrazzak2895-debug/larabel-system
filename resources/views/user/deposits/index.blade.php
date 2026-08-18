@@ -25,7 +25,7 @@
             </div>
             <div>
                 <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Deposited</p>
-                <p class="text-lg font-bold text-slate-900 mt-0.5">{{ number_format($totalDeposited, 2) }} SAR</p>
+                <p class="text-lg font-bold text-slate-900 mt-0.5">{{ number_format($totalDeposited, 2) }} BDT</p>
             </div>
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
@@ -61,7 +61,7 @@
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-100">
             <h3 class="text-sm font-semibold text-slate-800">Deposit History</h3>
-            <p class="text-xs text-slate-400 mt-0.5">Current wallet balance: <span class="font-semibold text-slate-700">{{ number_format($walletBalance, 2) }} SAR</span></p>
+            <p class="text-xs text-slate-400 mt-0.5">Current wallet balance: <span class="font-semibold text-slate-700">{{ number_format($walletBalance, 2) }} BDT</span></p>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -87,7 +87,7 @@
                     @endphp
                     <tr class="hover:bg-slate-50/60 transition">
                         <td class="px-6 py-4 font-mono text-xs text-slate-600">#{{ $deposit->id }}</td>
-                        <td class="px-6 py-4 text-sm font-semibold text-slate-800">{{ number_format($deposit->amount, 2) }} SAR</td>
+                        <td class="px-6 py-4 text-sm font-semibold text-slate-800">{{ number_format($deposit->amount, 2) }} BDT</td>
                         <td class="px-6 py-4 text-xs text-slate-500">{{ $deposit->payment_method }}</td>
                         <td class="px-6 py-4 text-xs text-slate-500">{{ $deposit->created_at->format('M d, Y g:i A') }}</td>
                         <td class="px-6 py-4">

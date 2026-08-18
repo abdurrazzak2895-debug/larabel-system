@@ -43,7 +43,7 @@
                     <tr class="hover:bg-slate-50/50 transition">
                         <td class="px-6 py-4 font-mono text-xs text-slate-500">#{{ $deposit->id }}</td>
                         <td class="px-6 py-4 font-medium text-slate-700">{{ $deposit->agency?->name ?? 'N/A' }}</td>
-                        <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($deposit->amount, 2) }} <span class="text-xs font-medium text-slate-400">SAR</span></td>
+                        <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($deposit->amount, 2) }} <span class="text-xs font-medium text-slate-400">BDT</span></td>
                         <td class="px-6 py-4 text-slate-600">{{ $deposit->payment_method }}</td>
                         <td class="px-6 py-4">
                             @if ($deposit->receipt_path)

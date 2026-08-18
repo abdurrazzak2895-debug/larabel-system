@@ -37,7 +37,7 @@
                     @endphp
                     <tr class="hover:bg-slate-50/50 transition">
                         <td class="px-6 py-4 font-mono text-xs text-slate-500">#{{ $row->id }}</td>
-                        <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($row->amount, 2) }} <span class="text-xs font-medium text-slate-400">SAR</span></td>
+                        <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($row->amount, 2) }} <span class="text-xs font-medium text-slate-400">BDT</span></td>
                         <td class="px-6 py-4 text-slate-600">{{ $row->payment_method }}</td>
                         <td class="px-6 py-4">
                             <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border {{ $color }}">{{ ucfirst($row->status) }}</span>

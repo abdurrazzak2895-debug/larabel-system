@@ -25,7 +25,7 @@
             </div>
             <div>
                 <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Refunded</p>
-                <p class="text-lg font-bold text-slate-900 mt-0.5">{{ number_format($totalRefunded, 2) }} SAR</p>
+                <p class="text-lg font-bold text-slate-900 mt-0.5">{{ number_format($totalRefunded, 2) }} BDT</p>
             </div>
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
@@ -98,7 +98,7 @@
                             @endif
                         </td>
                         <td class="px-6 py-4 text-xs text-slate-500">{{ $refund->created_at->format('M d, Y g:i A') }}</td>
-                        <td class="px-6 py-4 text-sm font-semibold text-slate-800">{{ number_format($refund->amount ?? 0, 2) }} SAR</td>
+                        <td class="px-6 py-4 text-sm font-semibold text-slate-800">{{ number_format($refund->amount ?? 0, 2) }} BDT</td>
                         <td class="px-6 py-4 text-xs text-slate-500 max-w-xs truncate">{{ $refund->reason }}</td>
                         <td class="px-6 py-4">
                             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border {{ $statusStyle }}">{{ ucfirst($refund->status) }}</span>

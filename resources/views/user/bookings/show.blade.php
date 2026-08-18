@@ -192,7 +192,7 @@
                         <span class="text-xs font-medium text-slate-500">#{{ $refund->id }} · {{ $refund->created_at->format('M d, Y') }}</span>
                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border {{ $refundStyle }}">{{ ucfirst($refund->status) }}</span>
                     </div>
-                    <p class="text-lg font-bold text-slate-900 mt-2">{{ number_format($refund->amount ?? 0, 2) }} <span class="text-sm font-medium text-slate-400">SAR</span></p>
+                    <p class="text-lg font-bold text-slate-900 mt-2">{{ number_format($refund->amount ?? 0, 2) }} <span class="text-sm font-medium text-slate-400">BDT</span></p>
                     <p class="text-xs text-slate-500 mt-1">{{ $refund->reason }}</p>
                 </div>
                 @empty

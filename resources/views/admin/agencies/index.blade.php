@@ -42,7 +42,7 @@
                         <td class="px-6 py-4 font-mono text-xs text-slate-500">#{{ $agency->id }}</td>
                         <td class="px-6 py-4 font-medium text-slate-700">{{ $agency->name }}</td>
                         <td class="px-6 py-4 font-mono text-xs text-slate-500">{{ $agency->code ?? '—' }}</td>
-                        <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($agency->wallet?->available_balance ?? 0, 2) }} <span class="text-xs font-medium text-slate-400">SAR</span></td>
+                        <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($agency->wallet?->available_balance ?? 0, 2) }} <span class="text-xs font-medium text-slate-400">BDT</span></td>
                         <td class="px-6 py-4">
                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border {{ $agency->status ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200' }}">
                                 <span class="w-1.5 h-1.5 rounded-full {{ $agency->status ? 'bg-emerald-500' : 'bg-red-500' }}"></span>

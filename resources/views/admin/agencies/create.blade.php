@@ -11,7 +11,7 @@
         </a>
         <div>
             <h2 class="text-xl font-bold text-slate-900">Create New Agency</h2>
-            <p class="text-sm text-slate-500 mt-0.5">A zero-balance SAR wallet is created automatically.</p>
+            <p class="text-sm text-slate-500 mt-0.5">A zero-balance BDT wallet is created automatically.</p>
         </div>
     </div>
 

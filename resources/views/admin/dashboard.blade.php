@@ -13,7 +13,7 @@
             <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Platform Wallet Balance</p>
             <p class="text-4xl sm:text-5xl font-black tracking-tight">
                 {{ number_format($totalWalletBalance, 2) }}
-                <span class="text-lg sm:text-xl font-bold text-indigo-300">SAR</span>
+                <span class="text-lg sm:text-xl font-bold text-indigo-300">BDT</span>
             </p>
             <div class="flex flex-wrap gap-4 mt-4 text-sm">
                 <span class="inline-flex items-center gap-1.5 text-slate-300">
@@ -84,7 +84,7 @@
                 @forelse ($revenueOverview as $row)
                     <tr class="hover:bg-slate-50/50 transition">
                         <td class="px-6 py-4 text-slate-600">{{ $row['date'] }}</td>
-                        <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($row['total'], 2) }} <span class="text-xs font-medium text-slate-400">SAR</span></td>
+                        <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($row['total'], 2) }} <span class="text-xs font-medium text-slate-400">BDT</span></td>
                     </tr>
                 @empty
                     <tr>

@@ -29,7 +29,7 @@
             <div>
                 <label for="booking_price" class="block text-sm font-medium text-slate-700 mb-1">Booking Price</label>
                 <div class="relative">
-                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">SAR</span>
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">BDT</span>
                     <input type="number" name="booking_price" id="booking_price" step="0.01" min="0" required
                         value="{{ old('booking_price', $settings['booking_price']?->value ?? 0) }}"
                         class="w-full rounded-xl pl-14 pr-4 py-3 border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
@@ -40,7 +40,7 @@
             <div>
                 <label for="service_fee" class="block text-sm font-medium text-slate-700 mb-1">Service Fee</label>
                 <div class="relative">
-                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">SAR</span>
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">BDT</span>
                     <input type="number" name="service_fee" id="service_fee" step="0.01" min="0" required
                         value="{{ old('service_fee', $settings['service_fee']?->value ?? 0) }}"
                         class="w-full rounded-xl pl-14 pr-4 py-3 border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
@@ -59,7 +59,7 @@
             <div>
                 <label for="currency" class="block text-sm font-medium text-slate-700 mb-1">Currency</label>
                 <input type="text" name="currency" id="currency" required maxlength="3"
-                    value="{{ old('currency', $settings['currency']?->value ?? 'SAR') }}"
+                    value="{{ old('currency', $settings['currency']?->value ?? 'BDT') }}"
                     class="w-full rounded-xl border-slate-200 text-sm font-mono focus:border-brand-500 focus:ring-brand-500">
                 @error('currency')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>

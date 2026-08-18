@@ -37,7 +37,7 @@
             </div>
             <div class="min-w-0">
                 <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Wallet Balance</p>
-                <p class="text-xl font-bold text-slate-900 mt-0.5">{{ number_format($walletBalance, 2) }} <span class="text-sm font-medium text-slate-400">SAR</span></p>
+                <p class="text-xl font-bold text-slate-900 mt-0.5">{{ number_format($walletBalance, 2) }} <span class="text-sm font-medium text-slate-400">BDT</span></p>
                 <p class="text-xs text-slate-400 mt-0.5 truncate">Reserved: {{ number_format($reservedBalance, 2) }} · Credit: {{ number_format($creditLimit, 2) }}</p>
             </div>
         </div>
@@ -214,7 +214,7 @@
                 <div class="absolute -top-16 -right-16 w-48 h-48 bg-indigo-500/25 rounded-full blur-3xl pointer-events-none"></div>
                 <div class="relative">
                     <p class="text-xs text-indigo-300 font-medium">Available Balance</p>
-                    <p class="text-3xl font-extrabold mt-1 tracking-tight">{{ number_format($walletBalance, 2) }} <span class="text-sm font-medium text-slate-400">SAR</span></p>
+                    <p class="text-3xl font-extrabold mt-1 tracking-tight">{{ number_format($walletBalance, 2) }} <span class="text-sm font-medium text-slate-400">BDT</span></p>
                     <div class="grid grid-cols-2 gap-3 mt-5 pt-5 border-t border-white/10">
                         <div>
                             <p class="text-[11px] text-slate-400">Reserved</p>
@@ -235,7 +235,7 @@
             @if ($latestDeposit)
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                 <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Latest Deposit</p>
-                <p class="text-lg font-bold text-slate-900 mt-1">{{ number_format($latestDeposit->amount, 2) }} <span class="text-sm font-medium text-slate-400">SAR</span></p>
+                <p class="text-lg font-bold text-slate-900 mt-1">{{ number_format($latestDeposit->amount, 2) }} <span class="text-sm font-medium text-slate-400">BDT</span></p>
                 <p class="text-xs text-slate-400 mt-0.5">{{ $latestDeposit->payment_method }} · {{ $latestDeposit->created_at->format('M d, Y') }}</p>
                 <span class="inline-flex items-center mt-3 px-2.5 py-1 rounded-full text-xs font-medium border {{ $latestDeposit->status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : ($latestDeposit->status === 'rejected' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200') }}">{{ ucfirst($latestDeposit->status) }}</span>
             </div>

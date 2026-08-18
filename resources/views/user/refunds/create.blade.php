@@ -39,7 +39,7 @@
             </div>
 
             <div>
-                <label for="amount" class="block text-sm font-medium text-slate-700 mb-1.5">Refund Amount (SAR)</label>
+                <label for="amount" class="block text-sm font-medium text-slate-700 mb-1.5">Refund Amount (BDT)</label>
                 <input type="number" name="amount" id="amount" step="0.01" min="1" value="{{ old('amount') }}" required
                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
                        placeholder="Enter refund amount">

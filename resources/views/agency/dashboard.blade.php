@@ -13,7 +13,7 @@
             <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Available Wallet Balance</p>
             <p class="text-4xl sm:text-5xl font-black tracking-tight">
                 {{ number_format($availableWallet, 2) }}
-                <span class="text-lg sm:text-xl font-bold text-indigo-300">SAR</span>
+                <span class="text-lg sm:text-xl font-bold text-indigo-300">BDT</span>
             </p>
             <div class="flex flex-wrap gap-4 mt-4 text-sm">
                 <span class="inline-flex items-center gap-1.5 text-slate-300">

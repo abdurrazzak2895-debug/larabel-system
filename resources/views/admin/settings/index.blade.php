@@ -38,7 +38,7 @@
             <div>
                 <label for="currency" class="block text-sm font-medium text-slate-700 mb-1">Currency</label>
                 <input type="text" name="currency" id="currency" required maxlength="3"
-                    value="{{ old('currency', $settings['currency']?->value ?? 'SAR') }}"
+                    value="{{ old('currency', $settings['currency']?->value ?? 'BDT') }}"
                     class="w-full rounded-xl border-slate-200 text-sm font-mono focus:border-brand-500 focus:ring-brand-500">
                 @error('currency')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
