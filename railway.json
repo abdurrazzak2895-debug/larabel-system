@@ -9,7 +9,7 @@
   "deploy": {
     "runtime": "V2",
     "startCommand": "php artisan serve --host=0.0.0.0 --port=$PORT",
-    "healthcheckPath": "/",
+    "healthcheckPath": "/login",
     "healthcheckTimeout": 300,
     "numReplicas": 1,
     "preDeployCommand": [
