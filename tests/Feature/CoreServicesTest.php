@@ -9,6 +9,7 @@ use App\Models\BookingAttempt;
 use App\Models\Candidate;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\BookingService;
 use App\Services\WalletService;
@@ -151,6 +152,67 @@ class CoreServicesTest extends TestCase
 
 
     // ---------- Booking service (regression: credential_id FK) ----------
+
+    public function test_successful_credit_booking_debits_the_agency_portal_fee_once(): void
+    {
+        Setting::create(['key' => 'booking_price', 'value' => '25.00', 'agency_id' => null]);
+
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/individual_labor_space/exam_reservations')) {
+                return Http::response(['exam_reservation' => ['id' => 99001]], 201);
+            }
+
+            if (str_ends_with($path, '/users/SVP-FEE-USER/balance')) {
+                return Http::response(['reservation_credits' => 1], 200);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/reservation_credits/use')) {
+                return Http::response(['success' => true, 'reservation_id' => 99001], 200);
+            }
+
+            return Http::response([], 200);
+        });
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $this->agency->id,
+            'full_name' => 'Portal Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-FEE-USER',
+        ]);
+
+        app(WalletService::class)->deposit($this->agency->id, 100.00);
+
+        $result = app(BookingService::class)->completeBooking('fee-token', [
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'credential_id' => $candidate->id,
+            'svp_user_id' => 'SVP-FEE-USER',
+            'occupation_id' => '2062',
+            'exam_session_id' => 'FEE-SESSION',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('booked', $result['booking']->booking_status);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'type' => 'booking_hold',
+            'amount' => 25.00,
+            'reference' => 'portal-booking-fee-'.$result['booking']->id,
+        ]);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'type' => 'booking_debit',
+            'amount' => 25.00,
+            'reference' => 'portal-booking-fee-'.$result['booking']->id,
+        ]);
+        $this->assertDatabaseHas('agency_wallets', [
+            'agency_id' => $this->agency->id,
+            'available_balance' => 75.00,
+            'reserved_balance' => 0.00,
+        ]);
+    }
 
     public function test_booking_service_persists_booking_with_candidate_credential(): void
     {

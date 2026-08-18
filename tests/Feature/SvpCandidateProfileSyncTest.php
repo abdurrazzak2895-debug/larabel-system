@@ -7,6 +7,7 @@ use App\Models\Agency;
 use App\Models\Candidate;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -49,6 +50,88 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertSame('Candidate After Sync', $candidate->full_name);
         $this->assertSame('candidate@example.test', $candidate->email);
         $this->assertSame(1, Candidate::where('user_id', $user->id)->count());
+    }
+
+    public function test_svp_sync_keeps_standalone_portal_user_without_creating_an_agency(): void
+    {
+        $agencyCount = Agency::count();
+        $user = User::factory()->create(['agency_id' => null]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => null,
+            'full_name' => 'Portal Candidate',
+            'email' => $user->email,
+            'svp_user_id' => null,
+        ]);
+
+        $controller = app(SvpLoginController::class);
+        $sync = new ReflectionMethod($controller, 'syncCandidateFromProfile');
+        $sync->invoke($controller, $user, [
+            'id' => 'SVP-EXTERNAL-USER',
+            'full_name' => 'SVP Candidate',
+            'email' => 'svp-candidate@example.test',
+        ]);
+
+        $candidate->refresh();
+        $user->refresh();
+
+        $this->assertSame($agencyCount, Agency::count());
+        $this->assertNull($user->agency_id);
+        $this->assertSame('SVP-EXTERNAL-USER', $candidate->svp_user_id);
+        $this->assertSame(1, Candidate::where('user_id', $user->id)->count());
+    }
+
+    public function test_otp_verification_keeps_svp_identity_on_existing_portal_user_without_agency_provisioning(): void
+    {
+        $agencyCount = Agency::count();
+        $user = User::factory()->create(['agency_id' => null]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => null,
+            'full_name' => 'Portal Candidate',
+            'email' => $user->email,
+            'svp_user_id' => null,
+        ]);
+
+        Http::fake([
+            '*/api/v1/sessions/otp' => Http::response([
+                'access_payload' => [
+                    'token' => 'svp-otp-token',
+                    'user' => ['id' => 'SVP-OTP-USER'],
+                ],
+            ], 200),
+            '*/api/v1/individual_labor_space/profile' => Http::response([
+                'profile' => [
+                    'id' => 'SVP-OTP-USER',
+                    'full_name' => 'SVP Candidate',
+                    'email' => 'svp-candidate@example.test',
+                ],
+            ], 200),
+        ]);
+
+        $csrfToken = 'svp-otp-csrf-token';
+        $response = $this->actingAs($user, 'web')
+            ->withSession([
+                '_token' => $csrfToken,
+                'svp_login' => [
+                    'email' => 'svp-candidate@example.test',
+                    'password' => 'secret',
+                    'otp_method' => 'email',
+                ],
+            ])
+            ->post(route('svp.otp.verify'), [
+                'otp_code' => '123456',
+                '_token' => $csrfToken,
+            ]);
+
+        $response->assertRedirect(route('user.dashboard'));
+        $user->refresh();
+        $candidate->refresh();
+
+        $this->assertSame($agencyCount, Agency::count());
+        $this->assertNull($user->agency_id);
+        $this->assertSame('SVP-OTP-USER', $candidate->svp_user_id);
+        $this->assertSame('svp-otp-token', session('svp_token'));
     }
 
     public function test_profile_envelope_is_normalized_to_the_actual_user_record(): void

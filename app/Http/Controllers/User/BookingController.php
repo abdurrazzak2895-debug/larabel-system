@@ -755,6 +755,7 @@ class BookingController extends Controller
             }
 
             $booking->update(['booking_status' => 'booked']);
+            $this->booking->finalizePortalBookingFee($booking);
             $attempt = $booking->attempts()->latest()->first();
             if ($attempt) {
                 $providerResponse = (array) ($attempt->provider_response ?? []);

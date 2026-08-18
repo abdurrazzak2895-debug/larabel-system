@@ -6,6 +6,7 @@ use App\Models\Agency;
 use App\Models\Booking;
 use App\Models\BookingAttempt;
 use App\Models\BookingLog;
+use App\Models\Setting;
 use App\Services\Providers\BookingProviderInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -24,7 +25,8 @@ class BookingService
         private BookingProviderInterface $provider,
         private SvpReservationCreditService $credits,
         private NotificationService $notifications,
-        private AuditService $audit
+        private AuditService $audit,
+        private WalletService $wallet
     ) {}
 
     // -----------------------------------------------------------------
@@ -114,15 +116,33 @@ class BookingService
         $this->logEvent($booking, 'booking_started', $data);
 
         try {
-            // 1. Persist an attempt before the real SVP reservation call. No
-            // Laravel-controlled amount is accepted or held: SVP determines
-            // whether a reservation credit can be used or card checkout is due.
+            // 1. Persist an attempt before the real SVP reservation call. The
+            // Agency portal service fee below is separate from the SVP amount;
+            // SVP still determines whether credit or card checkout is used.
             //
             $attempt = BookingAttempt::create([
                 'booking_id'     => $booking->id,
                 'status'         => 'processing',
                 'request_payload' => $data,
             ]);
+
+            // The portal booking fee belongs to the Agency wallet and is
+            // completely separate from the amount/credit decision made by SVP.
+            // Hold it before touching SVP, then debit only after SVP confirms the
+            // reservation. This prevents a successful external booking without
+            // the portal fee being accounted for.
+            $portalFee = $this->portalBookingFee($agencyId);
+            $portalFeeReference = $this->portalFeeReference($booking);
+            if ($portalFee > 0
+                && ! $this->walletTransaction($booking, 'booking_hold', $portalFeeReference)
+                && ! $this->walletTransaction($booking, 'booking_debit', $portalFeeReference)) {
+                $this->wallet->hold(
+                    $agencyId,
+                    $portalFee,
+                    $portalFeeReference,
+                    ['booking_id' => $booking->id, 'purpose' => 'portal_booking_fee']
+                );
+            }
 
             // 2. Create the real SVP reservation. The selected exam_session_id
             // is the authoritative center assignment; site_id/site_city are
@@ -263,6 +283,8 @@ class BookingService
             'booking_status' => 'booked',
         ]);
         $attempt->update(['status' => 'success']);
+
+        $this->finalizePortalBookingFee($booking);
 
         $this->logEvent($booking, 'booking_completed_with_svp_credit', ['response' => $providerResponse]);
         $this->audit->log((int) $booking->agency_id, 'booking', ['booking_id' => $booking->id, 'action' => 'completed_with_svp_credit']);
@@ -555,6 +577,7 @@ class BookingService
      */
     protected function handleBookingFailure(Booking $booking, ?BookingAttempt $attempt, mixed $response, ?string $error = null): array
     {
+        $this->releasePortalBookingFee($booking);
         $booking->update(['booking_status' => 'failed']);
         $this->logEvent($booking, 'booking_failed', ['response' => $response]);
 
@@ -569,6 +592,73 @@ class BookingService
         $this->audit->log((int) $booking->agency_id, 'booking', ['booking_id' => $booking->id, 'action' => 'failed']);
 
         return ['booking' => $booking, 'success' => false, 'error' => $error ?? 'Booking failed.'];
+    }
+
+    /**
+     * Return the canonical per-booking portal fee from Agency-specific settings,
+     * falling back to the global admin setting and finally to the documented
+     * zero-fee default. This is not the SVP reservation amount.
+     */
+    public function portalBookingFee(int $agencyId): float
+    {
+        $agencyValue = Setting::query()
+            ->where('key', 'booking_price')
+            ->where('agency_id', $agencyId)
+            ->value('value');
+
+        $globalValue = $agencyValue ?? Setting::query()
+            ->where('key', 'booking_price')
+            ->whereNull('agency_id')
+            ->value('value');
+
+        $configured = $globalValue ?? config('svp.portal_booking_fee', 0);
+        $fee = is_numeric($configured) ? (float) $configured : 0.0;
+
+        return max(0.0, round($fee, 2));
+    }
+
+    public function finalizePortalBookingFee(Booking $booking): void
+    {
+        $reference = $this->portalFeeReference($booking);
+        $hold = $this->walletTransaction($booking, 'booking_hold', $reference);
+        if (! $hold || $this->walletTransaction($booking, 'booking_debit', $reference)) {
+            return;
+        }
+
+        $this->wallet->debit((int) $booking->agency_id, (float) $hold->amount, $reference, [
+            'booking_id' => $booking->id,
+            'purpose' => 'portal_booking_fee',
+        ]);
+    }
+
+    public function releasePortalBookingFee(Booking $booking): void
+    {
+        $reference = $this->portalFeeReference($booking);
+        $hold = $this->walletTransaction($booking, 'booking_hold', $reference);
+        if (! $hold || $this->walletTransaction($booking, 'refund', $reference)) {
+            return;
+        }
+
+        $this->wallet->releaseHold((int) $booking->agency_id, (float) $hold->amount, $reference, [
+            'booking_id' => $booking->id,
+            'purpose' => 'portal_booking_fee_release',
+        ]);
+    }
+
+    protected function portalFeeReference(Booking $booking): string
+    {
+        return 'portal-booking-fee-'.$booking->id;
+    }
+
+    protected function walletTransaction(Booking $booking, string $type, string $reference): ?\App\Models\WalletTransaction
+    {
+        $wallet = $this->wallet->getWallet((int) $booking->agency_id);
+
+        return $wallet->transactions()
+            ->where('type', $type)
+            ->where('reference', $reference)
+            ->latest('id')
+            ->first();
     }
 
     /**

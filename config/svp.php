@@ -21,6 +21,10 @@ return [
     // SVP expects a Prometric language code (for example LOABB), not an ISO code such as en.
     'default_language_code' => env('SVP_DEFAULT_LANGUAGE_CODE', 'LOABB'),
     'default_methodology'   => env('SVP_DEFAULT_METHODOLOGY', 'in_person'),
+    // Portal service fee charged to the Agency wallet per successful booking
+    // when no admin booking_price setting exists. This is separate from SVP's
+    // own reservation amount or reservation-credit decision.
+    'portal_booking_fee'     => (float) env('SVP_PORTAL_BOOKING_FEE', 0),
     // SVP's category-filtered center response can omit known Dhaka centers.
     // Keep the supplied real SVP IDs canonical so both booking panels expose
     // the complete seven-center set; session availability is still verified
