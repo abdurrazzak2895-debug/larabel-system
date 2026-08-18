@@ -179,6 +179,67 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_center_session_lookup_loads_every_available_date_for_the_selected_center(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            if (str_ends_with($path, '/exam_sessions/available_dates')) {
+                return Http::response([
+                    'available_dates' => [
+                        [
+                            'start_date_in_tc_time_zone' => '2026-08-20T09:00:00+06:00',
+                            'test_center' => ['id' => 223, 'name' => 'Manikganj Technical Training Center', 'city' => 'Dhaka'],
+                        ],
+                        [
+                            'start_date_in_tc_time_zone' => '2026-08-24T09:00:00+06:00',
+                            'test_center' => ['id' => 17, 'name' => 'Bangladesh Korea TTC Dhaka', 'city' => 'Dhaka'],
+                        ],
+                        [
+                            'start_date_in_tc_time_zone' => '2026-08-25T09:00:00+06:00',
+                            'test_center' => ['id' => 223, 'name' => 'Manikganj Technical Training Center', 'city' => 'Dhaka'],
+                        ],
+                    ],
+                ], 200);
+            }
+
+            $date = $query['exam_date'] ?? null;
+            return Http::response([
+                'data' => [
+                    'exam_sessions' => [[
+                        'id' => 'session-'.$date,
+                        'start_date_in_browser_time_zone' => $date,
+                    ]],
+                ],
+            ], 200);
+        });
+
+        $payload = (new TakamolProvider())->withToken('test-token')->examSessionsForCenter([
+            'city' => 'Dhaka',
+            'category_id' => 'category-4',
+            'test_center_id' => '223',
+        ])->getData(true);
+
+        $sessions = $payload['data']['sessions'];
+        $this->assertCount(2, $sessions);
+        $this->assertSame(['session-2026-08-20', 'session-2026-08-25'], array_column($sessions, 'id'));
+        $this->assertSame(['2026-08-20', '2026-08-25'], array_column($sessions, 'exam_date'));
+        $this->assertCount(2, $payload['data']['available_dates']);
+        $this->assertSame('223', $payload['data']['available_dates'][0]['test_center_id']);
+
+        Http::assertSent(function ($request): bool {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return str_ends_with($path, '/exam_sessions')
+                && ! str_ends_with($path, '/available_dates')
+                && in_array($query['exam_date'] ?? null, ['2026-08-20', '2026-08-25'], true)
+                && ($query['test_center_id'] ?? null) === '223'
+                && ($query['available_seats'] ?? null) === 'greater_than::0';
+        });
+    }
+
     public function test_temporary_seat_uses_the_official_array_body_and_locale(): void
     {
         Http::fake([

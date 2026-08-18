@@ -34,6 +34,7 @@ class BookingService
     // -----------------------------------------------------------------
 
     public function sessions(string $token, array $params = []) { return $this->provider->withToken($token)->examSessions($params); }
+    public function sessionsForCenter(string $token, array $params = []) { return $this->provider->withToken($token)->examSessionsForCenter($params); }
     public function availableDates(string $token, ?string $sessionId = null, array $params = []) { return $this->provider->withToken($token)->availableDates($sessionId, $params); }
     public function validateReservation(string $token) { return $this->provider->withToken($token)->validateReservation(); }
     public function reservations(string $token) { return $this->provider->withToken($token)->reservationDetails(); }

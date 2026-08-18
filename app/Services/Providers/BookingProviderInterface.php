@@ -22,6 +22,7 @@ interface BookingProviderInterface
 
     // Exam
     public function examSessions(array $params = []): JsonResponse;
+    public function examSessionsForCenter(array $params = []): JsonResponse;
     public function examSession(string $id): JsonResponse;
     public function availableDates(?string $sessionId = null, array $params = []): JsonResponse;
     public function temporarySeat(array $payload): JsonResponse;

@@ -213,6 +213,126 @@ class TakamolProvider implements BookingProviderInterface
     }
 
     /**
+     * Resolve every available date for the selected center before loading its
+     * opaque session IDs. The SVP available_dates endpoint is category/city
+     * based and carries the center in each date record; the exam_sessions
+     * endpoint must then be called once per date with the exact center ID.
+     */
+    public function examSessionsForCenter(array $params = []): JsonResponse
+    {
+        $params = $this->normalizeQueryParams($params);
+        $categoryId = (string) ($params['category_id'] ?? '');
+        $city = (string) ($params['city'] ?? '');
+        $centerId = (string) ($params['test_center_id'] ?? '');
+
+        if ($categoryId === '' || $city === '' || $centerId === '') {
+            return $this->examSessions($params);
+        }
+
+        $availableResponse = $this->availableDates(null, [
+            'category_id' => $categoryId,
+            'city' => $city,
+            'country_id' => $params['country_id'] ?? null,
+            'per_page' => $params['per_page'] ?? 10000,
+        ]);
+
+        if ($availableResponse->getStatusCode() >= 400) {
+            // Preserve the existing lookup behavior if the auxiliary
+            // available_dates endpoint is temporarily unavailable.
+            return $this->examSessions($params);
+        }
+
+        $availablePayload = json_decode($availableResponse->getContent(), true);
+        $dateRecords = is_array($availablePayload)
+            ? $this->extractAvailableDateRecords($availablePayload)
+            : [];
+        $centerDates = [];
+
+        foreach ($dateRecords as $record) {
+            if (! is_array($record)) {
+                continue;
+            }
+
+            $normalized = self::formatSessionName($record);
+            $recordCenter = (string) ($normalized['test_center_id'] ?? '');
+            $date = (string) ($normalized['exam_date'] ?? '');
+
+            if ($recordCenter === $centerId && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date) === 1) {
+                $centerDates[$date] = $normalized;
+            }
+        }
+
+        ksort($centerDates);
+        if ($centerDates === []) {
+            // Some SVP deployments omit center metadata from available_dates.
+            // Keep the established exact-center session query as a safe
+            // compatibility path rather than rendering an empty wizard.
+            return $this->examSessions($params);
+        }
+
+        $sessions = [];
+        $availableDates = array_values($centerDates);
+
+        foreach (array_keys($centerDates) as $date) {
+            $dateResponse = $this->examSessions($params + ['exam_date' => $date]);
+            if ($dateResponse->getStatusCode() >= 400) {
+                continue;
+            }
+
+            $datePayload = json_decode($dateResponse->getContent(), true);
+            if (! is_array($datePayload)) {
+                continue;
+            }
+
+            foreach ($this->extractList($datePayload, ['exam_sessions', 'sessions', 'available_sessions']) ?? [] as $session) {
+                if (is_array($session)) {
+                    $sessions[] = $session;
+                }
+            }
+        }
+
+        $unique = [];
+        foreach ($sessions as $session) {
+            $key = (string) ($session['id'] ?? $session['exam_session_id'] ?? '');
+            $key = $key !== '' ? $key : sha1(json_encode($session));
+            $unique[$key] = $session;
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'sessions' => array_values($unique),
+                'exam_sessions' => array_values($unique),
+                'available_dates' => $availableDates,
+            ],
+        ]);
+    }
+
+    /**
+     * Extract available-date records from all SVP response envelopes.
+     *
+     * @return array<int, mixed>
+     */
+    protected function extractAvailableDateRecords(array $payload): array
+    {
+        $candidates = [
+            $payload['available_dates'] ?? null,
+            $payload['dates'] ?? null,
+            data_get($payload, 'data.available_dates'),
+            data_get($payload, 'data.dates'),
+            data_get($payload, 'data'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_array($candidate) && array_is_list($candidate)) {
+                return array_values($candidate);
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * Keep only non-empty query values and coerce the SVP filter names to the
      * contract used by the working Playwright client.
      */

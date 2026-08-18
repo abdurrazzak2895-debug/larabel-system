@@ -518,7 +518,7 @@ class BookingController extends Controller
         $params = array_filter($params, static fn ($value) => $value !== null && $value !== '');
 
         try {
-            $response = $this->booking->sessions($token, $params);
+            $response = $this->booking->sessionsForCenter($token, $params);
             $payload = $response->getData(true);
 
             $this->holds->rememberSessionLookup($request, [
