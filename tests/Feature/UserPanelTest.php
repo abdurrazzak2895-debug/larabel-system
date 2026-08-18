@@ -83,6 +83,20 @@ class UserPanelTest extends TestCase
     public function test_user_can_see_live_svp_reservations_and_download_a_ticket(): void
     {
         Http::fake([
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370112/reschedule*' => Http::response([
+                'success' => true,
+                'exam_reservation' => ['id' => 5370112, 'exam_date' => '2026-09-01', 'test_center_id' => 17],
+            ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_sessions/available_dates*' => Http::response([
+                'available_dates' => [
+                    ['exam_date' => '2026-09-01', 'test_center_id' => 17],
+                ],
+            ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_sessions*' => Http::response([
+                'exam_sessions' => [
+                    ['id' => 'reschedule-session-1', 'exam_date' => '2026-09-01', 'test_center_id' => 17, 'name' => 'First Shift'],
+                ],
+            ], 200),
             'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370112*' => Http::response([
                 'exam_reservation' => [
                     'id' => 5370112,
@@ -90,6 +104,12 @@ class UserPanelTest extends TestCase
                     'exam_result' => 'passed',
                     'can_be_canceled' => true,
                     'can_be_rescheduled' => true,
+                    'category_id' => 12,
+                    'city' => 'Dhaka',
+                    'test_center_id' => 17,
+                    'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+                    'exam_date' => '2026-08-25',
+                    'methodology' => 'in_person',
                     'occupation' => [
                         'id' => 2062,
                         'english_name' => 'Kitchen Worker',
@@ -184,7 +204,30 @@ class UserPanelTest extends TestCase
             ->assertSessionHas('success', 'The SVP reservation was canceled successfully.');
 
         $reschedule = $this->get(route('user.bookings.svp-reschedule', ['reservation' => 5370112]));
-        $reschedule->assertRedirect('https://svp-international.pacc.sa/labor/reschedule/steps?reservationId=5370112');
+        $reschedule->assertOk()
+            ->assertSee('Reschedule SVP Reservation')
+            ->assertSee('Bangladesh Korea TTC Dhaka')
+            ->assertDontSee('svp-international.pacc.sa/home');
+
+        $lookup = $this->get(route('user.bookings.lookup.sessions', [
+            'city' => 'Dhaka',
+            'category_id' => '12',
+            'test_center_id' => '17',
+        ]));
+        $lookup->assertOk()->assertJsonPath('data.sessions.0.id', 'reschedule-session-1');
+
+        $rescheduleSubmit = $this->withSession(['_token' => $csrfToken])
+            ->post(route('user.bookings.svp-reschedule.submit', ['reservation' => 5370112]), [
+                '_token' => $csrfToken,
+                'category_id' => '12',
+                'city' => 'Dhaka',
+                'test_center_id' => '17',
+                'exam_session_id' => 'reschedule-session-1',
+                'exam_date' => '2026-09-01',
+                'methodology' => 'in_person',
+            ]);
+        $rescheduleSubmit->assertRedirect(route('user.bookings.index'))
+            ->assertSessionHas('success', 'The SVP reservation was rescheduled successfully. Live reservations were refreshed from SVP.');
 
         Http::assertSent(function ($request) {
             return str_ends_with($request->url(), '/tickets/5370112/show_pdf?locale=en')
@@ -193,6 +236,13 @@ class UserPanelTest extends TestCase
         Http::assertSent(function ($request) {
             return $request->method() === 'DELETE'
                 && str_ends_with($request->url(), '/exam_reservations/5370112')
+                && $request->hasHeader('Authorization', 'Bearer test-svp-token');
+        });
+        Http::assertSent(function ($request) {
+            return $request->method() === 'POST'
+                && str_ends_with($request->url(), '/exam_reservations/5370112/reschedule')
+                && $request['exam_session_id'] === 'reschedule-session-1'
+                && $request['exam_date'] === '2026-09-01'
                 && $request->hasHeader('Authorization', 'Bearer test-svp-token');
         });
     }
