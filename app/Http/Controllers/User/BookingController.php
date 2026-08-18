@@ -928,6 +928,15 @@ class BookingController extends Controller
         $resourcePath = trim((string) $request->query('resourcePath', ''));
         $showRoute = route('user.bookings.show', $booking->id);
 
+        if ($booking->booking_status !== 'pending') {
+            Log::warning('Payment callback ignored for non-pending booking', [
+                'booking_id' => $booking->id,
+                'booking_status' => $booking->booking_status,
+            ]);
+
+            return redirect($showRoute)->with('error', 'This booking is no longer awaiting payment and cannot be paid again.');
+        }
+
         if ($resourcePath === '') {
             return redirect($showRoute)->with('error', 'SVP did not return a payment status path.');
         }

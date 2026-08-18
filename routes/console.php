@@ -13,6 +13,8 @@ use App\Models\WalletTransaction;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schedule;
+use App\Services\RefundService;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -128,3 +130,18 @@ Artisan::command('app:purge-demo-data {--force : Permanently delete the confirme
 
     return 0;
 })->purpose('Remove the confirmed seeded demo agencies and all dependent demo records');
+
+Artisan::command('bookings:refund-expired-pending {--minutes=10 : Minutes a pending booking may wait for payment} {--limit=100 : Maximum bookings to process in one run}', function () {
+    $minutes = max(1, (int) $this->option('minutes'));
+    $limit = max(1, min(500, (int) $this->option('limit')));
+    $count = app(RefundService::class)->autoRefundExpiredPending($minutes, $limit);
+
+    $this->info("Automatically refunded {$count} expired pending booking(s).");
+
+    return 0;
+})->purpose('Automatically refund pending bookings after the payment timeout');
+
+Schedule::command('bookings:refund-expired-pending')
+    ->everyMinute()
+    ->withoutOverlapping(15)
+    ->description('Refund pending bookings that have exceeded the payment timeout.');

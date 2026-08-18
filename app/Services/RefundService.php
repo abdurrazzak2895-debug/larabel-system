@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Booking;
 use App\Models\RefundRequest;
+use App\Models\WalletTransaction;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -82,6 +83,135 @@ class RefundService
 
             return $refund;
         });
+    }
+
+    /**
+     * Automatically refund pending bookings that have exceeded the payment timeout.
+     *
+     * A pending booking has a portal-fee hold, not a completed debit. Therefore
+     * the timeout path releases that hold back to available balance rather than
+     * calling refund(), which would over-credit the wallet. Booking rows are
+     * locked and both the booking status and wallet reference are checked so a
+     * repeated scheduler run cannot refund the same booking twice.
+     */
+    public function autoRefundExpiredPending(int $minutes = 10, int $limit = 100): int
+    {
+        $minutes = max(1, $minutes);
+        $limit = max(1, min(500, $limit));
+        $cutoff = now()->subMinutes($minutes);
+        $processed = 0;
+
+        Booking::query()
+            ->where('booking_status', 'pending')
+            ->whereNotNull('updated_at')
+            ->where('updated_at', '<=', $cutoff)
+            ->orderBy('id')
+            ->limit($limit)
+            ->pluck('id')
+            ->each(function (int $bookingId) use ($cutoff, $minutes, &$processed): void {
+                $refunded = DB::transaction(function () use ($bookingId, $cutoff, $minutes): bool {
+                    /** @var Booking|null $booking */
+                    $booking = Booking::query()->lockForUpdate()->find($bookingId);
+                    if (! $booking
+                        || $booking->booking_status !== 'pending'
+                        || ! $booking->updated_at
+                        || $booking->updated_at->greaterThan($cutoff)) {
+                        return false;
+                    }
+
+                    $reference = 'portal-booking-fee-'.$booking->id;
+                    $hold = WalletTransaction::query()
+                        ->where('type', 'booking_hold')
+                        ->where('reference', $reference)
+                        ->whereHas('wallet', fn ($query) => $query->where('agency_id', $booking->agency_id))
+                        ->latest('id')
+                        ->first();
+
+                    $alreadyReleased = $hold !== null && WalletTransaction::query()
+                        ->where('wallet_id', $hold->wallet_id)
+                        ->where('type', 'refund')
+                        ->where('reference', $reference)
+                        ->exists();
+
+                    if ($hold && ! $alreadyReleased) {
+                        $this->wallet->releaseHold(
+                            (int) $booking->agency_id,
+                            (float) $hold->amount,
+                            $reference,
+                            [
+                                'booking_id' => $booking->id,
+                                'purpose' => 'automatic_pending_booking_refund',
+                                'timeout_minutes' => $minutes,
+                            ]
+                        );
+                    }
+
+                    $reason = 'Automatic refund: pending booking exceeded the payment timeout.';
+                    $refund = RefundRequest::query()
+                        ->where('booking_id', $booking->id)
+                        ->where('reason', $reason)
+                        ->latest('id')
+                        ->first();
+
+                    if (! $refund) {
+                        RefundRequest::create([
+                            'booking_id' => $booking->id,
+                            'agency_id' => $booking->agency_id,
+                            'amount' => $hold ? (float) $hold->amount : 0.0,
+                            'reason' => $reason,
+                            'status' => 'processed',
+                            'processed_at' => now(),
+                        ]);
+                    } elseif ($refund->status !== 'processed') {
+                        $refund->update([
+                            'status' => 'processed',
+                            'processed_at' => now(),
+                        ]);
+                    }
+
+                    $booking->update(['booking_status' => 'refunded']);
+                    $attempt = $booking->attempts()
+                        ->whereIn('status', ['processing', 'payment_required'])
+                        ->latest('id')
+                        ->first();
+                    if ($attempt) {
+                        $attempt->update([
+                            'status' => 'expired',
+                            'error_message' => 'Pending booking automatically refunded after the payment timeout.',
+                        ]);
+                    }
+
+                    $booking->logs()->create([
+                        'event_type' => 'pending_booking_auto_refunded',
+                        'payload' => [
+                            'timeout_minutes' => $minutes,
+                            'portal_fee_refunded' => $hold ? (float) $hold->amount : 0.0,
+                        ],
+                    ]);
+
+                    $this->audit->log((int) $booking->agency_id, 'refund', [
+                        'booking_id' => $booking->id,
+                        'action' => 'automatic_pending_timeout',
+                        'amount' => $hold ? (float) $hold->amount : 0.0,
+                    ]);
+
+                    if ($booking->user_id) {
+                        $this->notifications->send(
+                            (int) $booking->user_id,
+                            'Booking automatically refunded',
+                            'The pending booking exceeded the 10-minute payment window. The portal fee hold was returned to your wallet.'
+                        );
+                    }
+
+                    return true;
+                });
+
+                if ($refunded) {
+                    $processed++;
+                }
+            });
+
+        return $processed;
     }
 
     /**
