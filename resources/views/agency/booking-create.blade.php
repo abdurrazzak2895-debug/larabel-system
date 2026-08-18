@@ -326,7 +326,7 @@
                     const centerId = sessionCenterId(session);
                     const matches = centerId !== '' && centerId === selectedCenterId;
                     const sessionId = session.id || session.exam_session_id || '';
-                    return '<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + escapeHtml(shiftLabel(session, index)) + '</span> · Session ' + escapeHtml(String(sessionId).slice(0, 18)) + ' · Center ' + escapeHtml(centerId || 'unknown') + ' — ' + escapeHtml(sessionCenterName(session)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>';
+                    return '<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + escapeHtml(shiftLabel(session, index)) + '</span> · Session ' + escapeHtml(String(sessionId).slice(0, 18)) + ' · ' + escapeHtml(sessionCenterName(session)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>';
                 }).join('');
                 return '<div class="mb-2 last:mb-0"><div class="font-semibold text-slate-700">' + escapeHtml(date) + '</div>' + rows + '</div>';
             }).join('');
@@ -355,7 +355,9 @@
             if (selectedSessionOption?.dataset?.centerId && selectedSessionOption.dataset.centerId !== String(testCenterSelect.value)) {
                 clearTemporaryHold('The selected session belongs to another test center and is blocked.');
                 if (sessionCenterError) {
-                    sessionCenterError.textContent = 'Blocked: session center ID ' + selectedSessionOption.dataset.centerId + ' does not match selected center ID ' + testCenterSelect.value + '.';
+                    const selectedSessionCenterName = selectedSessionOption.dataset.centerName || selectedSessionOption.dataset.name || 'another test center';
+                    const selectedCenterName = testCenterSelect.options[testCenterSelect.selectedIndex]?.dataset?.centerName || testCenterSelect.options[testCenterSelect.selectedIndex]?.textContent || 'the selected test center';
+                    sessionCenterError.textContent = 'Blocked: session center "' + selectedSessionCenterName + '" does not match selected center "' + selectedCenterName + '".';
                     sessionCenterError.classList.remove('hidden');
                 }
                 return;
@@ -467,19 +469,19 @@
                 const value = item[valueKey] ?? '';
                 const baseLabel = item[labelKey] || value || '';
                 const centerId = item.test_center_id ?? item.site_id ?? null;
-                const centerName = item.test_center_name ?? item.site_name ?? item.test_center?.name;
+                const centerName = item.test_center_name ?? item.site_name ?? item.center_name ?? item.test_center?.name ?? item.site?.name ?? item.center?.name;
                 option.value = value;
                 option.dataset.name = item.name || baseLabel;
                 option.dataset.centerName = centerName || '';
                 option.dataset.centerId = centerId || '';
                 option.dataset.date = item.exam_date || item.test_date || item.date || item.start_date_in_browser_time_zone || item.start_date_in_tc_time_zone || '';
                 if (select === testCenterSelect && centerId) {
-                    option.textContent = (centerName || baseLabel) + ' — SVP ID: ' + centerId;
+                    option.textContent = centerName || baseLabel;
                 } else if (select === sessionSelect) {
                     const date = option.dataset.date || 'Unknown date';
                     const sameDateIndex = sessionDateCounts[date] || 0;
                     sessionDateCounts[date] = sameDateIndex + 1;
-                    const centerText = centerId ? ' · Center ' + centerId : ' · Center metadata unavailable';
+                    const centerText = centerName ? ' · ' + centerName : ' · Center metadata unavailable';
                     option.textContent = date + ' — ' + shiftLabel(item, sameDateIndex) + centerText;
                     option.disabled = !centerId || (testCenterSelect?.value && String(centerId) !== String(testCenterSelect.value));
                 } else {
@@ -839,7 +841,9 @@
                     sessionSelect.value = '';
                     clearTemporaryHold('The selected session belongs to another center and has been blocked.');
                     if (sessionCenterError) {
-                        sessionCenterError.textContent = 'Blocked: selected session center ID ' + selectedSessionOption.dataset.centerId + ' does not match selected center ID ' + testCenterSelect.value + '.';
+                        const selectedSessionCenterName = selectedSessionOption.dataset.centerName || selectedSessionOption.dataset.name || 'another test center';
+                        const selectedCenterName = testCenterSelect.options[testCenterSelect.selectedIndex]?.dataset?.centerName || testCenterSelect.options[testCenterSelect.selectedIndex]?.textContent || 'the selected test center';
+                        sessionCenterError.textContent = 'Blocked: selected session center "' + selectedSessionCenterName + '" does not match selected center "' + selectedCenterName + '".';
                         sessionCenterError.classList.remove('hidden');
                     }
                     return;

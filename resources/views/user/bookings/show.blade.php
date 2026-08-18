@@ -23,6 +23,14 @@
         ?: data_get($requestPayload, 'test_center_name')
         ?: data_get($requestPayload, 'site_name')
         ?: data_get($requestPayload, 'test_center.name');
+    if (! $displayCenterName && $displayCenterId) {
+        foreach ((array) config('svp.dhaka_test_centers', []) as $center) {
+            if ((string) data_get($center, 'id') === (string) $displayCenterId) {
+                $displayCenterName = data_get($center, 'name') ?: data_get($center, 'english_name');
+                break;
+            }
+        }
+    }
     $statusSteps = ['pending', 'processing', 'booked'];
     $currentStep = array_search($booking->booking_status, $statusSteps);
 @endphp
@@ -98,9 +106,7 @@
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Test Center</p>
             <p class="text-sm font-semibold text-slate-800 mt-1">{{ $displayCenterName ?: 'Center data unavailable' }}</p>
-            @if ($displayCenterId)
-            <p class="text-xs text-slate-500 mt-1">SVP ID: {{ $displayCenterId }}</p>
-            @elseif (! $displayCenterName)
+            @if (! $displayCenterName)
             <p class="text-xs text-amber-600 mt-1">SVP center was not saved with this legacy booking.</p>
             @endif
             @if ($booking->city)

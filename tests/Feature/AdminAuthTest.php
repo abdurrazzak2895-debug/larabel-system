@@ -181,7 +181,7 @@ class AdminAuthTest extends TestCase
         $this->get(route('agency.bookings.show', $booking))
             ->assertOk()
             ->assertSee('Bangladesh Korea TTC Dhaka')
-            ->assertSee('SVP ID: 17');
+            ->assertDontSee('SVP ID: 17');
     }
 
     public function test_guest_is_redirected_to_login(): void

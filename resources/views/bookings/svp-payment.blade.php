@@ -23,7 +23,7 @@
             </div>
             <div>
                 <dt class="text-slate-400">Selected test center</dt>
-                <dd class="mt-1 font-semibold text-slate-900">{{ $booking->test_center_name }} <span class="font-normal text-slate-500">(SVP ID: {{ $booking->test_center_id }})</span></dd>
+                <dd class="mt-1 font-semibold text-slate-900">{{ $booking->test_center_name ?: 'Test center unavailable' }}</dd>
             </div>
             <div>
                 <dt class="text-slate-400">Session date</dt>

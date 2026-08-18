@@ -250,8 +250,9 @@
             option.value = id;
             option.dataset.name = item.name || item.session_name || shiftLabel(item, index);
             option.dataset.centerId = sessionCenterId(item);
+            option.dataset.centerName = sessionCenterName(item);
             option.dataset.date = dateValue;
-            option.textContent = (dateValue || 'Unknown date') + ' — ' + shiftLabel(item, index) + ' · Center ' + (option.dataset.centerId || 'unknown');
+            option.textContent = (dateValue || 'Unknown date') + ' — ' + shiftLabel(item, index) + ' · ' + (option.dataset.centerName || option.dataset.name || 'Unknown test center');
             option.disabled = !option.dataset.centerId || option.dataset.centerId !== String(center.value);
             session.appendChild(option);
         });
@@ -261,7 +262,7 @@
             grouped[d] = grouped[d] || [];
             const id = item.id || item.exam_session_id || '';
             const matches = sessionCenterId(item) === String(center.value);
-            grouped[d].push('<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + esc(shiftLabel(item, index)) + '</span> · Session ' + esc(id) + ' · Center ' + esc(sessionCenterId(item) || 'unknown') + ' — ' + esc(sessionCenterName(item)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>');
+            grouped[d].push('<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + esc(shiftLabel(item, index)) + '</span> · Session ' + esc(id) + ' · ' + esc(sessionCenterName(item)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>');
         });
         const html = Object.keys(grouped).sort().map(d => '<div class="mb-2 last:mb-0"><div class="font-semibold text-slate-700">' + esc(d) + '</div>' + grouped[d].join('') + '</div>').join('');
         sessionSummary.innerHTML = '<div class="mb-1 font-medium text-slate-700">Sessions grouped by date and shift</div>' + (html || '<div>No sessions returned for this center.</div>');
@@ -303,7 +304,7 @@
                 const id = item.id || item.test_center_id || item.site_id || '';
                 if (!id) return;
                 const name = item.name || item.english_name || item.site_name || 'SVP test center';
-                const option = document.createElement('option'); option.value = id; option.dataset.name = name; option.textContent = name + ' — SVP ID: ' + id; center.appendChild(option);
+                const option = document.createElement('option'); option.value = id; option.dataset.name = name; option.textContent = name; center.appendChild(option);
             });
             centerSummary.textContent = 'SVP returned ' + items.length + ' live test center(s) for ' + city.value + '.';
             centerSection.style.display = '';
@@ -370,7 +371,7 @@
     session.addEventListener('change', function () {
         const option = session.options[session.selectedIndex];
         centerError.classList.add('hidden'); dateError.classList.add('hidden');
-        if (option?.dataset?.centerId !== String(center.value)) { session.value = ''; resetHold('The selected session belongs to another test center and is blocked.'); centerError.textContent = 'Blocked: session center ID does not match selected center ID.'; centerError.classList.remove('hidden'); return; }
+        if (option?.dataset?.centerId !== String(center.value)) { session.value = ''; resetHold('The selected session belongs to another test center and is blocked.'); const sessionCenterName = option?.dataset?.centerName || option?.dataset?.name || 'another test center'; const selectedCenterName = center.options[center.selectedIndex]?.dataset?.name || center.options[center.selectedIndex]?.textContent || 'the selected test center'; centerError.textContent = 'Blocked: session center "' + sessionCenterName + '" does not match selected center "' + selectedCenterName + '".'; centerError.classList.remove('hidden'); return; }
         sessionName.value = option?.dataset?.name || option?.textContent || ''; date.value = option?.dataset?.date || ''; holdPanel.classList.remove('hidden'); resetHold('Create a temporary hold for this exact session and date before confirming.'); holdButton.disabled = !(candidate.value && session.value && date.value);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date.value)) { dateError.textContent = 'The selected SVP session did not return an exam date.'; dateError.classList.remove('hidden'); holdButton.disabled = true; }
     });

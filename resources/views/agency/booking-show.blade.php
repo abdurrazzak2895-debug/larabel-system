@@ -13,6 +13,14 @@
         ?: data_get($requestPayload, 'test_center_name')
         ?: data_get($requestPayload, 'site_name')
         ?: data_get($requestPayload, 'test_center.name');
+    if (! $displayCenterName && $displayCenterId) {
+        foreach ((array) config('svp.dhaka_test_centers', []) as $center) {
+            if ((string) data_get($center, 'id') === (string) $displayCenterId) {
+                $displayCenterName = data_get($center, 'name') ?: data_get($center, 'english_name');
+                break;
+            }
+        }
+    }
 @endphp
 <div class="max-w-4xl">
     <div class="flex items-center justify-between mb-6">
@@ -94,9 +102,7 @@
                 <dt class="text-xs font-medium text-slate-400 uppercase tracking-wide">Test Center</dt>
                 <dd class="col-span-2 text-sm text-slate-700">
                     {{ $displayCenterName ?: 'Center data unavailable' }}
-                    @if ($displayCenterId)
-                        <span class="block text-xs text-slate-500 mt-1">SVP ID: {{ $displayCenterId }}</span>
-                    @elseif (! $displayCenterName)
+                    @if (! $displayCenterName)
                         <span class="block text-xs text-amber-600 mt-1">SVP center was not saved with this legacy booking.</span>
                     @endif
                 </dd>

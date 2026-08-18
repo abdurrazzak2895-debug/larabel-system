@@ -165,7 +165,8 @@ class BookingService
             // it differs from the center selected in the Laravel wizard.
             $centerValidation = $this->validateReturnedReservationCenter(
                 $reservationPayload,
-                $data['test_center_id'] ?? null
+                $data['test_center_id'] ?? null,
+                $data['test_center_name'] ?? null
             );
             $providerResponse['center_validation'] = $centerValidation;
 
@@ -517,11 +518,12 @@ class BookingService
      * `prometric_data.site_id` is only a request echo in some responses, so a
      * nested `test_center` value is preferred whenever SVP provides it.
      *
-     * @return array{valid: bool, selected_center_id: ?string, returned_center_id: ?string, metadata_present: bool, error?: string}
+     * @return array{valid: bool, selected_center_id: ?string, returned_center_id: ?string, selected_center_name: string, returned_center_name: ?string, metadata_present: bool, error?: string}
      */
-    protected function validateReturnedReservationCenter(array $payload, mixed $selectedCenterId): array
+    protected function validateReturnedReservationCenter(array $payload, mixed $selectedCenterId, mixed $selectedCenterName = null): array
     {
         $selected = trim((string) ($selectedCenterId ?? ''));
+        $selectedName = $this->centerDisplayName($selected, $selectedCenterName);
         $returned = null;
 
         foreach ([
@@ -556,11 +558,18 @@ class BookingService
             }
         }
 
+        $returnedName = $returned === null ? null : $this->centerDisplayName(
+            $returned,
+            $this->centerNameFromPayload($payload)
+        );
+
         if ($selected === '' || $returned === null) {
             return [
                 'valid' => true,
                 'selected_center_id' => $selected !== '' ? $selected : null,
                 'returned_center_id' => $returned,
+                'selected_center_name' => $selectedName,
+                'returned_center_name' => $returnedName,
                 'metadata_present' => $returned !== null,
             ];
         }
@@ -571,11 +580,63 @@ class BookingService
             'valid' => $valid,
             'selected_center_id' => $selected,
             'returned_center_id' => $returned,
+            'selected_center_name' => $selectedName,
+            'returned_center_name' => $returnedName,
             'metadata_present' => true,
             ...(! $valid ? [
-                'error' => "SVP assigned test center {$returned}, but the selected center was {$selected}. The reservation was canceled for safety.",
+                'error' => sprintf(
+                    'SVP assigned test center %s, but the selected center was %s. The reservation was canceled for safety.',
+                    $returnedName ?? 'another test center',
+                    $selectedName
+                ),
             ] : []),
         ];
+    }
+
+    /**
+     * Resolve the best human-readable test-center name from an SVP response.
+     */
+    protected function centerNameFromPayload(array $payload): ?string
+    {
+        foreach ([
+            'reservation.test_center.name',
+            'reservation.test_center.english_name',
+            'reservation.test_center.test_center_name',
+            'exam_reservation.test_center.name',
+            'exam_reservation.test_center.english_name',
+            'exam_reservation.test_center.test_center_name',
+            'test_center.name',
+            'test_center.english_name',
+            'test_center.test_center_name',
+        ] as $path) {
+            $value = data_get($payload, $path);
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return trim((string) $value);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve a display-only name without exposing an opaque numeric ID.
+     */
+    protected function centerDisplayName(?string $centerId, mixed $providedName = null): string
+    {
+        foreach ((array) config('svp.dhaka_test_centers', []) as $center) {
+            if ((string) data_get($center, 'id') === (string) $centerId) {
+                return (string) (data_get($center, 'name')
+                    ?: data_get($center, 'english_name')
+                    ?: 'Test center');
+            }
+        }
+
+        $provided = trim((string) ($providedName ?? ''));
+        if ($provided !== '' && ! in_array(strtolower($provided), ['unknown center', 'unknown test center'], true)) {
+            return $provided;
+        }
+
+        return $centerId ? 'Test center' : 'Selected test center';
     }
 
     /**

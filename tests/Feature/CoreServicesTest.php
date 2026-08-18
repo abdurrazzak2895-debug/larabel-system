@@ -509,7 +509,10 @@ class CoreServicesTest extends TestCase
 
         $this->assertFalse($result['success']);
         $this->assertSame('failed', $result['booking']->booking_status);
-        $this->assertStringContainsString('assigned test center 223', $result['error']);
+        $this->assertStringContainsString('assigned test center Manikganj Technical Training Center', $result['error']);
+        $this->assertStringContainsString('selected center was Bangladesh Korea TTC Dhaka', $result['error']);
+        $this->assertStringNotContainsString('223', $result['error']);
+        $this->assertStringNotContainsString('17', $result['error']);
 
         Http::assertSent(function ($request): bool {
             return $request->method() === 'DELETE'
