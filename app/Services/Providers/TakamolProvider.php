@@ -446,6 +446,57 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', $uri);
     }
 
+    /**
+     * Download the official SVP ticket PDF without exposing the bearer token
+     * or the upstream API directly to the browser.
+     */
+    public function ticketPdf(string $reservationId): \Symfony\Component\HttpFoundation\Response
+    {
+        $reservationId = trim($reservationId);
+
+        if (! preg_match('/^[0-9]+$/', $reservationId)) {
+            return response('Invalid reservation ID.', 422, [
+                'Content-Type' => 'text/plain; charset=UTF-8',
+            ]);
+        }
+
+        $uri = $this->apiPrefix.'/individual_labor_space/tickets/'.rawurlencode($reservationId).'/show_pdf?locale=en';
+
+        try {
+            $upstream = $this->client->get($uri);
+
+            if ($upstream->failed()) {
+                Log::warning('SVP ticket PDF request failed', [
+                    'url' => $this->baseUrl.$uri,
+                    'status' => $upstream->status(),
+                    'body' => $upstream->body(),
+                ]);
+            }
+
+            $headers = [
+                'Content-Type' => $upstream->header('Content-Type') ?: 'application/pdf',
+                'Cache-Control' => 'private, no-store',
+            ];
+
+            if ($contentDisposition = $upstream->header('Content-Disposition')) {
+                $headers['Content-Disposition'] = $contentDisposition;
+            } else {
+                $headers['Content-Disposition'] = 'attachment; filename="svp-ticket-'.$reservationId.'.pdf"';
+            }
+
+            return response($upstream->body(), $upstream->status(), $headers);
+        } catch (ConnectionException $e) {
+            Log::error('SVP ticket PDF connection error', [
+                'url' => $this->baseUrl.$uri,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response('The SVP service is unreachable — please try again.', 503, [
+                'Content-Type' => 'text/plain; charset=UTF-8',
+            ]);
+        }
+    }
+
     public function createReservation(array $payload): JsonResponse
     {
         return $this->dispatch('POST', '/individual_labor_space/exam_reservations', $payload);

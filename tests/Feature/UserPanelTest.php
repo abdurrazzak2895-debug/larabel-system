@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class UserPanelTest extends TestCase
@@ -77,6 +78,56 @@ class UserPanelTest extends TestCase
         if ($booking) {
             $this->get(route('user.bookings.show', $booking))->assertOk();
         }
+    }
+
+    public function test_user_can_see_live_svp_reservations_and_download_a_ticket(): void
+    {
+        Http::fake([
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations*' => Http::response([
+                'data' => [
+                    [
+                        'id' => 5370112,
+                        'status' => 'confirmed',
+                        'exam_date' => '2026-08-25',
+                        'can_be_canceled' => true,
+                        'can_be_rescheduled' => true,
+                        'category' => ['english_name' => 'Kitchen Workers'],
+                    ],
+                ],
+            ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/tickets/5370112/show_pdf*' => Http::response(
+                "%PDF-1.7\\nSVP ticket\\n",
+                200,
+                [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="svp-ticket-5370112.pdf"',
+                ],
+            ),
+        ]);
+
+        $this->loginAgencyUser();
+        $this->withSession(['svp_token' => 'test-svp-token']);
+
+        $page = $this->get(route('user.bookings.index'));
+
+        $page->assertOk()
+            ->assertSee('SVP My Bookings')
+            ->assertSee('5370112')
+            ->assertSee('Cancel: Available')
+            ->assertSee('Reschedule: Available')
+            ->assertSee('Download PDF');
+
+        $ticket = $this->get(route('user.bookings.svp-ticket', ['reservation' => 5370112]));
+
+        $ticket->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('Content-Disposition', 'attachment; filename="svp-ticket-5370112.pdf"')
+            ->assertSee('%PDF-1.7');
+
+        Http::assertSent(function ($request) {
+            return str_ends_with($request->url(), '/tickets/5370112/show_pdf?locale=en')
+                && $request->hasHeader('Authorization', 'Bearer test-svp-token');
+        });
     }
 
     public function test_guest_is_redirected_to_login_from_user_panel(): void

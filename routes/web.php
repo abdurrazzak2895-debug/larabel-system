@@ -219,6 +219,9 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/lookup/sessions', [UserBookingController::class, 'lookupSessions'])->name('lookup.sessions');
         Route::get('/lookup/verify-session-center', [SvpSessionVerificationController::class, 'show'])->name('lookup.verify-session-center');
         Route::post('/lookup/verify-session-center', [SvpSessionVerificationController::class, 'verify'])->name('lookup.verify-session-center.post');
+        Route::get('/svp-reservations/{reservation}/ticket', [UserBookingController::class, 'svpTicket'])
+            ->whereNumber('reservation')
+            ->name('svp-ticket');
         Route::get('/{booking}/payment', [UserBookingController::class, 'payment'])->whereNumber('booking')->name('payment');
         Route::get('/{booking}/payment-return', [UserBookingController::class, 'paymentReturn'])->whereNumber('booking')->name('payment-return');
         Route::post('/{booking}/verify-reservation', [UserBookingController::class, 'verifyReservation'])->whereNumber('booking')->name('verify-reservation');

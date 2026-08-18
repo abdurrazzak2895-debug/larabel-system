@@ -89,12 +89,62 @@ class BookingController extends Controller
             'refunded'   => Booking::where('user_id', $userId)->where('booking_status', 'refunded')->count(),
         ];
 
+        $svpReservations = null;
+        $svpError = null;
+        $svpToken = $this->ensureSvpToken($request);
+        $svpUserId = Candidate::where('user_id', $userId)
+            ->whereNotNull('svp_user_id')
+            ->latest()
+            ->value('svp_user_id');
+
+        if ($svpToken) {
+            try {
+                $svpResponse = $this->booking->reservations($svpToken);
+
+                if ($svpResponse->getStatusCode() >= 400) {
+                    $svpError = 'Could not load live reservations from SVP.';
+                } else {
+                    $svpReservations = $svpResponse->getData(true);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('User SVP reservations fetch failed', [
+                    'user_id' => $userId,
+                    'error' => $e->getMessage(),
+                ]);
+                $svpError = 'Could not load live reservations from SVP.';
+            }
+        } else {
+            $svpError = 'Sign in with your SVP account to see live reservations and tickets.';
+        }
+
         return view('user.bookings.index', [
-            'bookings' => $bookings,
-            'counts'   => $counts,
-            'filter'   => $request->query('status', 'all'),
-            'search'   => $request->query('q', ''),
+            'bookings'        => $bookings,
+            'counts'          => $counts,
+            'filter'          => $request->query('status', 'all'),
+            'search'          => $request->query('q', ''),
+            'svpReservations' => $svpReservations,
+            'svpError'        => $svpError,
+            'hasSvpToken'     => (bool) $svpToken,
+            'svpUserId'       => $svpUserId,
         ]);
+    }
+
+    /**
+     * Download an official SVP ticket for a reservation belonging to the
+     * currently authenticated SVP session.
+     */
+    public function svpTicket(Request $request, string $reservation)
+    {
+        $token = $this->ensureSvpToken($request);
+
+        if (! $token) {
+            return redirect()->route('svp.login.form')
+                ->with('status', 'Please sign in with your SVP account to download the ticket.');
+        }
+
+        abort_unless(ctype_digit($reservation), 404);
+
+        return $this->booking->ticketPdf($token, $reservation);
     }
 
     /**

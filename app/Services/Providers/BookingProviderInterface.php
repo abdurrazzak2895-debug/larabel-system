@@ -27,6 +27,7 @@ interface BookingProviderInterface
     public function temporarySeat(array $payload): JsonResponse;
     public function validateReservation(): JsonResponse;
     public function reservationDetails(?string $id = null): JsonResponse;
+    public function ticketPdf(string $reservationId): \Symfony\Component\HttpFoundation\Response;
     public function createReservation(array $payload): JsonResponse;
     public function cancelReservation(string $id): JsonResponse;
     public function rescheduleReservation(string $id, array $payload): JsonResponse;

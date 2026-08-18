@@ -124,6 +124,125 @@
         </div>
         @endif
     </div>
+
+    {{-- ===================== SVP live reservations ===================== --}}
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+                <h2 class="text-base font-semibold text-slate-800">SVP My Bookings</h2>
+                <p class="text-xs text-slate-400 mt-1">Live reservations and official tickets from your authenticated SVP account.</p>
+            </div>
+            @if ($svpUserId)
+                <span class="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    SVP user ID: <span class="font-mono text-slate-700">{{ $svpUserId }}</span>
+                </span>
+            @endif
+        </div>
+
+        @if ($svpError)
+            <div class="m-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <span>{{ $svpError }}</span>
+                @if (! $hasSvpToken)
+                    <a href="{{ route('svp.login.form') }}" class="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-amber-700 text-white text-xs font-semibold hover:bg-amber-800 transition">Sign in with SVP</a>
+                @endif
+            </div>
+        @else
+            @php
+                $svpPayload = is_array($svpReservations) ? $svpReservations : [];
+                $svpItems = data_get($svpPayload, 'data.exam_reservations')
+                    ?? data_get($svpPayload, 'exam_reservations')
+                    ?? data_get($svpPayload, 'data')
+                    ?? [];
+                if (is_array($svpItems) && isset($svpItems['items'])) {
+                    $svpItems = $svpItems['items'];
+                }
+                if (is_array($svpItems) && ! array_is_list($svpItems) && isset($svpItems['id'])) {
+                    $svpItems = [$svpItems];
+                }
+                if (! is_array($svpItems)) {
+                    $svpItems = [];
+                }
+            @endphp
+
+            <div class="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
+                <p class="text-xs text-slate-500">{{ count($svpItems) }} live reservation{{ count($svpItems) === 1 ? '' : 's' }} found</p>
+                <span class="text-[11px] text-slate-400">Updated from SVP when this page opened</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50/70">
+                        <tr class="text-left text-[11px] uppercase tracking-wide text-slate-500">
+                            <th class="px-6 py-3 font-medium">Reservation</th>
+                            <th class="px-6 py-3 font-medium">Exam</th>
+                            <th class="px-6 py-3 font-medium">Date / Center</th>
+                            <th class="px-6 py-3 font-medium">Status</th>
+                            <th class="px-6 py-3 font-medium">Availability</th>
+                            <th class="px-6 py-3 text-right font-medium">Ticket</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @forelse ($svpItems as $reservation)
+                            @php
+                                $reservation = (array) $reservation;
+                                $reservationId = (string) ($reservation['id'] ?? '');
+                                $category = (array) ($reservation['category'] ?? []);
+                                $center = (array) ($reservation['test_center'] ?? $reservation['testCenter'] ?? []);
+                                $session = (array) ($reservation['exam_session'] ?? $reservation['examSession'] ?? []);
+                                $examDate = $reservation['exam_date'] ?? $reservation['date'] ?? ($session['date'] ?? null);
+                                $centerName = $reservation['test_center_name'] ?? $reservation['center_name'] ?? ($center['english_name'] ?? $center['name'] ?? null);
+                                $examName = $reservation['exam_name'] ?? ($category['english_name'] ?? $category['name'] ?? 'SVP Exam');
+                                $cancellable = filter_var($reservation['can_be_canceled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                                $reschedulable = filter_var($reservation['can_be_rescheduled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                            @endphp
+                            <tr class="hover:bg-slate-50/60 transition align-top">
+                                <td class="px-6 py-4">
+                                    <div class="font-mono text-xs font-semibold text-slate-700">#{{ $reservationId ?: '—' }}</div>
+                                    <div class="text-[11px] text-slate-400 mt-1">{{ $reservation['booking_reference'] ?? 'SVP reservation' }}</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-xs font-medium text-slate-700">{{ $examName }}</div>
+                                    <div class="text-[11px] text-slate-400 mt-1">Session: {{ $reservation['exam_session_id'] ?? $reservation['session_id'] ?? ($session['id'] ?? '—') }}</div>
+                                </td>
+                                <td class="px-6 py-4 text-xs text-slate-600">
+                                    <div>{{ $examDate ?: 'Date pending' }}</div>
+                                    <div class="text-[11px] text-slate-400 mt-1">{{ $centerName ?: 'Center not returned' }}</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-50 text-slate-700 border-slate-200">{{ $reservation['status'] ?? 'Reserved' }}</span>
+                                </td>
+                                <td class="px-6 py-4 text-xs space-y-1.5">
+                                    <div class="{{ $cancellable ? 'text-emerald-600' : 'text-slate-400' }}">Cancel: {{ $cancellable ? 'Available' : 'Unavailable' }}</div>
+                                    <div class="{{ $reschedulable ? 'text-emerald-600' : 'text-slate-400' }}">Reschedule: {{ $reschedulable ? 'Available' : 'Unavailable' }}</div>
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    @if ($reservationId !== '' && ctype_digit($reservationId))
+                                        <a href="{{ route('user.bookings.svp-ticket', ['reservation' => $reservationId]) }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition" download>
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h5l4 4v11a2 2 0 01-2 2z"/></svg>
+                                            Download PDF
+                                        </a>
+                                    @else
+                                        <span class="text-xs text-slate-400">Not available</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-6 py-12 text-center">
+                                    <div class="w-12 h-12 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                    </div>
+                                    <p class="text-sm font-medium text-slate-600">No live SVP reservations found</p>
+                                    <p class="text-xs text-slate-400 mt-1">Completed reservations will appear here with their official ticket.</p>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
 </div>
 @endsection
 
