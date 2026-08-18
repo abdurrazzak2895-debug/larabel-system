@@ -450,7 +450,7 @@ class TakamolProvider implements BookingProviderInterface
      * Download the official SVP ticket PDF without exposing the bearer token
      * or the upstream API directly to the browser.
      */
-    public function ticketPdf(string $reservationId): \Symfony\Component\HttpFoundation\Response
+    public function ticketPdf(string $reservationId, ?string $filename = null): \Symfony\Component\HttpFoundation\Response
     {
         $reservationId = trim($reservationId);
 
@@ -478,7 +478,14 @@ class TakamolProvider implements BookingProviderInterface
                 'Cache-Control' => 'private, no-store',
             ];
 
-            if ($contentDisposition = $upstream->header('Content-Disposition')) {
+            if ($filename !== null && trim($filename) !== '') {
+                $safeFilename = preg_replace('/[^A-Za-z0-9._-]+/', '_', trim($filename)) ?: 'svp-ticket-'.$reservationId.'.pdf';
+                $safeFilename = trim($safeFilename, '._');
+                if (! str_ends_with(strtolower($safeFilename), '.pdf')) {
+                    $safeFilename .= '.pdf';
+                }
+                $headers['Content-Disposition'] = 'attachment; filename="'.$safeFilename.'"';
+            } elseif ($contentDisposition = $upstream->header('Content-Disposition')) {
                 $headers['Content-Disposition'] = $contentDisposition;
             } else {
                 $headers['Content-Disposition'] = 'attachment; filename="svp-ticket-'.$reservationId.'.pdf"';

@@ -13,6 +13,7 @@ use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class BookingController extends Controller
@@ -114,6 +115,33 @@ class BookingController extends Controller
 
             return $reservation;
         }, $items);
+    }
+
+    private function certificateFilename(array $reservation, string $reservationId): string
+    {
+        $fullName = data_get($reservation, 'full_name')
+            ?? data_get($reservation, 'fullName')
+            ?? data_get($reservation, 'candidate.full_name')
+            ?? data_get($reservation, 'user.full_name')
+            ?? data_get($reservation, 'candidate.name')
+            ?? data_get($reservation, 'user.name');
+        $occupation = data_get($reservation, 'occupation.name')
+            ?? data_get($reservation, 'occupation.english_name')
+            ?? data_get($reservation, 'occupation.name_en')
+            ?? data_get($reservation, 'occupation');
+
+        $parts = array_values(array_filter([
+            is_scalar($fullName) ? trim((string) $fullName) : '',
+            is_scalar($occupation) ? trim((string) $occupation) : '',
+        ]));
+        $base = implode(' ', $parts);
+        $base = Str::of($base)->ascii()->replaceMatches('/[^A-Za-z0-9]+/', '_')->trim('_')->value();
+
+        if ($base === '') {
+            $base = 'SVP_Reservation_'.$reservationId;
+        }
+
+        return $base.'_Certificate.pdf';
     }
 
     /**
@@ -241,7 +269,9 @@ class BookingController extends Controller
                     ->with('error', 'The certificate is available only after SVP marks the exam as Passed.');
             }
 
-            return $this->booking->ticketPdf($token, $reservation);
+            $filename = $this->certificateFilename((array) $reservationData, $reservation);
+
+            return $this->booking->ticketPdf($token, $reservation, $filename);
         } catch (\Throwable $e) {
             Log::warning('SVP certificate verification failed', [
                 'reservation_id' => $reservation,

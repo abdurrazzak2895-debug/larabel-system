@@ -86,7 +86,13 @@ class UserPanelTest extends TestCase
             'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370112*' => Http::response([
                 'exam_reservation' => [
                     'id' => 5370112,
+                    'full_name' => 'Rifat Ahmed',
                     'exam_result' => 'passed',
+                    'occupation' => [
+                        'id' => 2062,
+                        'english_name' => 'Kitchen Worker',
+                        'name' => 'Kitchen Worker',
+                    ],
                 ],
             ], 200),
             'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370113*' => Http::response([
@@ -144,7 +150,7 @@ class UserPanelTest extends TestCase
 
         $ticket->assertOk()
             ->assertHeader('Content-Type', 'application/pdf')
-            ->assertHeader('Content-Disposition', 'attachment; filename="svp-ticket-5370112.pdf"')
+            ->assertHeader('Content-Disposition', 'attachment; filename="Rifat_Ahmed_Kitchen_Worker_Certificate.pdf"')
             ->assertSee('%PDF-1.7');
 
         $failedTicket = $this->get(route('user.bookings.svp-ticket', ['reservation' => 5370113]));

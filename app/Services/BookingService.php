@@ -36,7 +36,7 @@ class BookingService
     public function validateReservation(string $token) { return $this->provider->withToken($token)->validateReservation(); }
     public function reservations(string $token) { return $this->provider->withToken($token)->reservationDetails(); }
     public function reservation(string $token, string $id) { return $this->provider->withToken($token)->reservationDetails($id); }
-    public function ticketPdf(string $token, string $reservationId) { return $this->provider->withToken($token)->ticketPdf($reservationId); }
+    public function ticketPdf(string $token, string $reservationId, ?string $filename = null) { return $this->provider->withToken($token)->ticketPdf($reservationId, $filename); }
     public function createReservation(string $token, array $payload) { return $this->provider->withToken($token)->createReservation($payload); }
     public function cancelReservation(string $token, string $id) { return $this->provider->withToken($token)->cancelReservation($id); }
     public function rescheduleReservation(string $token, string $id, array $payload) { return $this->provider->withToken($token)->rescheduleReservation($id, $payload); }
