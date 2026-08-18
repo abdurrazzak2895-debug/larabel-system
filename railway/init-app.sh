@@ -45,15 +45,17 @@ php artisan migrate --force --no-interaction
 echo "==> Seeding roles, permissions and platform admin..."
 php artisan db:seed --class=RolesAndPermissionsSeeder --force --no-interaction
 
-# 7. Seed the full demo dataset ONLY on the very first deploy.
-#    DemoSeeder uses ->create() for transactions/bookings, so
-#    running it twice would duplicate data. We guard it by
-#    checking whether agencies already exist.
-if php artisan tinker --execute="exit(\App\Models\Agency::query()->count() > 0 ? 0 : 1);" >/dev/null 2>&1; then
-    echo "==> Agencies already exist — skipping demo data."
-else
-    echo "==> First deploy detected — seeding demo data..."
-    php artisan db:seed --force --no-interaction
-fi
+# 7. Keep the official SVP test-center reference data current.
+#    This seeder is idempotent and contains no portal demo accounts.
+echo "==> Seeding official SVP test centers..."
+php artisan db:seed --class=TestCenterSeeder --force --no-interaction
+
+# 8. Permanently remove the confirmed seeded demo dataset. The command
+#    is agency-code scoped, idempotent, and never deletes admin accounts
+#    or non-demo agencies. Running it on every deploy is intentional:
+#    it prevents old demo rows from surviving while remaining a no-op
+#    after the first successful cleanup.
+echo "==> Purging confirmed demo data..."
+php artisan app:purge-demo-data --force --no-interaction
 
 echo "==> init-app.sh finished OK"

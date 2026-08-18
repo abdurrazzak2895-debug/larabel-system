@@ -159,11 +159,6 @@
                         Sign In →
                     </button>
 
-                    <div class="rounded-xl border border-white/10 bg-white/5 p-4 text-xs text-slate-400 space-y-1">
-                        <p class="font-semibold text-slate-300 uppercase tracking-wide">Demo logins</p>
-                        <p>Admin &nbsp;<code class="text-indigo-300">admin@takamol.example.com</code> / <code class="text-indigo-300">ChangeMe123!</code></p>
-                        <p>Agency &nbsp;<code class="text-emerald-300">alnoor</code> / <code class="text-emerald-300">password</code></p>
-                    </div>
                 </form>
 
                 <div class="mt-8 pt-6 border-t border-white/10 text-center space-y-3">
