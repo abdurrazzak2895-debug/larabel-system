@@ -61,6 +61,7 @@ class DemoCleanupCommandTest extends TestCase
             ->assertDontSee('Demo logins')
             ->assertDontSee('admin@takamol.example.com')
             ->assertDontSee('ChangeMe123!')
-            ->assertDontSee('alnoor');
+            ->assertDontSee('alnoor')
+            ->assertDontSee('Back to Portal');
     }
 }
