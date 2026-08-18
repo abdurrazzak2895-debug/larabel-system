@@ -159,8 +159,9 @@ class BookingController extends Controller
     }
 
     /**
-     * Extract the immutable context needed to keep an SVP reschedule at the
-     * reservation's original occupation, category, city, and physical center.
+     * Extract only the immutable exam identity for a reschedule. City, center,
+     * date, and session are deliberately omitted so the user can choose a new
+     * live SVP location exactly as they would for a fresh booking.
      *
      * @return array<string, string|null>
      */
@@ -169,11 +170,7 @@ class BookingController extends Controller
         return [
             'occupation_id' => $this->reservationValue($reservation, ['occupation_id', 'occupation.id']),
             'category_id' => $this->reservationValue($reservation, ['category_id', 'category.id']),
-            'city' => $this->reservationValue($reservation, ['city', 'city_name', 'exam_city', 'test_center.city', 'test_center.city_name', 'location.city']),
-            'test_center_id' => $this->reservationValue($reservation, ['test_center_id', 'site_id', 'prometric_data.site_id', 'test_center.id', 'site.id', 'center.id']),
-            'test_center_name' => $this->reservationValue($reservation, ['test_center_name', 'prometric_data.site_name', 'test_center.name', 'site.name', 'center.name']),
             'current_exam_date' => $this->reservationValue($reservation, ['exam_date', 'test_date', 'date', 'start_date_in_browser_time_zone', 'start_date_in_tc_time_zone']),
-            'current_exam_session_id' => $this->reservationValue($reservation, ['exam_session_id', 'session_id', 'exam_session.id']),
             'methodology' => $this->reservationValue($reservation, ['methodology', 'methodology_type']) ?? config('svp.default_methodology', 'in_person'),
         ];
     }
@@ -406,7 +403,9 @@ class BookingController extends Controller
     }
 
     /**
-     * Show the in-portal, center-locked reschedule form.
+     * Show a booking-style reschedule wizard. Occupation and category remain
+     * fixed from the live reservation; city, center, date, and session are new
+     * selections loaded through the same SVP lookup endpoints as fresh booking.
      */
     public function svpReschedule(Request $request, string $reservation)
     {
@@ -430,10 +429,30 @@ class BookingController extends Controller
                 return redirect()->route('user.bookings.index')->with('error', 'SVP does not allow this reservation to be rescheduled.');
             }
 
+            $agencyId = $this->currentAgencyId();
+            if ($agencyId === null) {
+                return redirect()->route('user.dashboard')
+                    ->with('error', 'Your account is not assigned to an agency yet. Please contact the administrator.');
+            }
+
+            $context = $this->rescheduleContext($reservationData);
+            $candidates = Candidate::where('user_id', Auth::id())->latest()->get();
+            $reservationName = $this->reservationValue($reservationData, [
+                'full_name', 'fullName', 'candidate.full_name', 'user.full_name', 'candidate.name', 'user.name',
+            ]);
+            $selectedCandidateId = optional($candidates->first(function (Candidate $candidate) use ($reservationName): bool {
+                return $reservationName !== null
+                    && strcasecmp(trim((string) $candidate->full_name), trim($reservationName)) === 0;
+            }))->id;
+
             return view('user.bookings.reschedule', [
                 'reservation' => $reservation,
                 'reservationData' => $reservationData,
-                'context' => $this->rescheduleContext($reservationData),
+                'context' => $context,
+                'wallet' => $this->wallet->getWallet($agencyId),
+                'candidates' => $candidates,
+                'selectedCandidateId' => $selectedCandidateId,
+                'svpToken' => $token,
                 'svpError' => null,
             ]);
         } catch (\Throwable $e) {
@@ -448,19 +467,26 @@ class BookingController extends Controller
     }
 
     /**
-     * Submit a new live session to SVP through the Laravel API client.
-     * The session must have been loaded into this browser session by the
-     * center-scoped lookup endpoint, preventing a reschedule to another center.
+     * Submit the fresh-booking-style reschedule. Only the live reservation's
+     * occupation and category are immutable; all location/session fields are
+     * checked against the new session-bound temporary hold.
      */
     public function svpRescheduleSubmit(Request $request, string $reservation)
     {
         $data = $request->validate([
+            'candidate_id' => ['required', 'integer', 'exists:candidates,id'],
+            'occupation_id' => ['required', 'string', 'max:100'],
             'category_id' => ['required', 'string', 'max:100'],
             'city' => ['required', 'string', 'max:120'],
             'test_center_id' => ['required', 'string', 'max:100'],
+            'test_center_name' => ['required', 'string', 'max:255'],
             'exam_session_id' => ['required', 'string', 'max:255'],
+            'exam_session_name' => ['nullable', 'string', 'max:255'],
             'exam_date' => ['required', 'date_format:Y-m-d'],
+            'temporary_hold_id' => ['required', 'string', 'max:100'],
+            'language_code' => ['required', 'string', 'max:20'],
             'methodology' => ['nullable', 'string', 'max:40'],
+            'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
         $token = $this->ensureSvpToken($request);
@@ -482,40 +508,57 @@ class BookingController extends Controller
                 return redirect()->route('user.bookings.index')->with('error', 'SVP does not allow this reservation to be rescheduled.');
             }
 
-            $liveContext = $this->rescheduleContext($reservationData);
-            foreach (['category_id', 'city', 'test_center_id'] as $field) {
-                if (($liveContext[$field] ?? '') !== '' && (string) $liveContext[$field] !== (string) $data[$field]) {
-                    return back()->withInput()->with('error', 'The selected reschedule context does not match the live SVP reservation.');
+            $context = $this->rescheduleContext($reservationData);
+            foreach (['occupation_id', 'category_id'] as $field) {
+                if (($context[$field] ?? '') === '' || (string) $context[$field] !== (string) $data[$field]) {
+                    return back()->withInput()->with('error', 'The occupation and category of a reservation cannot be changed during rescheduling.');
                 }
             }
 
-            $sessionContext = [
-                'category_id' => $data['category_id'],
+            $agencyId = $this->currentAgencyId();
+            if ($agencyId === null) {
+                return back()->withInput()->with('error', 'Your account is not assigned to an agency yet. Please contact the administrator.');
+            }
+
+            $candidate = Candidate::where('user_id', Auth::id())->findOrFail($data['candidate_id']);
+            $hold = $this->holds->consumeMatching($request, $data);
+            if ($hold === null) {
+                return back()->withInput()->withErrors([
+                    'temporary_hold_id' => 'Create a new temporary SVP hold for the selected city, center, session, and date before confirming the reschedule.',
+                ]);
+            }
+
+            $result = $this->booking->completeReschedule($token, $reservation, [
+                'agency_id' => $agencyId,
+                'user_id' => Auth::id(),
+                'credential_id' => $candidate->id,
+                'svp_user_id' => $candidate->svp_user_id,
+                'occupation_id' => $context['occupation_id'],
+                'category_id' => $context['category_id'],
                 'city' => $data['city'],
                 'test_center_id' => $data['test_center_id'],
-            ];
-            $selectedSession = $this->holds->findRememberedSession($request, $sessionContext, $data['exam_session_id']);
-
-            if ($selectedSession === null
-                || $this->sessionCenterId($selectedSession) !== (string) $data['test_center_id']
-                || $this->sessionDate($selectedSession) !== $data['exam_date']) {
-                return back()->withInput()->with('error', 'The selected session is no longer valid for this test center. Reload the available sessions and try again.');
-            }
-
-            $response = $this->booking->rescheduleReservation($token, $reservation, [
+                'test_center_name' => $data['test_center_name'],
                 'exam_session_id' => $data['exam_session_id'],
+                'exam_session_name' => $data['exam_session_name'] ?? null,
                 'exam_date' => $data['exam_date'],
-                'methodology' => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
+                'temporary_hold_id' => $hold['id'],
+                'temporary_hold_expires_at' => $hold['expires_at'] ?? null,
+                'language_code' => strtoupper(trim($data['language_code'])),
+                'methodology' => $data['methodology'] ?? ($context['methodology'] ?? config('svp.default_methodology', 'in_person')),
+                'notes' => $data['notes'] ?? null,
             ]);
 
-            if ($response->getStatusCode() < 200
-                || $response->getStatusCode() >= 300
-                || $this->svpResponseFailed($response->getData(true))) {
-                return back()->withInput()->with('error', 'SVP could not reschedule the reservation. The original booking was not changed.');
+            if (! $result['success']) {
+                return back()->withInput()->with('error', $result['error'] ?? 'Reschedule failed.');
             }
 
-            return redirect()->route('user.bookings.index')
-                ->with('success', 'The SVP reservation was rescheduled successfully. Live reservations were refreshed from SVP.');
+            if (! empty($result['payment_required'])) {
+                return redirect()->route('user.bookings.payment', $result['booking']->id)
+                    ->with('success', 'SVP has created a card checkout for this rescheduled reservation. Complete payment only on the official SVP page.');
+            }
+
+            return redirect()->route('user.bookings.show', $result['booking']->id)
+                ->with('success', 'The SVP reservation was rescheduled successfully with the available SVP credit.');
         } catch (\Throwable $e) {
             Log::warning('SVP reservation reschedule failed', [
                 'reservation_id' => $reservation,

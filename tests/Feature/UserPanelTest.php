@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Booking;
+use App\Models\Candidate;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -83,6 +84,16 @@ class UserPanelTest extends TestCase
     public function test_user_can_see_live_svp_reservations_and_download_a_ticket(): void
     {
         Http::fake([
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/temporary_seats*' => Http::response([
+                'temporary_seat' => ['id' => 'hold-reschedule-1', 'expires_at' => '2026-09-01T10:00:00Z'],
+            ], 201),
+            'svp-international-api.pacc.sa/api/v1/users/SVP-RESCHEDULE-USER/balance*' => Http::response([
+                'reservation_credits' => 1,
+            ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/reservation_credits/use*' => Http::response([
+                'success' => true,
+                'reservation_id' => 5370112,
+            ], 200),
             'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370112/reschedule*' => Http::response([
                 'success' => true,
                 'exam_reservation' => ['id' => 5370112, 'exam_date' => '2026-09-01', 'test_center_id' => 17],
@@ -169,7 +180,14 @@ class UserPanelTest extends TestCase
             ], 200),
         ]);
 
-        $this->loginAgencyUser();
+        $user = $this->loginAgencyUser();
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $user->agency_id,
+            'full_name' => 'Rifat Ahmed',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-RESCHEDULE-USER',
+        ]);
         $this->withSession(['svp_token' => 'test-svp-token']);
 
         $page = $this->get(route('user.bookings.index'));
@@ -206,7 +224,9 @@ class UserPanelTest extends TestCase
         $reschedule = $this->get(route('user.bookings.svp-reschedule', ['reservation' => 5370112]));
         $reschedule->assertOk()
             ->assertSee('Reschedule SVP Reservation')
-            ->assertSee('Bangladesh Korea TTC Dhaka')
+            ->assertSee('Choose a new city, test center, date, and session')
+            ->assertSee('Occupation and category stay fixed')
+            ->assertDontSee('Locked center')
             ->assertDontSee('svp-international.pacc.sa/home');
 
         $lookup = $this->get(route('user.bookings.lookup.sessions', [
@@ -216,18 +236,43 @@ class UserPanelTest extends TestCase
         ]));
         $lookup->assertOk()->assertJsonPath('data.sessions.0.id', 'reschedule-session-1');
 
-        $rescheduleSubmit = $this->withSession(['_token' => $csrfToken])
-            ->post(route('user.bookings.svp-reschedule.submit', ['reservation' => 5370112]), [
-                '_token' => $csrfToken,
+        $hold = $this->withSession(['_token' => $csrfToken, 'svp_token' => 'test-svp-token'])
+            ->postJson(route('user.bookings.temporary-hold'), [
+                'occupation_id' => '2062',
                 'category_id' => '12',
                 'city' => 'Dhaka',
                 'test_center_id' => '17',
+                'test_center_name' => 'Bangladesh Korea TTC Dhaka',
                 'exam_session_id' => 'reschedule-session-1',
                 'exam_date' => '2026-09-01',
+            ], ['X-CSRF-TOKEN' => $csrfToken]);
+        $hold->assertStatus(201)->assertJsonPath('data.id', 'hold-reschedule-1');
+
+        $rescheduleSubmit = $this->withSession(['_token' => $csrfToken, 'svp_token' => 'test-svp-token'])
+            ->post(route('user.bookings.svp-reschedule.submit', ['reservation' => 5370112]), [
+                '_token' => $csrfToken,
+                'candidate_id' => $candidate->id,
+                'occupation_id' => '2062',
+                'category_id' => '12',
+                'city' => 'Dhaka',
+                'test_center_id' => '17',
+                'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+                'exam_session_id' => 'reschedule-session-1',
+                'exam_session_name' => 'First Shift',
+                'exam_date' => '2026-09-01',
+                'temporary_hold_id' => 'hold-reschedule-1',
+                'language_code' => 'LOABB',
                 'methodology' => 'in_person',
             ]);
-        $rescheduleSubmit->assertRedirect(route('user.bookings.index'))
-            ->assertSessionHas('success', 'The SVP reservation was rescheduled successfully. Live reservations were refreshed from SVP.');
+        $rescheduleSubmit->assertRedirect();
+        $this->assertDatabaseHas('bookings', [
+            'reservation_id' => '5370112',
+            'occupation_id' => '2062',
+            'category_id' => '12',
+            'test_center_id' => '17',
+            'exam_session_id' => 'reschedule-session-1',
+            'booking_status' => 'booked',
+        ]);
 
         Http::assertSent(function ($request) {
             return str_ends_with($request->url(), '/tickets/5370112/show_pdf?locale=en')

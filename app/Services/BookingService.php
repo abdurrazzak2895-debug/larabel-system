@@ -267,6 +267,163 @@ class BookingService
     }
 
     /**
+     * Complete a reschedule against the existing SVP reservation ID.
+     *
+     * Unlike a fresh booking, SVP keeps the reservation ID while changing the
+     * selected session/date. The local Booking row is a new audit/payment
+     * record, so portal fees remain independently traceable and are finalized
+     * only after SVP credit or card payment succeeds.
+     *
+     * @param array<string, mixed> $data
+     * @return array{booking?: Booking, response?: mixed, success: bool, error?: string, payment_required?: bool}
+     */
+    public function completeReschedule(string $token, string $reservationId, array $data): array
+    {
+        $agencyId = (int) $data['agency_id'];
+        $booking = Booking::create([
+            'agency_id'        => $agencyId,
+            'user_id'          => $data['user_id'] ?? null,
+            'credential_id'    => $data['credential_id'] ?? null,
+            'occupation_id'    => $data['occupation_id'] ?? null,
+            'category_id'      => $data['category_id'] ?? null,
+            'exam_session_id'  => $data['exam_session_id'] ?? null,
+            'exam_session_name' => $data['exam_session_name'] ?? null,
+            'test_center_id'   => $data['test_center_id'] ?? null,
+            'test_center_name' => $data['test_center_name'] ?? null,
+            'exam_date'        => $data['exam_date'] ?? null,
+            'temporary_hold_id' => $data['temporary_hold_id'] ?? null,
+            'temporary_hold_expires_at' => $data['temporary_hold_expires_at'] ?? null,
+            'reservation_id'   => $reservationId,
+            'notes'            => $data['notes'] ?? null,
+            'booking_status'   => 'processing',
+            'booking_reference' => Str::uuid()->toString(),
+        ]);
+
+        $this->audit->log($agencyId, 'booking', ['booking_id' => $booking->id, 'action' => 'reschedule_started', 'reservation_id' => $reservationId]);
+        $this->logEvent($booking, 'reschedule_started', $data + ['reservation_id' => $reservationId]);
+
+        try {
+            $attempt = BookingAttempt::create([
+                'booking_id' => $booking->id,
+                'status' => 'processing',
+                'request_payload' => $data + ['reservation_id' => $reservationId],
+            ]);
+
+            $portalFee = $this->portalBookingFee($agencyId);
+            $portalFeeReference = $this->portalFeeReference($booking);
+            if ($portalFee > 0
+                && ! $this->walletTransaction($booking, 'booking_hold', $portalFeeReference)
+                && ! $this->walletTransaction($booking, 'booking_debit', $portalFeeReference)) {
+                $this->wallet->hold($agencyId, $portalFee, $portalFeeReference, [
+                    'booking_id' => $booking->id,
+                    'purpose' => 'portal_booking_fee_reschedule',
+                    'reservation_id' => $reservationId,
+                ]);
+            }
+
+            $provider = $this->provider->withToken($token);
+            $rescheduleResponse = $provider->rescheduleReservation($reservationId, [
+                'exam_session_id' => (string) $data['exam_session_id'],
+                'exam_date' => (string) $data['exam_date'],
+                'methodology' => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
+            ]);
+            $reschedulePayload = $rescheduleResponse->getData(true);
+            $providerResponse = ['reschedule' => $reschedulePayload];
+
+            if ($rescheduleResponse->getStatusCode() < 200 || $rescheduleResponse->getStatusCode() >= 300) {
+                $attempt->update(['provider_response' => $providerResponse]);
+                return $this->handleBookingFailure($booking, $attempt, $providerResponse, 'SVP could not reschedule the reservation.');
+            }
+
+            // Read the reservation back from SVP. This response is authoritative
+            // for the physical center after an opaque session ID is accepted.
+            $verificationResponse = $provider->reservationDetails($reservationId);
+            $verificationPayload = $verificationResponse->getData(true);
+            $providerResponse['verification'] = $verificationPayload;
+            $centerValidation = $this->validateReturnedReservationCenter($verificationPayload, $data['test_center_id'] ?? null);
+            $providerResponse['center_validation'] = $centerValidation;
+
+            if (! $centerValidation['valid']) {
+                $attempt->update([
+                    'status' => 'failed',
+                    'provider_response' => $providerResponse,
+                    'error_message' => $centerValidation['error'],
+                ]);
+                return $this->handleBookingFailure($booking, $attempt, $providerResponse, $centerValidation['error']);
+            }
+
+            $methodology = $data['methodology'] ?? config('svp.default_methodology', 'in_person');
+            $creditStatus = $this->credits->statusForUser(
+                $token,
+                (string) ($data['svp_user_id'] ?? ''),
+                (string) ($data['occupation_id'] ?? ''),
+                (string) $methodology
+            );
+            $providerResponse['credit_status'] = ['credits' => $creditStatus['credits']];
+
+            if ($creditStatus['credits'] > 0) {
+                $creditResponse = $provider->useReservationCredit([
+                    'methodology_type' => $methodology,
+                    'reservation_id' => $this->numericOrString($reservationId),
+                    'occupation_id' => $this->numericOrString($data['occupation_id'] ?? null),
+                ]);
+                $providerResponse['credit_payment'] = $creditResponse->getData(true);
+                $attempt->update(['provider_response' => $providerResponse]);
+
+                if ($creditResponse->getStatusCode() >= 200 && $creditResponse->getStatusCode() < 300) {
+                    return $this->markCreditBookingComplete($booking, $attempt, $reservationId, $providerResponse, $creditResponse);
+                }
+            }
+
+            $checkoutResponse = $provider->createPayment([
+                'payment_method' => 'card',
+                'payable_type' => 'Reservation',
+                'payable_id' => $this->numericOrString($reservationId),
+            ]);
+            $checkoutPayload = $checkoutResponse->getData(true);
+            $providerResponse['checkout'] = is_array($checkoutPayload['checkout'] ?? null)
+                ? $checkoutPayload['checkout']
+                : $checkoutPayload;
+            $checkoutUrl = $this->extractCheckoutUrl($providerResponse);
+            $widgetCheckout = $this->widgetCheckoutFromProviderResponse($providerResponse);
+            if (is_string($checkoutUrl) && $checkoutUrl !== '') {
+                $providerResponse['checkout_url'] = $checkoutUrl;
+            }
+            if ($widgetCheckout !== null) {
+                $providerResponse['widget_checkout'] = $widgetCheckout;
+            }
+            $attempt->update(['provider_response' => $providerResponse]);
+
+            $checkoutCreated = $checkoutResponse->getStatusCode() >= 200
+                && $checkoutResponse->getStatusCode() < 300
+                && ((is_string($checkoutUrl) && $checkoutUrl !== '') || $widgetCheckout !== null);
+
+            if ($checkoutCreated) {
+                $booking->update(['booking_status' => 'pending']);
+                $attempt->update(['status' => 'payment_required']);
+                $this->logEvent($booking, 'svp_reschedule_checkout_created', ['reservation_id' => $reservationId], $providerResponse);
+
+                return [
+                    'booking' => $booking,
+                    'response' => $checkoutResponse,
+                    'success' => true,
+                    'payment_required' => true,
+                    'checkout_url' => $checkoutUrl,
+                    'widget_checkout' => $widgetCheckout,
+                ];
+            }
+
+            return $this->handleBookingFailure($booking, $attempt, $providerResponse, 'SVP could not create a card checkout for the rescheduled reservation.');
+        } catch (\Throwable $e) {
+            if (isset($attempt)) {
+                $attempt->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
+            }
+
+            return $this->handleBookingFailure($booking, $attempt ?? null, ['error' => $e->getMessage()], 'Could not complete the SVP reschedule.');
+        }
+    }
+
+    /**
      * Persist the completed state after SVP accepted a reservation credit.
      *
      * @param array<string, mixed> $providerResponse
