@@ -41,6 +41,82 @@ class BookingController extends Controller
     }
 
     /**
+     * Normalize the several result/certificate aliases used by SVP payloads.
+     * The normalized state is intentionally kept server-side and is used to
+     * protect certificate downloads as well as render the user-facing badge.
+     *
+     * @return array{state: string, label: string, passed: bool}
+     */
+    private function normalizeSvpResult(array $reservation): array
+    {
+        $rawResult = data_get($reservation, 'result_status')
+            ?? data_get($reservation, 'exam_result')
+            ?? data_get($reservation, 'result')
+            ?? data_get($reservation, 'outcome')
+            ?? data_get($reservation, 'exam_status')
+            ?? data_get($reservation, 'reservation_status')
+            ?? data_get($reservation, 'status');
+
+        if (is_array($rawResult)) {
+            $rawResult = data_get($rawResult, 'status')
+                ?? data_get($rawResult, 'result')
+                ?? data_get($rawResult, 'label')
+                ?? data_get($rawResult, 'name');
+        }
+
+        $value = is_scalar($rawResult) ? strtolower(trim((string) $rawResult)) : '';
+        $certificate = data_get($reservation, 'certificate');
+        $hasCertificate = is_array($certificate)
+            ? count(array_filter($certificate, static fn ($item) => $item !== null && $item !== '')) > 0
+            : is_string($certificate) && trim($certificate) !== '';
+
+        if ($hasCertificate || preg_match('/(^|[^a-z])(pass|passed|successful|success)([^a-z]|$)/', $value)) {
+            return ['state' => 'passed', 'label' => 'Passed', 'passed' => true];
+        }
+
+        if (preg_match('/fail|reject|unsuccess|not[ _-]?pass/', $value)) {
+            return ['state' => 'failed', 'label' => 'Failed', 'passed' => false];
+        }
+
+        return ['state' => 'pending', 'label' => 'Pending', 'passed' => false];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeSvpReservations(array $payload): array
+    {
+        $items = data_get($payload, 'data.exam_reservations')
+            ?? data_get($payload, 'exam_reservations')
+            ?? data_get($payload, 'data.reservations')
+            ?? data_get($payload, 'reservations')
+            ?? data_get($payload, 'data')
+            ?? [];
+
+        if (is_array($items) && isset($items['items'])) {
+            $items = $items['items'];
+        }
+
+        if (is_array($items) && ! array_is_list($items) && isset($items['id'])) {
+            $items = [$items];
+        }
+
+        if (! is_array($items)) {
+            return [];
+        }
+
+        return array_map(function ($item): array {
+            $reservation = (array) $item;
+            $result = $this->normalizeSvpResult($reservation);
+            $reservation['_result_state'] = $result['state'];
+            $reservation['_result_label'] = $result['label'];
+            $reservation['_result_passed'] = $result['passed'];
+
+            return $reservation;
+        }, $items);
+    }
+
+    /**
      * Resolve the authenticated user's agency id — or null when the account
      * is not (yet) assigned to a real agency. Guards against the FK crash
      * caused by casting a missing agency_id (null) to (int) 0.
@@ -104,7 +180,7 @@ class BookingController extends Controller
                 if ($svpResponse->getStatusCode() >= 400) {
                     $svpError = 'Could not load live reservations from SVP.';
                 } else {
-                    $svpReservations = $svpResponse->getData(true);
+                    $svpReservations = $this->normalizeSvpReservations($svpResponse->getData(true));
                 }
             } catch (\Throwable $e) {
                 Log::warning('User SVP reservations fetch failed', [
@@ -144,7 +220,38 @@ class BookingController extends Controller
 
         abort_unless(ctype_digit($reservation), 404);
 
-        return $this->booking->ticketPdf($token, $reservation);
+        try {
+            $svpResponse = $this->booking->reservation($token, $reservation);
+
+            if ($svpResponse->getStatusCode() >= 400) {
+                return redirect()->route('user.bookings.index')
+                    ->with('error', 'SVP could not verify this reservation result.');
+            }
+
+            $payload = $svpResponse->getData(true);
+            $reservationData = data_get($payload, 'data.exam_reservation')
+                ?? data_get($payload, 'exam_reservation')
+                ?? data_get($payload, 'data.reservation')
+                ?? data_get($payload, 'reservation')
+                ?? $payload;
+            $result = $this->normalizeSvpResult((array) $reservationData);
+
+            if (! $result['passed']) {
+                return redirect()->route('user.bookings.index')
+                    ->with('error', 'The certificate is available only after SVP marks the exam as Passed.');
+            }
+
+            return $this->booking->ticketPdf($token, $reservation);
+        } catch (\Throwable $e) {
+            Log::warning('SVP certificate verification failed', [
+                'reservation_id' => $reservation,
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('user.bookings.index')
+                ->with('error', 'Could not verify the SVP result. Please try again.');
+        }
     }
 
     /**

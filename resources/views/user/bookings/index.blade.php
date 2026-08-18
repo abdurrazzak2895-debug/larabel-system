@@ -150,10 +150,14 @@
         @else
             @php
                 $svpPayload = is_array($svpReservations) ? $svpReservations : [];
-                $svpItems = data_get($svpPayload, 'data.exam_reservations')
-                    ?? data_get($svpPayload, 'exam_reservations')
-                    ?? data_get($svpPayload, 'data')
-                    ?? [];
+                $svpItems = array_is_list($svpPayload)
+                    ? $svpPayload
+                    : (data_get($svpPayload, 'data.exam_reservations')
+                        ?? data_get($svpPayload, 'exam_reservations')
+                        ?? data_get($svpPayload, 'data.reservations')
+                        ?? data_get($svpPayload, 'reservations')
+                        ?? data_get($svpPayload, 'data')
+                        ?? []);
                 if (is_array($svpItems) && isset($svpItems['items'])) {
                     $svpItems = $svpItems['items'];
                 }
@@ -195,6 +199,14 @@
                                 $examName = $reservation['exam_name'] ?? ($category['english_name'] ?? $category['name'] ?? 'SVP Exam');
                                 $cancellable = filter_var($reservation['can_be_canceled'] ?? false, FILTER_VALIDATE_BOOLEAN);
                                 $reschedulable = filter_var($reservation['can_be_rescheduled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                                $resultState = $reservation['_result_state'] ?? 'pending';
+                                $resultLabel = $reservation['_result_label'] ?? 'Pending';
+                                $resultPassed = (bool) ($reservation['_result_passed'] ?? false);
+                                $resultStyle = match ($resultState) {
+                                    'passed' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                    'failed' => 'bg-red-50 text-red-700 border-red-200',
+                                    default => 'bg-amber-50 text-amber-700 border-amber-200',
+                                };
                             @endphp
                             <tr class="hover:bg-slate-50/60 transition align-top">
                                 <td class="px-6 py-4">
@@ -209,21 +221,24 @@
                                     <div>{{ $examDate ?: 'Date pending' }}</div>
                                     <div class="text-[11px] text-slate-400 mt-1">{{ $centerName ?: 'Center not returned' }}</div>
                                 </td>
-                                <td class="px-6 py-4">
+                                <td class="px-6 py-4 space-y-1.5">
                                     <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-50 text-slate-700 border-slate-200">{{ $reservation['status'] ?? 'Reserved' }}</span>
+                                    <div><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border {{ $resultStyle }}">Result: {{ $resultLabel }}</span></div>
                                 </td>
                                 <td class="px-6 py-4 text-xs space-y-1.5">
                                     <div class="{{ $cancellable ? 'text-emerald-600' : 'text-slate-400' }}">Cancel: {{ $cancellable ? 'Available' : 'Unavailable' }}</div>
                                     <div class="{{ $reschedulable ? 'text-emerald-600' : 'text-slate-400' }}">Reschedule: {{ $reschedulable ? 'Available' : 'Unavailable' }}</div>
                                 </td>
                                 <td class="px-6 py-4 text-right">
-                                    @if ($reservationId !== '' && ctype_digit($reservationId))
-                                        <a href="{{ route('user.bookings.svp-ticket', ['reservation' => $reservationId]) }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition" download>
+                                    @if ($resultPassed && $reservationId !== '' && ctype_digit($reservationId))
+                                        <a href="{{ route('user.bookings.svp-ticket', ['reservation' => $reservationId]) }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 transition" download>
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h5l4 4v11a2 2 0 01-2 2z"/></svg>
-                                            Download PDF
+                                            Download Certificate
                                         </a>
+                                    @elseif ($resultState === 'failed')
+                                        <span class="text-xs text-red-600">Certificate unavailable</span>
                                     @else
-                                        <span class="text-xs text-slate-400">Not available</span>
+                                        <span class="text-xs text-amber-600">Awaiting result</span>
                                     @endif
                                 </td>
                             </tr>

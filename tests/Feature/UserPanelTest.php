@@ -83,15 +83,37 @@ class UserPanelTest extends TestCase
     public function test_user_can_see_live_svp_reservations_and_download_a_ticket(): void
     {
         Http::fake([
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370112*' => Http::response([
+                'exam_reservation' => [
+                    'id' => 5370112,
+                    'exam_result' => 'passed',
+                ],
+            ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370113*' => Http::response([
+                'exam_reservation' => [
+                    'id' => 5370113,
+                    'exam_result' => 'failed',
+                ],
+            ], 200),
             'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations*' => Http::response([
                 'data' => [
                     [
                         'id' => 5370112,
-                        'status' => 'confirmed',
+                        'status' => 'completed',
+                        'exam_result' => 'passed',
                         'exam_date' => '2026-08-25',
-                        'can_be_canceled' => true,
-                        'can_be_rescheduled' => true,
+                        'can_be_canceled' => false,
+                        'can_be_rescheduled' => false,
                         'category' => ['english_name' => 'Kitchen Workers'],
+                    ],
+                    [
+                        'id' => 5370113,
+                        'status' => 'completed',
+                        'exam_result' => 'failed',
+                        'exam_date' => '2026-08-26',
+                        'can_be_canceled' => false,
+                        'can_be_rescheduled' => false,
+                        'category' => ['english_name' => 'Electrician'],
                     ],
                 ],
             ], 200),
@@ -113,9 +135,10 @@ class UserPanelTest extends TestCase
         $page->assertOk()
             ->assertSee('SVP My Bookings')
             ->assertSee('5370112')
-            ->assertSee('Cancel: Available')
-            ->assertSee('Reschedule: Available')
-            ->assertSee('Download PDF');
+            ->assertSee('Result: Passed')
+            ->assertSee('Result: Failed')
+            ->assertSee('Download Certificate')
+            ->assertSee('Certificate unavailable');
 
         $ticket = $this->get(route('user.bookings.svp-ticket', ['reservation' => 5370112]));
 
@@ -123,6 +146,11 @@ class UserPanelTest extends TestCase
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'attachment; filename="svp-ticket-5370112.pdf"')
             ->assertSee('%PDF-1.7');
+
+        $failedTicket = $this->get(route('user.bookings.svp-ticket', ['reservation' => 5370113]));
+
+        $failedTicket->assertRedirect(route('user.bookings.index'))
+            ->assertSessionHas('error', 'The certificate is available only after SVP marks the exam as Passed.');
 
         Http::assertSent(function ($request) {
             return str_ends_with($request->url(), '/tickets/5370112/show_pdf?locale=en')
