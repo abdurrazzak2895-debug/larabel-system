@@ -88,6 +88,8 @@ class UserPanelTest extends TestCase
                     'id' => 5370112,
                     'full_name' => 'Rifat Ahmed',
                     'exam_result' => 'passed',
+                    'can_be_canceled' => true,
+                    'can_be_rescheduled' => true,
                     'occupation' => [
                         'id' => 2062,
                         'english_name' => 'Kitchen Worker',
@@ -99,6 +101,8 @@ class UserPanelTest extends TestCase
                 'exam_reservation' => [
                     'id' => 5370113,
                     'exam_result' => 'failed',
+                    'can_be_canceled' => false,
+                    'can_be_rescheduled' => false,
                 ],
             ], 200),
             'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations*' => Http::response([
@@ -108,8 +112,8 @@ class UserPanelTest extends TestCase
                         'status' => 'completed',
                         'exam_result' => 'passed',
                         'exam_date' => '2026-08-25',
-                        'can_be_canceled' => false,
-                        'can_be_rescheduled' => false,
+                        'can_be_canceled' => true,
+                        'can_be_rescheduled' => true,
                         'category' => ['english_name' => 'Kitchen Workers'],
                     ],
                     [
@@ -131,6 +135,18 @@ class UserPanelTest extends TestCase
                     'Content-Disposition' => 'attachment; filename="svp-ticket-5370112.pdf"',
                 ],
             ),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/tickets/5370113/show_pdf*' => Http::response(
+                "%PDF-1.7\\nSVP ticket 5370113\\n",
+                200,
+                ['Content-Type' => 'application/pdf'],
+            ),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370112' => Http::response([
+                'exam_reservation' => [
+                    'id' => 5370112,
+                    'can_be_canceled' => true,
+                    'can_be_rescheduled' => true,
+                ],
+            ], 200),
         ]);
 
         $this->loginAgencyUser();
@@ -143,8 +159,10 @@ class UserPanelTest extends TestCase
             ->assertSee('5370112')
             ->assertSee('Result: Passed')
             ->assertSee('Result: Failed')
+            ->assertSee('Cancel Reservation')
+            ->assertSee('Reschedule')
             ->assertSee('Download Certificate')
-            ->assertSee('Certificate unavailable');
+            ->assertSee('Download Ticket');
 
         $ticket = $this->get(route('user.bookings.svp-ticket', ['reservation' => 5370112]));
 
@@ -155,11 +173,26 @@ class UserPanelTest extends TestCase
 
         $failedTicket = $this->get(route('user.bookings.svp-ticket', ['reservation' => 5370113]));
 
-        $failedTicket->assertRedirect(route('user.bookings.index'))
-            ->assertSessionHas('error', 'The certificate is available only after SVP marks the exam as Passed.');
+        $failedTicket->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('Content-Disposition', 'attachment; filename="SVP_Reservation_5370113_Ticket.pdf"');
+
+        $csrfToken = 'svp-cancel-csrf-token';
+        $cancel = $this->withSession(['_token' => $csrfToken])
+            ->post(route('user.bookings.svp-cancel', ['reservation' => 5370112]), ['_token' => $csrfToken]);
+        $cancel->assertRedirect(route('user.bookings.index'))
+            ->assertSessionHas('success', 'The SVP reservation was canceled successfully.');
+
+        $reschedule = $this->get(route('user.bookings.svp-reschedule', ['reservation' => 5370112]));
+        $reschedule->assertRedirect('https://svp-international.pacc.sa/labor/reschedule/steps?reservationId=5370112');
 
         Http::assertSent(function ($request) {
             return str_ends_with($request->url(), '/tickets/5370112/show_pdf?locale=en')
+                && $request->hasHeader('Authorization', 'Bearer test-svp-token');
+        });
+        Http::assertSent(function ($request) {
+            return $request->method() === 'DELETE'
+                && str_ends_with($request->url(), '/exam_reservations/5370112')
                 && $request->hasHeader('Authorization', 'Bearer test-svp-token');
         });
     }

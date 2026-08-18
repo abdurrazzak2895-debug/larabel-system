@@ -140,6 +140,13 @@
             @endif
         </div>
 
+        @if (session('success'))
+            <div class="m-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
+        @endif
+        @if (session('error'))
+            <div class="m-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ session('error') }}</div>
+        @endif
+
         @if ($svpError)
             <div class="m-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 <span>{{ $svpError }}</span>
@@ -182,8 +189,8 @@
                             <th class="px-6 py-3 font-medium">Exam</th>
                             <th class="px-6 py-3 font-medium">Date / Center</th>
                             <th class="px-6 py-3 font-medium">Status</th>
-                            <th class="px-6 py-3 font-medium">Availability</th>
-                            <th class="px-6 py-3 text-right font-medium">Ticket</th>
+                            <th class="px-6 py-3 font-medium">Actions</th>
+                            <th class="px-6 py-3 text-right font-medium">Download</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -225,20 +232,29 @@
                                     <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-50 text-slate-700 border-slate-200">{{ $reservation['status'] ?? 'Reserved' }}</span>
                                     <div><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border {{ $resultStyle }}">Result: {{ $resultLabel }}</span></div>
                                 </td>
-                                <td class="px-6 py-4 text-xs space-y-1.5">
-                                    <div class="{{ $cancellable ? 'text-emerald-600' : 'text-slate-400' }}">Cancel: {{ $cancellable ? 'Available' : 'Unavailable' }}</div>
-                                    <div class="{{ $reschedulable ? 'text-emerald-600' : 'text-slate-400' }}">Reschedule: {{ $reschedulable ? 'Available' : 'Unavailable' }}</div>
+                                <td class="px-6 py-4 text-xs space-y-2">
+                                    @if ($cancellable && $reservationId !== '' && ctype_digit($reservationId))
+                                        <form method="POST" action="{{ route('user.bookings.svp-cancel', ['reservation' => $reservationId]) }}" onsubmit="return confirm('Cancel this SVP reservation? This action cannot be undone.');">
+                                            @csrf
+                                            <button type="submit" class="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition">Cancel Reservation</button>
+                                        </form>
+                                    @else
+                                        <div class="text-slate-400">Cancel: Unavailable</div>
+                                    @endif
+                                    @if ($reschedulable && $reservationId !== '' && ctype_digit($reservationId))
+                                        <a href="{{ route('user.bookings.svp-reschedule', ['reservation' => $reservationId]) }}" target="_blank" rel="noopener" class="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition">Reschedule</a>
+                                    @else
+                                        <div class="text-slate-400">Reschedule: Unavailable</div>
+                                    @endif
                                 </td>
                                 <td class="px-6 py-4 text-right">
-                                    @if ($resultPassed && $reservationId !== '' && ctype_digit($reservationId))
-                                        <a href="{{ route('user.bookings.svp-ticket', ['reservation' => $reservationId]) }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 transition" download>
+                                    @if ($reservationId !== '' && ctype_digit($reservationId))
+                                        <a href="{{ route('user.bookings.svp-ticket', ['reservation' => $reservationId]) }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg {{ $resultPassed ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-slate-700 hover:bg-slate-800' }} text-white text-xs font-semibold transition" download>
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h5l4 4v11a2 2 0 01-2 2z"/></svg>
-                                            Download Certificate
+                                            {{ $resultPassed ? 'Download Certificate' : 'Download Ticket' }}
                                         </a>
-                                    @elseif ($resultState === 'failed')
-                                        <span class="text-xs text-red-600">Certificate unavailable</span>
                                     @else
-                                        <span class="text-xs text-amber-600">Awaiting result</span>
+                                        <span class="text-xs text-slate-400">Ticket unavailable</span>
                                     @endif
                                 </td>
                             </tr>

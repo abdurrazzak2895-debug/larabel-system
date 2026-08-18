@@ -222,6 +222,12 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/svp-reservations/{reservation}/ticket', [UserBookingController::class, 'svpTicket'])
             ->whereNumber('reservation')
             ->name('svp-ticket');
+        Route::post('/svp-reservations/{reservation}/cancel', [UserBookingController::class, 'svpCancel'])
+            ->whereNumber('reservation')
+            ->name('svp-cancel');
+        Route::get('/svp-reservations/{reservation}/reschedule', [UserBookingController::class, 'svpReschedule'])
+            ->whereNumber('reservation')
+            ->name('svp-reschedule');
         Route::get('/{booking}/payment', [UserBookingController::class, 'payment'])->whereNumber('booking')->name('payment');
         Route::get('/{booking}/payment-return', [UserBookingController::class, 'paymentReturn'])->whereNumber('booking')->name('payment-return');
         Route::post('/{booking}/verify-reservation', [UserBookingController::class, 'verifyReservation'])->whereNumber('booking')->name('verify-reservation');

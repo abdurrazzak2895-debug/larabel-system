@@ -117,7 +117,7 @@ class BookingController extends Controller
         }, $items);
     }
 
-    private function certificateFilename(array $reservation, string $reservationId): string
+    private function certificateFilename(array $reservation, string $reservationId, bool $passed = true): string
     {
         $fullName = data_get($reservation, 'full_name')
             ?? data_get($reservation, 'fullName')
@@ -141,7 +141,21 @@ class BookingController extends Controller
             $base = 'SVP_Reservation_'.$reservationId;
         }
 
-        return $base.'_Certificate.pdf';
+        return $base.'_'.($passed ? 'Certificate' : 'Ticket').'.pdf';
+    }
+
+    private function svpReservationData(array $payload): array
+    {
+        return (array) (data_get($payload, 'data.exam_reservation')
+            ?? data_get($payload, 'exam_reservation')
+            ?? data_get($payload, 'data.reservation')
+            ?? data_get($payload, 'reservation')
+            ?? $payload);
+    }
+
+    private function svpReservationFlag(array $reservation, string $snake, string $camel): bool
+    {
+        return filter_var($reservation[$snake] ?? $reservation[$camel] ?? false, FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
@@ -257,19 +271,9 @@ class BookingController extends Controller
             }
 
             $payload = $svpResponse->getData(true);
-            $reservationData = data_get($payload, 'data.exam_reservation')
-                ?? data_get($payload, 'exam_reservation')
-                ?? data_get($payload, 'data.reservation')
-                ?? data_get($payload, 'reservation')
-                ?? $payload;
-            $result = $this->normalizeSvpResult((array) $reservationData);
-
-            if (! $result['passed']) {
-                return redirect()->route('user.bookings.index')
-                    ->with('error', 'The certificate is available only after SVP marks the exam as Passed.');
-            }
-
-            $filename = $this->certificateFilename((array) $reservationData, $reservation);
+            $reservationData = $this->svpReservationData((array) $payload);
+            $result = $this->normalizeSvpResult($reservationData);
+            $filename = $this->certificateFilename($reservationData, $reservation, $result['passed']);
 
             return $this->booking->ticketPdf($token, $reservation, $filename);
         } catch (\Throwable $e) {
@@ -281,6 +285,87 @@ class BookingController extends Controller
 
             return redirect()->route('user.bookings.index')
                 ->with('error', 'Could not verify the SVP result. Please try again.');
+        }
+    }
+
+    /**
+     * Cancel an eligible reservation after verifying its live SVP state.
+     */
+    public function svpCancel(Request $request, string $reservation)
+    {
+        $token = $this->ensureSvpToken($request);
+
+        if (! $token) {
+            return redirect()->route('svp.login.form')
+                ->with('status', 'Please sign in with your SVP account to cancel a reservation.');
+        }
+
+        abort_unless(ctype_digit($reservation), 404);
+
+        try {
+            $detail = $this->booking->reservation($token, $reservation);
+            if ($detail->getStatusCode() >= 400) {
+                return redirect()->route('user.bookings.index')->with('error', 'SVP could not verify this reservation.');
+            }
+
+            $reservationData = $this->svpReservationData($detail->getData(true));
+            if (! $this->svpReservationFlag($reservationData, 'can_be_canceled', 'canBeCanceled')) {
+                return redirect()->route('user.bookings.index')->with('error', 'SVP does not allow this reservation to be canceled.');
+            }
+
+            $response = $this->booking->cancelReservation($token, $reservation);
+            if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+                return redirect()->route('user.bookings.index')->with('error', 'SVP could not cancel the reservation.');
+            }
+
+            return redirect()->route('user.bookings.index')->with('success', 'The SVP reservation was canceled successfully.');
+        } catch (\Throwable $e) {
+            Log::warning('SVP reservation cancellation failed', [
+                'reservation_id' => $reservation,
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('user.bookings.index')->with('error', 'Could not cancel the SVP reservation. Please try again.');
+        }
+    }
+
+    /**
+     * Verify rescheduling eligibility, then open SVP's official guided flow.
+     */
+    public function svpReschedule(Request $request, string $reservation)
+    {
+        $token = $this->ensureSvpToken($request);
+
+        if (! $token) {
+            return redirect()->route('svp.login.form')
+                ->with('status', 'Please sign in with your SVP account to reschedule a reservation.');
+        }
+
+        abort_unless(ctype_digit($reservation), 404);
+
+        try {
+            $detail = $this->booking->reservation($token, $reservation);
+            if ($detail->getStatusCode() >= 400) {
+                return redirect()->route('user.bookings.index')->with('error', 'SVP could not verify this reservation.');
+            }
+
+            $reservationData = $this->svpReservationData($detail->getData(true));
+            if (! $this->svpReservationFlag($reservationData, 'can_be_rescheduled', 'canBeRescheduled')) {
+                return redirect()->route('user.bookings.index')->with('error', 'SVP does not allow this reservation to be rescheduled.');
+            }
+
+            $url = rtrim((string) config('svp.web_base_url'), '/').'/labor/reschedule/steps?reservationId='.rawurlencode($reservation);
+
+            return redirect()->away($url);
+        } catch (\Throwable $e) {
+            Log::warning('SVP reservation reschedule launch failed', [
+                'reservation_id' => $reservation,
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('user.bookings.index')->with('error', 'Could not open the SVP reschedule flow. Please try again.');
         }
     }
 
