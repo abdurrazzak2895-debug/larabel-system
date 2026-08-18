@@ -55,12 +55,13 @@
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Exam Lookups</p>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                    <label for="occupation_id" class="block text-sm font-medium text-slate-700 mb-1">Occupation</label>
-                    <div class="relative">
-                        <input type="text" id="occupation-search" placeholder="Search occupation..." 
-                            class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500 pl-10 pr-3" autocomplete="off">
+                    <label for="occupation-search" class="block text-sm font-medium text-slate-700 mb-1">Occupation</label>
+                    <div class="relative" id="occupation-combobox">
+                        <input type="text" id="occupation-search" placeholder="Search occupation..."
+                            class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500 pl-10 pr-9" autocomplete="off"
+                            role="combobox" aria-expanded="false" aria-controls="occupation-dropdown" aria-autocomplete="list">
                         <select name="occupation_id" id="occupation_id" required
-                            class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;">
+                            class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;" tabindex="-1" aria-hidden="true">
                             <option value="">Select…</option>
                             @php
                                 $occ = data_get($occupations, 'data.occupations')
@@ -72,13 +73,21 @@
                             @endphp
                             @foreach ($occ as $o)
                                 @php $o = is_array($o) ? $o : (array) $o; @endphp
-                                <option value="{{ $o['id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? '') ? 'selected' : '' }}>{{ $o['name'] ?? $o['title'] ?? $o['id'] ?? '' }}</option>
+                                <option value="{{ $o['id'] ?? $o['occupation_id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? $o['occupation_id'] ?? '') ? 'selected' : '' }}>{{ $o['name'] ?? $o['english_name'] ?? $o['arabic_name'] ?? $o['title'] ?? $o['id'] ?? $o['occupation_id'] ?? '' }}</option>
                             @endforeach
                         </select>
                         <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M9.75 9.75c0 1.568 1.273 2.84 2.84 2.84s2.84-1.273 2.84-2.84-1.273-2.84-2.84-2.84S9.75 8.182 9.75 9.75z"/></svg>
                         </div>
+                        <button type="button" id="occupation-clear" tabindex="-1" aria-label="Clear occupation selection"
+                            class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-200 text-slate-500 text-xs leading-5 text-center hover:bg-slate-300">×</button>
+                        <div id="occupation-dropdown" class="hidden absolute z-20 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg max-h-64 overflow-y-auto">
+                            <p id="occupation-dropdown-status" class="px-3 py-2 text-xs text-slate-500 border-b border-slate-100"></p>
+                            <ul id="occupation-dropdown-list" class="py-1"></ul>
+                        </div>
                     </div>
+                    <p id="occupation-error" class="hidden text-red-600 text-xs mt-1"></p>
+                    <p id="occupation-hint" class="hidden text-xs text-slate-400 mt-1">Type to search, then pick an occupation from the list.</p>
                     @error('occupation_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -196,6 +205,13 @@
 (function () {
     const candidateSelect = document.getElementById('candidate_id');
     const occupationSelect = document.getElementById('occupation_id');
+    const occupationSearchInput = document.getElementById('occupation-search');
+    const occupationDropdown = document.getElementById('occupation-dropdown');
+    const occupationDropdownStatus = document.getElementById('occupation-dropdown-status');
+    const occupationDropdownList = document.getElementById('occupation-dropdown-list');
+    const occupationClear = document.getElementById('occupation-clear');
+    const occupationError = document.getElementById('occupation-error');
+    const occupationHint = document.getElementById('occupation-hint');
     const citySelect = document.getElementById('city_id');
     const categorySelect = document.getElementById('category_id');
     const testCenterSelect = document.getElementById('test_center_id');
@@ -428,7 +444,7 @@
         (items || []).forEach(function (item) {
             const option = document.createElement('option');
             const value = item[valueKey] ?? '';
-            const baseLabel = item[labelKey] || value || '';
+            const baseLabel = item[labelKey] || item.name || item.english_name || item.arabic_name || item.title || value || '';
             const centerId = item.test_center_id ?? item.site_id ?? null;
             const centerName = item.test_center_name ?? item.site_name ?? item.test_center?.name;
             option.value = value;
@@ -464,8 +480,129 @@
         return response.json();
     }
 
+    let occupationsCache = [];
+    let occupationsLoaded = false;
+    let occupationsLoading = false;
+
+    function showOccupationError(message) {
+        if (!occupationError) return;
+        occupationError.textContent = message;
+        occupationError.classList.toggle('hidden', !message);
+    }
+
+    function seedOccupationsFromServer() {
+        if (occupationsCache.length > 0 || !occupationSelect) return;
+        occupationSelect.querySelectorAll('option').forEach(function (option) {
+            const name = option.textContent.trim();
+            if (option.value && name && name.toLowerCase() !== 'load' && name.toLowerCase() !== 'loading') {
+                occupationsCache.push({ id: option.value, name: name });
+            }
+        });
+        occupationsLoaded = occupationsCache.length > 0;
+    }
+
+    function syncOccupationSearchDisplay() {
+        if (!occupationSelect || !occupationSearchInput) return;
+        const option = occupationSelect.options[occupationSelect.selectedIndex];
+        const label = option ? option.textContent.trim() : '';
+        const validLabel = label && label.toLowerCase() !== 'load' && label.toLowerCase() !== 'loading';
+        occupationSearchInput.value = occupationSelect.value && validLabel ? label : '';
+        occupationClear?.classList.toggle('hidden', !occupationSelect.value || !validLabel);
+    }
+
+    async function loadOccupationsFromApi(searchTerm) {
+        if (occupationsLoading) return;
+        occupationsLoading = true;
+        try {
+            const url = "{{ route('user.bookings.lookup.occupations') }}?page=1" + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');
+            const data = await fetchJSON(url);
+            const occupations = data.data?.occupations || data.data || data.occupations || [];
+            occupationsCache = (Array.isArray(occupations) ? occupations : []).map(function (occupation) {
+                return {
+                    id: occupation.id || occupation.occupation_id || '',
+                    name: occupation.name || occupation.english_name || occupation.arabic_name || occupation.title || occupation.id || occupation.occupation_id || ''
+                };
+            }).filter(function (occupation) { return occupation.id && occupation.name; });
+            occupationsLoaded = true;
+            showOccupationError('');
+        } catch (error) {
+            showOccupationError('Could not load occupations. The SVP service may be unavailable.');
+            console.error(error);
+        } finally {
+            occupationsLoading = false;
+        }
+    }
+
+    function renderOccupationDropdown(filter) {
+        if (!occupationDropdown || !occupationDropdownStatus || !occupationDropdownList) return;
+        const term = String(filter || '').trim().toLowerCase();
+        const matches = occupationsCache.filter(function (occupation) {
+            return !term || occupation.name.toLowerCase().includes(term);
+        });
+        occupationDropdownStatus.textContent = matches.length
+            ? matches.length + (matches.length === 1 ? ' occupation' : ' occupations')
+            : 'No occupations match "' + (filter || '') + '".';
+        occupationDropdownList.innerHTML = '';
+        matches.slice(0, 100).forEach(function (occupation) {
+            const item = document.createElement('li');
+            item.className = 'px-3 py-2 text-sm text-slate-700 cursor-pointer hover:bg-brand-50';
+            item.textContent = occupation.name;
+            item.addEventListener('click', function () {
+                occupationSelect.value = occupation.id;
+                occupationSearchInput.value = occupation.name;
+                occupationClear?.classList.remove('hidden');
+                occupationDropdown.classList.add('hidden');
+                occupationSearchInput.setAttribute('aria-expanded', 'false');
+                occupationSelect.dispatchEvent(new Event('change'));
+            });
+            occupationDropdownList.appendChild(item);
+        });
+        occupationDropdown.classList.remove('hidden');
+        occupationSearchInput.setAttribute('aria-expanded', 'true');
+    }
+
+    async function ensureOccupationsLoaded(searchTerm) {
+        const term = String(searchTerm || '').trim();
+        if (term || !occupationsLoaded) await loadOccupationsFromApi(term);
+        if (occupationsCache.length === 0) seedOccupationsFromServer();
+    }
+
+    occupationSearchInput?.addEventListener('focus', function () {
+        ensureOccupationsLoaded(occupationSearchInput.value).then(function () { renderOccupationDropdown(occupationSearchInput.value); });
+    });
+    occupationSearchInput?.addEventListener('input', function () {
+        clearTimeout(occupationSearchInput.searchTimer);
+        occupationSearchInput.searchTimer = setTimeout(function () {
+            ensureOccupationsLoaded(occupationSearchInput.value).then(function () { renderOccupationDropdown(occupationSearchInput.value); });
+        }, 300);
+    });
+    occupationSearchInput?.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            ensureOccupationsLoaded(occupationSearchInput.value).then(function () { renderOccupationDropdown(occupationSearchInput.value); });
+        } else if (event.key === 'Escape') {
+            occupationDropdown?.classList.add('hidden');
+            occupationSearchInput.setAttribute('aria-expanded', 'false');
+        }
+    });
+    occupationClear?.addEventListener('click', function () {
+        occupationSelect.value = '';
+        occupationSearchInput.value = '';
+        occupationClear.classList.add('hidden');
+        occupationDropdown?.classList.add('hidden');
+        occupationSelect.dispatchEvent(new Event('change'));
+    });
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('#occupation-combobox') && !event.target.closest('#occupation-dropdown')) {
+            occupationDropdown?.classList.add('hidden');
+            occupationSearchInput?.setAttribute('aria-expanded', 'false');
+        }
+    });
+
     if (occupationSelect) {
+        syncOccupationSearchDisplay();
         occupationSelect.addEventListener('change', async function () {
+            syncOccupationSearchDisplay();
             const occupationId = occupationSelect.value;
             testCenterSection.style.display = 'none';
             populateSelect(citySelect, []);
@@ -488,6 +625,10 @@
                 const catData = await fetchJSON("{{ route('user.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
                 const categories = (catData && Array.isArray(catData.data)) ? catData.data : [];
                 populateSelect(categorySelect, categories, 'id', 'name');
+                if (categories.length === 1) {
+                    categorySelect.value = String(categories[0].id ?? categories[0].category_id ?? '');
+                    categorySelect.dispatchEvent(new Event('change'));
+                }
             } catch (e) {
                 console.error(e);
             } finally {

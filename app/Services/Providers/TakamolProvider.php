@@ -694,14 +694,32 @@ class TakamolProvider implements BookingProviderInterface
         $container = $payload['data'] ?? $payload;
 
         if (is_array($container) && is_array($container['occupations'] ?? null)) {
-            return $container['occupations'];
+            $records = $container['occupations'];
+        } elseif (is_array($payload['occupations'] ?? null)) {
+            $records = $payload['occupations'];
+        } else {
+            $records = is_array($container) && array_is_list($container) ? $container : [];
         }
 
-        if (is_array($payload['occupations'] ?? null)) {
-            return $payload['occupations'];
-        }
+        return collect($records)
+            ->filter(static fn ($occupation): bool => is_array($occupation))
+            ->map(static function (array $occupation): array {
+                $id = trim((string) ($occupation['id'] ?? $occupation['occupation_id'] ?? ''));
+                $name = trim((string) (
+                    $occupation['name']
+                    ?? $occupation['english_name']
+                    ?? $occupation['arabic_name']
+                    ?? $occupation['title']
+                    ?? $id
+                ));
 
-        return is_array($container) && array_is_list($container) ? $container : [];
+                return $occupation + [
+                    'id' => $id,
+                    'name' => $name,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

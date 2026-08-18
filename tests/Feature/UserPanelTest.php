@@ -197,6 +197,39 @@ class UserPanelTest extends TestCase
         });
     }
 
+    public function test_booking_wizard_renders_real_occupation_search_and_category_autofill(): void
+    {
+        Http::fake([
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/occupations*' => Http::response([
+                'data' => [
+                    [
+                        'id' => 2062,
+                        'english_name' => 'Kitchen Worker',
+                        'arabic_name' => 'عامل مطبخ',
+                    ],
+                ],
+            ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/categories*' => Http::response([
+                'data' => [
+                    ['id' => 1, 'name' => 'Offices and Facilities Cleaning Workers'],
+                ],
+            ], 200),
+        ]);
+
+        $this->loginAgencyUser();
+        $this->withSession(['svp_token' => 'test-svp-token']);
+
+        $page = $this->get(route('user.bookings.create'));
+
+        $page->assertOk()
+            ->assertSee('id="occupation-search"', false)
+            ->assertSee('Kitchen Worker')
+            ->assertSee('id="category_id"', false)
+            ->assertSee('if (categories.length === 1)', false)
+            ->assertDontSee('>load<', false)
+            ->assertDontSee('>loading<', false);
+    }
+
     public function test_guest_is_redirected_to_login_from_user_panel(): void
     {
         $this->get(route('user.dashboard'))->assertRedirect(route('login'));

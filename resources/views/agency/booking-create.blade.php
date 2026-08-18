@@ -72,7 +72,7 @@
                             @endphp
                             @foreach($occ as $o)
                                 @php $o = (array) $o; @endphp
-                                <option value="{{ $o['id'] ?? '' }}">{{ $o['name'] ?? $o['title'] ?? $o['id'] ?? '' }}</option>
+                                <option value="{{ $o['id'] ?? $o['occupation_id'] ?? '' }}">{{ $o['name'] ?? $o['english_name'] ?? $o['arabic_name'] ?? $o['title'] ?? $o['id'] ?? '' }}</option>
                             @endforeach
                         </select>
                         <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -507,11 +507,21 @@
             if (occupationsCache.length > 0) return;
             if (!occupationSelect) return;
             occupationSelect.querySelectorAll('option').forEach(function (opt) {
-                if (opt.value) {
-                    occupationsCache.push({ id: opt.value, name: opt.textContent.trim() });
+                const name = opt.textContent.trim();
+                if (opt.value && name && name.toLowerCase() !== 'load' && name.toLowerCase() !== 'loading') {
+                    occupationsCache.push({ id: opt.value, name: name });
                 }
             });
             occupationsLoaded = occupationsCache.length > 0;
+        }
+
+        function syncOccupationSearchDisplay() {
+            if (!occupationSelect || !occupationSearchInput) return;
+            const option = occupationSelect.options[occupationSelect.selectedIndex];
+            const label = option ? option.textContent.trim() : '';
+            const validLabel = label && label.toLowerCase() !== 'load' && label.toLowerCase() !== 'loading';
+            occupationSearchInput.value = occupationSelect.value && validLabel ? label : '';
+            occupationClear?.classList.toggle('hidden', !occupationSelect.value || !validLabel);
         }
 
         async function loadOccupationsFromApi(searchTerm) {
@@ -522,7 +532,7 @@
                 const data = await fetchJSON(url);
                 const occupations = data.data?.occupations || data.data || data.occupations || [];
                 occupationsCache = (Array.isArray(occupations) ? occupations : []).map(function (o) {
-                    return { id: o.id || '', name: o.name || o.title || o.id || '' };
+                    return { id: o.id || o.occupation_id || '', name: o.name || o.english_name || o.arabic_name || o.title || o.id || o.occupation_id || '' };
                 });
                 occupationsLoaded = true;
                 clearError(occupationError);
@@ -649,7 +659,9 @@
         }
 
         if (occupationSelect) {
+            syncOccupationSearchDisplay();
             occupationSelect.addEventListener('change', async function () {
+                syncOccupationSearchDisplay();
                 const occupationId = occupationSelect.value;
                 testCenterSection.style.display = 'none';
                 populateSelect(citySelect, []);
@@ -677,6 +689,10 @@
                     const catData = await fetchJSON("{{ route('agency.bookings.lookup.categories') }}?occupation_id=" + encodeURIComponent(occupationId));
                     const categories = (catData && Array.isArray(catData.data)) ? catData.data : [];
                     populateSelect(categorySelect, categories, 'id', 'name');
+                    if (categories.length === 1) {
+                        categorySelect.value = String(categories[0].id ?? categories[0].category_id ?? '');
+                        categorySelect.dispatchEvent(new Event('change'));
+                    }
                     if (categories.length === 0) {
                         showError(categoryError, 'No categories available for this occupation.');
                     }
