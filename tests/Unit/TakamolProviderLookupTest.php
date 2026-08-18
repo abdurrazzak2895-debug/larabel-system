@@ -189,15 +189,15 @@ class TakamolProviderLookupTest extends TestCase
                 return Http::response([
                     'available_dates' => [
                         [
-                            'start_date_in_tc_time_zone' => '2026-08-20T09:00:00+06:00',
+                            'exam_date' => '2026-08-20',
                             'test_center' => ['id' => 223, 'name' => 'Manikganj Technical Training Center', 'city' => 'Dhaka'],
                         ],
                         [
-                            'start_date_in_tc_time_zone' => '2026-08-24T09:00:00+06:00',
+                            'exam_date' => '2026-08-24',
                             'test_center' => ['id' => 17, 'name' => 'Bangladesh Korea TTC Dhaka', 'city' => 'Dhaka'],
                         ],
                         [
-                            'start_date_in_tc_time_zone' => '2026-08-25T09:00:00+06:00',
+                            'exam_date' => '2026-08-25',
                             'test_center' => ['id' => 223, 'name' => 'Manikganj Technical Training Center', 'city' => 'Dhaka'],
                         ],
                     ],

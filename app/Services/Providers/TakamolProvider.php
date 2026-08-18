@@ -393,7 +393,8 @@ class TakamolProvider implements BookingProviderInterface
         $centerId = $center['id'] ?? null;
         $centerName = $center['name'] ?? null;
         $city = $center['city'] ?? null;
-        $date = $node['test_date']
+        $date = $node['exam_date']
+            ?? $node['test_date']
             ?? $node['date']
             ?? $node['start_date_in_browser_time_zone']
             ?? $node['start_date_in_tc_time_zone']
