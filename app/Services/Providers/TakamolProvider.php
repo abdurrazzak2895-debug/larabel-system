@@ -224,8 +224,15 @@ class TakamolProvider implements BookingProviderInterface
         $categoryId = (string) ($params['category_id'] ?? '');
         $city = (string) ($params['city'] ?? '');
         $centerId = (string) ($params['test_center_id'] ?? '');
+        $requestedDate = (string) ($params['exam_date'] ?? '');
 
         if ($categoryId === '' || $city === '' || $centerId === '') {
+            return $this->examSessions($params);
+        }
+
+        // A date-specific request is authoritative. Do not replace it with
+        // the aggregate available_dates response, which may omit valid dates.
+        if (preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $requestedDate) === 1) {
             return $this->examSessions($params);
         }
 
@@ -262,7 +269,17 @@ class TakamolProvider implements BookingProviderInterface
             }
         }
 
+        // SVP can omit earlier dates from available_dates even though the
+        // explicit exam_sessions?exam_date=YYYY-MM-DD endpoint still returns
+        // valid seats. Probe the bounded gap before the first discovered date;
+        // every candidate is still accepted only when its response contains a
+        // session for the selected center.
+        $probeDates = $this->explicitDateProbeDates($centerDates);
+        foreach ($probeDates as $date) {
+            $centerDates[$date] ??= $this->syntheticCenterDate($date, $centerId, $city);
+        }
         ksort($centerDates);
+
         if ($centerDates === []) {
             // Some SVP deployments omit center metadata from available_dates.
             // Keep the established exact-center session query as a safe
@@ -271,7 +288,7 @@ class TakamolProvider implements BookingProviderInterface
         }
 
         $sessions = [];
-        $availableDates = array_values($centerDates);
+        $availableDates = [];
 
         foreach (array_keys($centerDates) as $date) {
             $dateResponse = $this->examSessions($params + ['exam_date' => $date]);
@@ -284,10 +301,17 @@ class TakamolProvider implements BookingProviderInterface
                 continue;
             }
 
-            foreach ($this->extractList($datePayload, ['exam_sessions', 'sessions', 'available_sessions']) ?? [] as $session) {
-                if (is_array($session)) {
-                    $sessions[] = $session;
-                }
+            $dateSessions = array_values(array_filter(
+                $this->extractList($datePayload, ['exam_sessions', 'sessions', 'available_sessions']) ?? [],
+                static fn ($session): bool => is_array($session),
+            ));
+            if ($dateSessions === []) {
+                continue;
+            }
+
+            $availableDates[$date] = $centerDates[$date];
+            foreach ($dateSessions as $session) {
+                $sessions[] = $session;
             }
         }
 
@@ -303,9 +327,71 @@ class TakamolProvider implements BookingProviderInterface
             'data' => [
                 'sessions' => array_values($unique),
                 'exam_sessions' => array_values($unique),
-                'available_dates' => $availableDates,
+                'available_dates' => array_values($availableDates),
             ],
         ]);
+    }
+
+    /**
+     * Return the dates before the first SVP metadata date that should be
+     * checked explicitly for seats.
+     *
+     * @param array<string, array<string, mixed>> $centerDates
+     * @return array<int, string>
+     */
+    protected function explicitDateProbeDates(array $centerDates): array
+    {
+        $backfillDays = max(0, min(31, (int) config('svp.session_date_probe_backfill_days', 14)));
+        if ($backfillDays === 0) {
+            return [];
+        }
+
+        $dates = array_keys($centerDates);
+        if ($dates === []) {
+            $start = now()->startOfDay();
+            return collect(range(0, $backfillDays))
+                ->map(static fn (int $offset): string => $start->copy()->addDays($offset)->toDateString())
+                ->all();
+        }
+
+        $firstDate = \Carbon\CarbonImmutable::createFromFormat('Y-m-d', min($dates));
+        $today = now()->startOfDay();
+        if ($firstDate->lessThanOrEqualTo($today)) {
+            return [];
+        }
+
+        $probeStart = $firstDate->subDays($backfillDays);
+        if ($probeStart->lessThan($today)) {
+            $probeStart = \Carbon\CarbonImmutable::instance($today);
+        }
+
+        $daysToProbe = (int) $probeStart->diffInDays($firstDate);
+        return collect(range($daysToProbe, 1))
+            ->map(static fn (int $offset): string => $firstDate->subDays($offset)->toDateString())
+            ->all();
+    }
+
+    /**
+     * Build a center-scoped date record for a date discovered by an explicit
+     * session probe, without inventing an exam-session ID.
+     *
+     * @return array<string, mixed>
+     */
+    protected function syntheticCenterDate(string $date, string $centerId, string $city): array
+    {
+        $canonical = collect(config('svp.dhaka_test_centers', []))->first(
+            static fn (array $center): bool => (string) ($center['id'] ?? '') === $centerId,
+        );
+        $centerName = is_array($canonical) ? (string) ($canonical['name'] ?? '') : '';
+        $centerCity = is_array($canonical) ? (string) ($canonical['city'] ?? $city) : $city;
+
+        return [
+            'exam_date' => $date,
+            'test_center_id' => $centerId,
+            'test_center_name' => $centerName !== '' ? $centerName : null,
+            'test_center_city' => $centerCity,
+            'name' => trim(implode(' • ', array_filter([$date, $centerName, $centerCity]))),
+        ];
     }
 
     /**

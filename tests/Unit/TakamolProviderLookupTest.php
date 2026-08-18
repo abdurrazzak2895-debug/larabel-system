@@ -14,6 +14,7 @@ class TakamolProviderLookupTest extends TestCase
 
         config()->set('svp.base_url', 'https://svp.test');
         config()->set('svp.country_id', 78);
+        config()->set('svp.session_date_probe_backfill_days', 0);
     }
 
     public function test_sessions_are_filtered_by_category_and_exact_test_center(): void
@@ -236,6 +237,104 @@ class TakamolProviderLookupTest extends TestCase
                 && ! str_ends_with($path, '/available_dates')
                 && in_array($query['exam_date'] ?? null, ['2026-08-20', '2026-08-25'], true)
                 && ($query['test_center_id'] ?? null) === '223'
+                && ($query['available_seats'] ?? null) === 'greater_than::0';
+        });
+    }
+
+    public function test_explicit_date_lookup_bypasses_aggregate_metadata(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/exam_sessions/available_dates')) {
+                return Http::response(['available_dates' => []], 200);
+            }
+
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return Http::response([
+                'data' => [
+                    'exam_sessions' => [[
+                        'id' => 'session-explicit-2026-08-19',
+                        'exam_date' => $query['exam_date'] ?? null,
+                        'test_center_id' => '17',
+                    ]],
+                ],
+            ], 200);
+        });
+
+        $payload = (new TakamolProvider())->withToken('test-token')->examSessionsForCenter([
+            'city' => 'Dhaka',
+            'category_id' => 'category-4',
+            'test_center_id' => '17',
+            'exam_date' => '2026-08-19',
+        ])->getData(true);
+
+        $this->assertSame('session-explicit-2026-08-19', $payload['data']['sessions'][0]['id']);
+        $this->assertSame('2026-08-19', $payload['data']['sessions'][0]['exam_date']);
+        $this->assertSame('17', $payload['data']['sessions'][0]['test_center_id']);
+        Http::assertNotSent(function ($request): bool {
+            return str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/exam_sessions/available_dates');
+        });
+    }
+
+    public function test_center_session_lookup_backfills_dates_missing_from_available_metadata(): void
+    {
+        config()->set('svp.session_date_probe_backfill_days', 14);
+        $validDates = ['2026-08-19', '2026-08-20', '2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25'];
+
+        Http::fake(function ($request) use ($validDates) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            if (str_ends_with($path, '/exam_sessions/available_dates')) {
+                return Http::response([
+                    'available_dates' => [[
+                        'exam_date' => '2026-08-25',
+                        'test_center' => ['id' => 17, 'name' => 'Bangladesh Korea TTC Dhaka', 'city' => 'Dhaka'],
+                    ]],
+                ], 200);
+            }
+
+            $date = $query['exam_date'] ?? null;
+            return Http::response([
+                'data' => [
+                    'exam_sessions' => in_array($date, $validDates, true) ? [[
+                        'id' => 'session-'.$date,
+                        'start_date_in_browser_time_zone' => $date,
+                    ]] : [],
+                ],
+            ], 200);
+        });
+
+        $payload = (new TakamolProvider())->withToken('test-token')->examSessionsForCenter([
+            'city' => 'Dhaka',
+            'category_id' => 'category-4',
+            'test_center_id' => '17',
+        ])->getData(true);
+
+        $this->assertSame(
+            $validDates,
+            array_column($payload['data']['sessions'], 'exam_date'),
+        );
+        $this->assertSame(
+            $validDates,
+            array_column($payload['data']['available_dates'], 'exam_date'),
+        );
+        $this->assertSame(
+            array_fill(0, count($validDates), '17'),
+            array_column($payload['data']['sessions'], 'test_center_id'),
+            'Every backfilled session must remain bound to the selected Center 17.',
+        );
+
+        Http::assertSent(function ($request): bool {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return str_ends_with($path, '/exam_sessions')
+                && ! str_ends_with($path, '/available_dates')
+                && in_array($query['exam_date'] ?? null, ['2026-08-19', '2026-08-20', '2026-08-22', '2026-08-23', '2026-08-24'], true)
+                && ($query['test_center_id'] ?? null) === '17'
                 && ($query['available_seats'] ?? null) === 'greater_than::0';
         });
     }
