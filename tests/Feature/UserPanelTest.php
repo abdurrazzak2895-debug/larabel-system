@@ -227,7 +227,10 @@ class UserPanelTest extends TestCase
             ->assertSee('Choose a new city, test center, date, and session')
             ->assertSee('Occupation and category stay fixed')
             ->assertDontSee('Locked center')
-            ->assertDontSee('svp-international.pacc.sa/home');
+            ->assertDontSee('svp-international.pacc.sa/home')
+            ->assertSee('function canCreateHold()')
+            ->assertSee('return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && session.value && date.value);', false)
+            ->assertDontSee("holdButton.disabled = !(candidate.value && session.value && date.value)");
 
         $lookup = $this->get(route('user.bookings.lookup.sessions', [
             'city' => 'Dhaka',

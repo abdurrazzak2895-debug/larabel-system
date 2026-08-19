@@ -237,6 +237,15 @@
         holdPanel.classList.toggle('hidden', !session.value);
     }
 
+    function canCreateHold() {
+        return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && session.value && date.value);
+    }
+
+    function syncActionButtons() {
+        if (!holdId.value) holdButton.disabled = !canCreateHold();
+        confirmButton.disabled = !(holdId.value && candidate.value);
+    }
+
     function renderSessions(items) {
         sessionSnapshot = Array.isArray(items) ? items : [];
         session.innerHTML = '<option value="">Select…</option>';
@@ -345,7 +354,7 @@
             holdStatus.textContent = 'The selected session does not belong to the selected test center.'; return;
         }
         const payload = {occupation_id: occupation.value, category_id: category.value, city: city.value, test_center_id: center.value, test_center_name: centerName.value, exam_session_id: session.value, exam_date: date.value};
-        if (Object.values(payload).some(value => !value)) { holdStatus.textContent = 'Select candidate, city, center, session, and date first.'; return; }
+        if (Object.values(payload).some(value => !value)) { holdStatus.textContent = 'Select city, center, session, and date first.'; return; }
         holdButton.disabled = true; holdStatus.textContent = 'Creating the live SVP temporary hold…';
         holdRequest = fetch('{{ route('user.bookings.temporary-hold') }}', {method: 'POST', headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content || ''}, body: JSON.stringify(payload)}).then(async response => {
             const body = await response.json().catch(() => ({}));
@@ -358,8 +367,8 @@
             if (!id) throw new Error('SVP returned no temporary hold ID.');
             holdId.value = id; holdExpiry.value = hold.expired_at || hold.expires_at || '';
             holdStatus.textContent = 'Hold #' + id + ' created' + (holdExpiry.value ? ' — expires ' + formatExpiry(holdExpiry.value) : '') + '. You may now confirm the reschedule.';
-            holdStatus.classList.remove('text-red-700'); confirmButton.disabled = false;
-        }).catch(error => { holdId.value = ''; holdExpiry.value = ''; confirmButton.disabled = true; holdStatus.textContent = error.message; holdStatus.classList.add('text-red-700'); }).finally(() => { holdRequest = null; holdButton.disabled = !(occupation.value && category.value && city.value && center.value && session.value && date.value); });
+            holdStatus.classList.remove('text-red-700'); syncActionButtons();
+        }).catch(error => { holdId.value = ''; holdExpiry.value = ''; confirmButton.disabled = true; holdStatus.textContent = error.message; holdStatus.classList.add('text-red-700'); }).finally(() => { holdRequest = null; syncActionButtons(); });
         await holdRequest;
     }
 
@@ -372,11 +381,23 @@
         const option = session.options[session.selectedIndex];
         centerError.classList.add('hidden'); dateError.classList.add('hidden');
         if (option?.dataset?.centerId !== String(center.value)) { session.value = ''; resetHold('The selected session belongs to another test center and is blocked.'); const sessionCenterName = option?.dataset?.centerName || option?.dataset?.name || 'another test center'; const selectedCenterName = center.options[center.selectedIndex]?.dataset?.name || center.options[center.selectedIndex]?.textContent || 'the selected test center'; centerError.textContent = 'Blocked: session center "' + sessionCenterName + '" does not match selected center "' + selectedCenterName + '".'; centerError.classList.remove('hidden'); return; }
-        sessionName.value = option?.dataset?.name || option?.textContent || ''; date.value = option?.dataset?.date || ''; holdPanel.classList.remove('hidden'); resetHold('Create a temporary hold for this exact session and date before confirming.'); holdButton.disabled = !(candidate.value && session.value && date.value);
+        sessionName.value = option?.dataset?.name || option?.textContent || ''; date.value = option?.dataset?.date || ''; holdPanel.classList.remove('hidden'); resetHold('Create a temporary hold for this exact session and date before confirming.'); syncActionButtons();
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date.value)) { dateError.textContent = 'The selected SVP session did not return an exam date.'; dateError.classList.remove('hidden'); holdButton.disabled = true; }
     });
-    candidate.addEventListener('change', loadCredit);
-    form.addEventListener('submit', event => { if (!holdId.value) { event.preventDefault(); holdPanel.classList.remove('hidden'); holdStatus.textContent = 'Create a live SVP temporary hold before confirming the reschedule.'; } });
+    candidate.addEventListener('change', function () { loadCredit(); syncActionButtons(); });
+    form.addEventListener('submit', event => {
+        if (!candidate.value) {
+            event.preventDefault();
+            holdPanel.classList.remove('hidden');
+            holdStatus.textContent = 'Select a candidate profile before confirming the reschedule.';
+            return;
+        }
+        if (!holdId.value) {
+            event.preventDefault();
+            holdPanel.classList.remove('hidden');
+            holdStatus.textContent = 'Create a live SVP temporary hold before confirming the reschedule.';
+        }
+    });
     holdButton.addEventListener('click', createHold);
     loadCredit(); loadCities();
 })();
