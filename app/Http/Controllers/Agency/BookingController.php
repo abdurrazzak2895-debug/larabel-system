@@ -12,6 +12,7 @@ use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -358,7 +359,7 @@ class BookingController extends Controller
             'exam_session_name'=> ['nullable', 'string', 'max:255'],
             'exam_date'        => ['required', 'date'],
             'temporary_hold_id' => ['required', 'string', 'max:100'],
-            'language_code'    => ['required', 'string', 'max:20'],
+            'language_code'    => ['required', 'string', 'max:20', Rule::in(array_column(config('svp.languages', []), 'code'))],
             'methodology'      => ['nullable', 'string', 'max:40'],
             'notes'           => ['nullable', 'string', 'max:500'],
         ]);
