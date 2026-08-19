@@ -328,6 +328,9 @@ class UserPanelTest extends TestCase
             ->assertSee('if (categories.length === 1)', false)
             ->assertSee('Bengali', false)
             ->assertSee('value="LOABB"', false)
+            ->assertSee('id="available_session_date"', false)
+            ->assertSee('Every date returned by SVP for the selected center is shown automatically.', false)
+            ->assertSee('loadSessionsForDate', false)
             ->assertDontSee('>load<', false)
             ->assertDontSee('>loading<', false);
     }

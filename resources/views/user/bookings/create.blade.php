@@ -129,7 +129,13 @@
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC booking</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1">Available Session Date</label>
+                    <label for="available_session_date" class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
+                    <select id="available_session_date" required
+                        class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                        <option value="">Select a test center first…</option>
+                    </select>
+                    <p class="text-xs text-slate-400 mt-1">Every date returned by SVP for the selected center is shown automatically.</p>
+                    <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available session / shift</label>
                     <select name="exam_session_id" id="exam_session_id" required
                         class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
@@ -220,6 +226,7 @@
     const testCenterSelect = document.getElementById('test_center_id');
     const testCenterNameInput = document.getElementById('test_center_name');
     const dhakaCenterSummary = document.getElementById('dhaka-center-summary');
+    const availableDateSelect = document.getElementById('available_session_date');
     const sessionSelect = document.getElementById('exam_session_id');
     const sessionNameInput = document.getElementById('exam_session_name');
     const sessionShiftSummary = document.getElementById('session-shift-summary');
@@ -237,6 +244,8 @@
     const svpCreditStatus = document.getElementById('svp-credit-status');
     let temporaryHoldRequest = null;
     let creditStatusRequest = null;
+    let sessionCatalog = [];
+    let availableDateCatalog = [];
 
     async function loadCreditStatus() {
         const candidateId = candidateSelect?.value;
@@ -285,6 +294,81 @@
 
     function sessionCenterName(session) {
         return session?.test_center_name || session?.site_name || session?.center_name || session?.test_center?.name || session?.site?.name || session?.center?.name || 'Unknown center';
+    }
+
+    function normalizeAvailableDate(item) {
+        const date = typeof item === 'string' ? item : item?.exam_date || item?.date || item?.test_date || '';
+        return String(date).substring(0, 10);
+    }
+
+    function renderAvailableDates(sessions, availableDates) {
+        if (!availableDateSelect) return [];
+        const selectedCenterId = String(testCenterSelect?.value || '');
+        const dates = new Set();
+        (availableDates || []).forEach(function (item) {
+            const itemCenterId = typeof item === 'object' ? String(item?.test_center_id ?? item?.test_center?.id ?? item?.site_id ?? '') : '';
+            const date = normalizeAvailableDate(item);
+            if (date && (!itemCenterId || itemCenterId === selectedCenterId)) dates.add(date);
+        });
+        (sessions || []).forEach(function (session) {
+            const centerId = sessionCenterId(session);
+            const date = sessionDate(session);
+            if (date && (!centerId || centerId === selectedCenterId)) dates.add(date);
+        });
+        const sortedDates = Array.from(dates).filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort();
+        availableDateSelect.innerHTML = '<option value="">Select an available date…</option>';
+        sortedDates.forEach(function (date) {
+            const option = document.createElement('option');
+            option.value = date;
+            option.textContent = date;
+            availableDateSelect.appendChild(option);
+        });
+        availableDateSelect.disabled = sortedDates.length === 0;
+        return sortedDates;
+    }
+
+    function mergeSessionCatalog(items) {
+        const merged = new Map((sessionCatalog || []).map(session => [String(session?.id || session?.exam_session_id || sessionDate(session) + '|' + session?.name), session]));
+        (items || []).forEach(function (session) {
+            const key = String(session?.id || session?.exam_session_id || sessionDate(session) + '|' + session?.name);
+            if (key) merged.set(key, session);
+        });
+        sessionCatalog = Array.from(merged.values());
+    }
+
+    function renderSessionsForDate(date) {
+        const filtered = (sessionCatalog || []).filter(session => !date || sessionDate(session) === date);
+        renderSessionShiftSummary(sessionCatalog);
+        populateSelect(sessionSelect, filtered, 'id', 'name');
+        if (sessionSelect) sessionSelect.disabled = filtered.length === 0;
+        return filtered;
+    }
+
+    async function loadSessionsForDate(date) {
+        if (!date || !citySelect.value || !categorySelect.value || !testCenterSelect.value) {
+            renderSessionsForDate(date);
+            return;
+        }
+        try {
+            setLoading(sessionSelect, true);
+            const params = new URLSearchParams({city: citySelect.value, category_id: categorySelect.value, test_center_id: testCenterSelect.value, exam_date: date});
+            const data = await fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString());
+            const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
+            mergeSessionCatalog(sessions);
+            renderAvailableDates(sessionCatalog, availableDateCatalog);
+            availableDateSelect.value = date;
+            dateInput.value = date;
+            renderSessionsForDate(date);
+            if (!sessions.length) {
+                sessionSelect.innerHTML = '<option value="">No sessions returned for this date</option>';
+                temporaryHoldStatus.textContent = 'SVP returned no available session for this date at the selected center.';
+            }
+        } catch (error) {
+            sessionSelect.innerHTML = '<option value="">Could not load sessions for this date</option>';
+            console.error(error);
+        } finally {
+            setLoading(sessionSelect, false);
+        }
     }
 
     function shiftLabel(session, sameDateIndex) {
@@ -613,6 +697,9 @@
             populateSelect(citySelect, []);
             populateSelect(categorySelect, []);
             populateSelect(testCenterSelect, []);
+            sessionCatalog = [];
+            availableDateCatalog = [];
+            renderAvailableDates([], []);
             populateSelect(sessionSelect, []);
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
@@ -650,6 +737,9 @@
             testCenterSection.style.display = 'none';
             populateSelect(citySelect, []);
             populateSelect(testCenterSelect, []);
+            sessionCatalog = [];
+            availableDateCatalog = [];
+            renderAvailableDates([], []);
             populateSelect(sessionSelect, []);
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
@@ -679,6 +769,9 @@
             const categoryId = categorySelect.value;
             testCenterSection.style.display = 'none';
             populateSelect(testCenterSelect, []);
+            sessionCatalog = [];
+            availableDateCatalog = [];
+            renderAvailableDates([], []);
             populateSelect(sessionSelect, []);
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
@@ -720,6 +813,9 @@
             const categoryId = categorySelect.value;
             if (testCenterNameInput) testCenterNameInput.value = selectedCenterName.trim();
             if (sessionNameInput) sessionNameInput.value = '';
+            sessionCatalog = [];
+            availableDateCatalog = [];
+            renderAvailableDates([], []);
             populateSelect(sessionSelect, []);
             dateInput.value = '';
             clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
@@ -730,19 +826,37 @@
 
             try {
                 setLoading(sessionSelect, true);
-                const params = new URLSearchParams();
-                if (city) params.set('city', city);
-                params.set('category_id', categoryId);
-                params.set('test_center_id', testCenterId);
+                const params = new URLSearchParams({city: city, category_id: categoryId, test_center_id: testCenterId});
                 const data = await fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString());
-            const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
-            renderSessionShiftSummary(sessions);
-            populateSelect(sessionSelect, sessions, 'id', 'name');
+                const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
+                availableDateCatalog = data?.data?.available_dates || data?.available_dates || [];
+                mergeSessionCatalog(sessions);
+                const dates = renderAvailableDates(sessionCatalog, availableDateCatalog);
+                renderSessionsForDate('');
+                if (dates.length) {
+                    availableDateSelect.value = dates[0];
+                    dateInput.value = dates[0];
+                    await loadSessionsForDate(dates[0]);
+                }
             } catch (e) {
                 console.error(e);
             } finally {
                 setLoading(sessionSelect, false);
             }
+        });
+    }
+
+    if (availableDateSelect) {
+        availableDateSelect.addEventListener('change', async function () {
+            const date = availableDateSelect.value;
+            dateInput.value = date || '';
+            clearTemporaryHold('Select a session for this date, then create a temporary hold before confirming the booking.');
+            clearDateError();
+            if (!date) {
+                populateSelect(sessionSelect, []);
+                return;
+            }
+            await loadSessionsForDate(date);
         });
     }
 
@@ -764,11 +878,15 @@
             }
             if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || selectedSessionOption?.textContent || '';
 
-            // The selected session is already narrowed to one live SVP center.
-            // Its own date is authoritative and must never be overwritten by a
-            // broader category/city available_dates response.
-            const sessionDate = (selectedSessionOption?.dataset?.date || '').substring(0, 10);
-            dateInput.value = /^\d{4}-\d{2}-\d{2}$/.test(sessionDate) ? sessionDate : '';
+            const selectedDate = availableDateSelect?.value || '';
+            const sessionDateValue = (selectedSessionOption?.dataset?.date || '').substring(0, 10);
+            if (selectedDate && sessionDateValue && selectedDate !== sessionDateValue) {
+                sessionSelect.value = '';
+                clearTemporaryHold('The selected session date does not match the selected available date.');
+                showDateError('This session belongs to ' + sessionDateValue + '. Please select a session for ' + selectedDate + '.');
+                return;
+            }
+            dateInput.value = selectedDate || (/^\d{4}-\d{2}-\d{2}$/.test(sessionDateValue) ? sessionDateValue : '');
             clearTemporaryHold('Select a live SVP session to load its exact date, then create a temporary hold.');
             clearDateError();
 
