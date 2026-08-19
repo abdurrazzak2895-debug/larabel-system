@@ -165,12 +165,15 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP Language Code</label>
-                    <input type="text" name="language_code" id="language_code" required maxlength="20"
-                        value="{{ old('language_code', config('svp.default_language_code', 'LOABB')) }}"
-                        placeholder="e.g. LOABB"
-                        class="w-full rounded-xl border-slate-200 text-sm uppercase focus:border-brand-500 focus:ring-brand-500">
-                    <p class="text-xs text-slate-400 mt-1">Use the SVP Prometric code, not an ISO code such as <code>en</code>.</p>
+                    <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
+                    <select name="language_code" id="language_code" required class="w-full md:w-1/2 rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                        @foreach (config('svp.languages', []) as $language)
+                            <option value="{{ $language['code'] }}" {{ old('language_code', config('svp.default_language_code', 'LOABB')) === $language['code'] ? 'selected' : '' }}>
+                                {{ $language['english_name'] }} ({{ $language['code'] }}) · {{ ucfirst($language['exam_engine_name']) }} · {{ $language['question_count'] }} questions
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="text-xs text-slate-400 mt-1">Selected language: Bengali · Prometric · code <code>LOABB</code>. This code is sent to SVP; <code>bn</code> is the ISO language identifier.</p>
                 </div>
                 <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
             </div>

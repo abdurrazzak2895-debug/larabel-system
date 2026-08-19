@@ -20,6 +20,19 @@ return [
     'country_id'    => (int) env('SVP_COUNTRY_ID', 78),
     // SVP expects a Prometric language code (for example LOABB), not an ISO code such as en.
     'default_language_code' => env('SVP_DEFAULT_LANGUAGE_CODE', 'LOABB'),
+    'languages' => [
+        [
+            'id' => 392,
+            'arabic_name' => 'بنغالي',
+            'code' => 'LOABB',
+            'english_name' => 'Bengali',
+            'exam_engine_id' => 1,
+            'exam_engine_name' => 'prometric',
+            'language_code' => 'bn',
+            'non_targeted' => false,
+            'question_count' => 15,
+        ],
+    ],
     'default_methodology'   => env('SVP_DEFAULT_METHODOLOGY', 'in_person'),
     // Some SVP deployments omit earlier dates from available_dates even though
     // the date-specific exam_sessions endpoint still returns valid seats.

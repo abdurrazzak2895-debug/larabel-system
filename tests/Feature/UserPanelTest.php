@@ -226,6 +226,8 @@ class UserPanelTest extends TestCase
             ->assertSee('Reschedule SVP Reservation')
             ->assertSee('Choose a new city, test center, date, and session')
             ->assertSee('Occupation and category stay fixed')
+            ->assertSee('Bengali', false)
+            ->assertSee('value="LOABB"', false)
             ->assertDontSee('Locked center')
             ->assertDontSee('svp-international.pacc.sa/home')
             ->assertSee('function canCreateHold()')
@@ -324,6 +326,8 @@ class UserPanelTest extends TestCase
             ->assertSee('Kitchen Worker')
             ->assertSee('id="category_id"', false)
             ->assertSee('if (categories.length === 1)', false)
+            ->assertSee('Bengali', false)
+            ->assertSee('value="LOABB"', false)
             ->assertDontSee('>load<', false)
             ->assertDontSee('>loading<', false);
     }
