@@ -101,6 +101,52 @@ class SvpSessionCenterVerificationTest extends TestCase
             ->assertJsonPath('expected.test_center_id', '17');
     }
 
+    public function test_verifier_maps_list_wrapped_session_with_nested_site_data(): void
+    {
+        $agency = Agency::create([
+            'name' => 'Nested Session Agency',
+            'code' => 'SVERIFY4',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        Auth::guard('web')->login($user);
+
+        $service = $this->mock(BookingService::class);
+        $service->shouldReceive('examSession')
+            ->once()
+            ->with('test-token', 'opaque-session-site-data')
+            ->andReturn(response()->json([
+                'data' => [
+                    'exam_sessions' => [[
+                        'id' => 'opaque-session-site-data',
+                        'start_date_in_browser_time_zone' => '2026-08-30T08:00:00Z',
+                        'site' => [
+                            'data' => [
+                                'id' => 17,
+                                'name' => 'Bangladesh Korea TTC Dhaka',
+                                'city' => 'Dhaka',
+                            ],
+                        ],
+                    ]],
+                ],
+            ], 200));
+
+        $response = $this->withSession(['svp_token' => 'test-token'])
+            ->getJson(route('agency.bookings.lookup.verify-session-center', [
+                'exam_session_id' => 'opaque-session-site-data',
+                'expected_test_center_id' => '17',
+                'expected_city' => 'Dhaka',
+                'expected_exam_date' => '2026-08-30',
+            ]));
+
+        $response->assertOk()
+            ->assertJsonPath('verified', true)
+            ->assertJsonPath('checks.center_match', true)
+            ->assertJsonPath('checks.date_match', true)
+            ->assertJsonPath('actual.test_center_id', '17')
+            ->assertJsonPath('actual.test_center_name', 'Bangladesh Korea TTC Dhaka');
+    }
+
     public function test_verification_does_not_claim_success_when_session_has_no_center_metadata(): void
     {
         $agency = Agency::create([

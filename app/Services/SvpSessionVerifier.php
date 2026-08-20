@@ -86,6 +86,10 @@ class SvpSessionVerifier
         $candidates = [
             data_get($payload, 'data.exam_session'),
             data_get($payload, 'data.session'),
+            data_get($payload, 'data.exam_sessions.0'),
+            data_get($payload, 'data.sessions.0'),
+            data_get($payload, 'exam_sessions.0'),
+            data_get($payload, 'sessions.0'),
             $payload['exam_session'] ?? null,
             $payload['session'] ?? null,
             data_get($payload, 'data'),
@@ -108,25 +112,45 @@ class SvpSessionVerifier
     private function extractCenter(array $session): array
     {
         $nested = [];
-        foreach (['test_center', 'center', 'site'] as $key) {
+        foreach ([
+            'test_center', 'testCenter', 'center', 'site', 'exam_center',
+            'test_center_data', 'test_center_details', 'center_data',
+            'location', 'data', 'attributes',
+        ] as $key) {
             if (is_array($session[$key] ?? null)) {
                 $nested[] = $session[$key];
             }
         }
 
-        $id = $this->firstValue($session, ['test_center_id', 'site_id', 'center_id']);
-        $name = $this->firstValue($session, ['test_center_name', 'site_name', 'center_name']);
-        $city = $this->firstValue($session, ['test_center_city', 'site_city', 'city']);
+        $id = $this->firstValue($session, [
+            'test_center_id', 'testCenterId', 'center_id', 'centerId',
+            'site_id', 'siteId', 'test_center_code', 'center_code',
+        ]);
+        $name = $this->firstValue($session, [
+            'test_center_name', 'testCenterName', 'center_name', 'centerName',
+            'site_name', 'siteName',
+        ]);
+        $city = $this->firstValue($session, [
+            'test_center_city', 'testCenterCity', 'center_city', 'centerCity',
+            'site_city', 'siteCity',
+        ]);
 
         foreach ($nested as $center) {
             $candidate = is_array($center['data'] ?? null)
                 ? array_merge($center, $center['data'])
                 : $center;
 
-            $id ??= $this->firstValue($candidate, ['id', 'test_center_id', 'site_id', 'center_id']);
-            $name ??= $this->firstValue($candidate, ['name', 'test_center_name', 'site_name', 'center_name']);
+            $id ??= $this->firstValue($candidate, [
+                'id', 'value', 'test_center_id', 'testCenterId',
+                'site_id', 'siteId', 'center_id', 'centerId',
+            ]);
+            $name ??= $this->firstValue($candidate, [
+                'name', 'english_name', 'title', 'label',
+                'test_center_name', 'testCenterName', 'site_name', 'siteName',
+            ]);
             $city ??= $this->firstValue($candidate, [
-                'city', 'locality', 'test_center_city', 'site_city',
+                'city', 'english_city', 'location_name', 'locality',
+                'test_center_city', 'testCenterCity', 'site_city', 'siteCity',
             ]);
 
             if (is_array($candidate['address'] ?? null)) {
