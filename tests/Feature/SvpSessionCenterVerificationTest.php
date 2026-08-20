@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Agency;
 use App\Models\User;
 use App\Services\BookingService;
+use App\Services\SvpSessionVerifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
@@ -145,6 +146,70 @@ class SvpSessionCenterVerificationTest extends TestCase
             ->assertJsonPath('checks.date_match', true)
             ->assertJsonPath('actual.test_center_id', '17')
             ->assertJsonPath('actual.test_center_name', 'Bangladesh Korea TTC Dhaka');
+    }
+
+    public function test_verifier_accepts_all_configured_dhaka_centers_across_response_shapes(): void
+    {
+        $agency = Agency::create([
+            'name' => 'All Centers Verification Agency',
+            'code' => 'SVERIFY5',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        Auth::guard('web')->login($user);
+
+        $centers = config('svp.dhaka_test_centers');
+        $service = $this->mock(BookingService::class);
+        $service->shouldReceive('examSession')
+            ->times(count($centers))
+            ->andReturnUsing(function (string $token, string $sessionId) use ($centers) {
+                $center = collect($centers)->firstWhere('id', substr($sessionId, strlen('center-session-')));
+                $index = array_search($center, $centers, true);
+                $date = '2026-08-'.str_pad((string) (23 + $index), 2, '0', STR_PAD_LEFT);
+                $metadata = [
+                    'id' => (int) $center['id'],
+                    'name' => $center['name'],
+                    'city' => $center['city'],
+                ];
+
+                return match ($index % 3) {
+                    0 => response()->json([
+                        'data' => ['exam_session' => [
+                            'id' => $sessionId,
+                            'test_center' => $metadata,
+                            'exam_date' => $date,
+                        ]],
+                    ], 200),
+                    1 => response()->json([
+                        'data' => ['exam_sessions' => [[
+                            'id' => $sessionId,
+                            'site' => ['data' => $metadata],
+                            'start_date_in_browser_time_zone' => $date.'T08:00:00Z',
+                        ]]],
+                    ], 200),
+                    default => response()->json([
+                        'session' => [
+                            'id' => $sessionId,
+                            'testCenterId' => $metadata['id'],
+                            'testCenterName' => $metadata['name'],
+                            'testCenterCity' => $metadata['city'],
+                            'date' => $date,
+                        ],
+                    ], 200),
+                };
+            });
+
+        $verifier = app(SvpSessionVerifier::class);
+
+        foreach ($centers as $center) {
+            $sessionId = 'center-session-'.$center['id'];
+            $date = '2026-08-'.str_pad((string) (23 + array_search($center, $centers, true)), 2, '0', STR_PAD_LEFT);
+            $result = $verifier->verify('test-token', $sessionId, $center['id'], $center['city'], $date);
+
+            $this->assertTrue($result['verified'], 'Center '.$center['id'].' should verify.');
+            $this->assertSame((string) $center['id'], data_get($result, 'actual.test_center_id'));
+            $this->assertSame($center['name'], data_get($result, 'actual.test_center_name'));
+        }
     }
 
     public function test_verification_does_not_claim_success_when_session_has_no_center_metadata(): void
