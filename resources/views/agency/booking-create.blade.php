@@ -533,13 +533,16 @@
         function setLoading(select, isLoading) {
             if (!select) return;
             select.disabled = isLoading;
+            const parent = select.parentElement;
+            if (!parent) return;
+            parent.querySelectorAll('.svp-loading-indicator').forEach(function (loading) {
+                loading.remove();
+            });
             if (isLoading) {
-                select.insertAdjacentHTML('afterend', '<span class="text-xs text-slate-400 ml-2">Loading…</span>');
-            } else {
-                const loading = select.parentElement.querySelector('.text-slate-400');
-                if (loading && loading.textContent === 'Loading…') {
-                    loading.remove();
-                }
+                const loading = document.createElement('span');
+                loading.className = 'svp-loading-indicator text-xs text-slate-400 ml-2';
+                loading.textContent = 'Loading…';
+                select.insertAdjacentElement('afterend', loading);
             }
         }
 

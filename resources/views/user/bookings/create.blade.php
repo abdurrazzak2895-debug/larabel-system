@@ -515,13 +515,16 @@
     function setLoading(select, isLoading) {
         if (!select) return;
         select.disabled = isLoading;
+        const parent = select.parentElement;
+        if (!parent) return;
+        parent.querySelectorAll('.svp-loading-indicator').forEach(function (loading) {
+            loading.remove();
+        });
         if (isLoading) {
-            select.insertAdjacentHTML('afterend', '<span class="text-xs text-slate-400 ml-2">Loading…</span>');
-        } else {
-            const loading = select.parentElement.querySelector('.text-slate-400');
-            if (loading && loading.textContent === 'Loading…') {
-                loading.remove();
-            }
+            const loading = document.createElement('span');
+            loading.className = 'svp-loading-indicator text-xs text-slate-400 ml-2';
+            loading.textContent = 'Loading…';
+            select.insertAdjacentElement('afterend', loading);
         }
     }
 
@@ -584,14 +587,36 @@
         occupationError.classList.toggle('hidden', !message);
     }
 
+    function normalizeOccupationRecord(item) {
+        if (!item || typeof item !== 'object') return null;
+        const id = String(item.id ?? item.occupation_id ?? '').trim();
+        const name = String(item.name ?? item.english_name ?? item.arabic_name ?? item.title ?? id).trim();
+        return id && name ? { id: id, name: name } : null;
+    }
+
+    function mergeOccupationRecords(items) {
+        const merged = new Map((occupationsCache || []).map(function (occupation) {
+            return [String(occupation.id), occupation];
+        }));
+        (Array.isArray(items) ? items : []).forEach(function (item) {
+            const occupation = normalizeOccupationRecord(item);
+            if (!occupation) return;
+            const existing = merged.get(occupation.id) || {};
+            merged.set(occupation.id, { ...existing, ...occupation });
+        });
+        occupationsCache = Array.from(merged.values());
+    }
+
     function seedOccupationsFromServer() {
-        if (occupationsCache.length > 0 || !occupationSelect) return;
+        if (!occupationSelect) return;
+        const seeded = [];
         occupationSelect.querySelectorAll('option').forEach(function (option) {
             const name = option.textContent.trim();
             if (option.value && name && name.toLowerCase() !== 'load' && name.toLowerCase() !== 'loading') {
-                occupationsCache.push({ id: option.value, name: name });
+                seeded.push({ id: option.value, name: name });
             }
         });
+        mergeOccupationRecords(seeded);
         occupationsLoaded = occupationsCache.length > 0;
     }
 
@@ -606,22 +631,25 @@
 
     async function loadOccupationsFromApi(searchTerm) {
         if (occupationsLoading) return;
+        // Keep the complete server-rendered list because SVP may ignore the
+        // search parameter or return only a partial page.
+        seedOccupationsFromServer();
         occupationsLoading = true;
         try {
             const url = "{{ route('user.bookings.lookup.occupations') }}?page=1" + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');
             const data = await fetchJSON(url);
             const occupations = data.data?.occupations || data.data || data.occupations || [];
-            occupationsCache = (Array.isArray(occupations) ? occupations : []).map(function (occupation) {
-                return {
-                    id: occupation.id || occupation.occupation_id || '',
-                    name: occupation.name || occupation.english_name || occupation.arabic_name || occupation.title || occupation.id || occupation.occupation_id || ''
-                };
-            }).filter(function (occupation) { return occupation.id && occupation.name; });
-            occupationsLoaded = true;
+            mergeOccupationRecords(occupations);
+            occupationsLoaded = occupationsCache.length > 0;
             showOccupationError('');
+            return true;
         } catch (error) {
-            showOccupationError('Could not load occupations. The SVP service may be unavailable.');
+            // The seeded list remains usable if the optional live search fails.
+            if (occupationsCache.length === 0) {
+                showOccupationError('Could not load occupations. The SVP service may be unavailable.');
+            }
             console.error(error);
+            return occupationsCache.length > 0;
         } finally {
             occupationsLoading = false;
         }
