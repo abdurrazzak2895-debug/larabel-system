@@ -587,17 +587,39 @@
             return response.json();
         }
 
-        // Seed the cache from the options the server already rendered, so the
-        // dropdown works instantly without an extra request when available.
+        function normalizeOccupationRecord(item) {
+            if (!item || typeof item !== 'object') return null;
+            const id = String(item.id ?? item.occupation_id ?? '').trim();
+            const name = String(item.name ?? item.english_name ?? item.arabic_name ?? item.title ?? id).trim();
+            return id && name ? { id: id, name: name } : null;
+        }
+
+        function mergeOccupationRecords(items) {
+            const merged = new Map((occupationsCache || []).map(function (occupation) {
+                return [String(occupation.id), occupation];
+            }));
+            (Array.isArray(items) ? items : []).forEach(function (item) {
+                const occupation = normalizeOccupationRecord(item);
+                if (!occupation) return;
+                const existing = merged.get(occupation.id) || {};
+                merged.set(occupation.id, { ...existing, ...occupation });
+            });
+            occupationsCache = Array.from(merged.values());
+        }
+
+        // Seed the cache from the options the server already rendered. The SVP
+        // search endpoint can ignore its search parameter or return only a
+        // partial page, so these known occupations must remain available.
         function seedOccupationsFromServer() {
-            if (occupationsCache.length > 0) return;
             if (!occupationSelect) return;
+            const seeded = [];
             occupationSelect.querySelectorAll('option').forEach(function (opt) {
                 const name = opt.textContent.trim();
                 if (opt.value && name && name.toLowerCase() !== 'load' && name.toLowerCase() !== 'loading') {
-                    occupationsCache.push({ id: opt.value, name: name });
+                    seeded.push({ id: opt.value, name: name });
                 }
             });
+            mergeOccupationRecords(seeded);
             occupationsLoaded = occupationsCache.length > 0;
         }
 
@@ -612,21 +634,27 @@
 
         async function loadOccupationsFromApi(searchTerm) {
             if (occupationsLoading) return;
+            // Preserve the complete server-rendered list before querying SVP.
+            // SVP may ignore `search` and return a different page, which must
+            // not make a valid occupation disappear from the dropdown.
+            seedOccupationsFromServer();
             occupationsLoading = true;
             try {
                 const url = "{{ route('agency.bookings.lookup.occupations') }}?page=1" + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');
                 const data = await fetchJSON(url);
                 const occupations = data.data?.occupations || data.data || data.occupations || [];
-                occupationsCache = (Array.isArray(occupations) ? occupations : []).map(function (o) {
-                    return { id: o.id || o.occupation_id || '', name: o.name || o.english_name || o.arabic_name || o.title || o.id || o.occupation_id || '' };
-                });
-                occupationsLoaded = true;
+                mergeOccupationRecords(occupations);
+                occupationsLoaded = occupationsCache.length > 0;
                 clearError(occupationError);
                 return true;
             } catch (e) {
-                showError(occupationError, 'Could not load occupations. The SVP service is unreachable — please try again in a moment.');
+                // The seeded list is still usable when the optional live search
+                // request fails, so only show the error if no occupation exists.
+                if (occupationsCache.length === 0) {
+                    showError(occupationError, 'Could not load occupations. The SVP service is unreachable — please try again in a moment.');
+                }
                 console.error(e);
-                return false;
+                return occupationsCache.length > 0;
             } finally {
                 occupationsLoading = false;
             }
