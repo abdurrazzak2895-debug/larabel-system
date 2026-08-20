@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\BookingService;
+use App\Services\SvpSessionVerifier;
 use App\Services\SvpTemporaryHoldService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,7 +13,8 @@ class SvpHoldController extends Controller
 {
     public function __construct(
         private BookingService $booking,
-        private SvpTemporaryHoldService $holds
+        private SvpTemporaryHoldService $holds,
+        private SvpSessionVerifier $sessionVerifier
     ) {
     }
 
@@ -82,6 +84,50 @@ class SvpHoldController extends Controller
                 ], 422);
             }
 
+            // The list response is only a candidate snapshot. The opaque ID
+            // becomes trustworthy for this hold only after the authoritative
+            // authenticated GET /exam_sessions/{id}?locale=en confirms the
+            // exact center and date. This call is read-only; no upstream
+            // mutation happens until the guard has returned verified=true.
+            $verification = $this->sessionVerifier->verify(
+                $token,
+                $resolvedSessionId,
+                (string) $data['test_center_id'],
+                (string) $data['city'],
+                $selectedSessionDate,
+            );
+
+            if (! $verification['success']) {
+                if ((int) ($verification['upstream_status'] ?? 0) === 401) {
+                    return response()->json([
+                        'success' => false,
+                        'requires_svp_login' => true,
+                        'login_url' => route('svp.login.form', ['force' => 1]),
+                        'error' => 'Your SVP session has expired. Sign in with SVP again, then retry this same session.',
+                    ], 401);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'error' => 'SVP could not verify the selected session before creating a hold. Please refresh the available sessions and try again.',
+                ], 502);
+            }
+
+            if (! $verification['verified']) {
+                $actualCenterName = data_get($verification, 'actual.test_center_name') ?: 'unknown center';
+                $expectedCenterName = ($data['test_center_name'] ?? '') ?: 'the selected test center';
+
+                return response()->json([
+                    'success' => false,
+                    'error' => sprintf(
+                        'Blocked: SVP session belongs to %s, not %s, or its live date does not match the selected date.',
+                        $actualCenterName,
+                        $expectedCenterName
+                    ),
+                    'verification' => $verification,
+                ], 422);
+            }
+
             $response = $this->booking->temporarySeat($token, [
                 // PACC's official contract accepts an array even for a
                 // one-session final-only hold attempt.
@@ -113,7 +159,7 @@ class SvpHoldController extends Controller
                 'category_id' => $data['category_id'],
                 'city' => $data['city'],
                 'test_center_id' => $data['test_center_id'],
-                'test_center_name' => $data['test_center_name'] ?? null,
+                'test_center_name' => data_get($verification, 'actual.test_center_name') ?: ($data['test_center_name'] ?? null),
                 'exam_session_id' => $resolvedSessionId,
                 'exam_session_name' => $selectedSession['name'] ?? $selectedSession['session_name'] ?? null,
                 'exam_date' => $selectedSessionDate,

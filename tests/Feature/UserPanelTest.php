@@ -98,6 +98,15 @@ class UserPanelTest extends TestCase
                 'success' => true,
                 'exam_reservation' => ['id' => 5370112, 'exam_date' => '2026-09-01', 'test_center_id' => 17],
             ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_sessions/reschedule-session-1*' => Http::response([
+                'exam_session' => [
+                    'id' => 'reschedule-session-1',
+                    'exam_date' => '2026-09-01',
+                    'test_center_id' => 17,
+                    'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+                    'test_center_city' => 'Dhaka',
+                ],
+            ], 200),
             'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_sessions/available_dates*' => Http::response([
                 'available_dates' => [
                     ['exam_date' => '2026-09-01', 'test_center_id' => 17],

@@ -17,6 +17,42 @@ class TakamolProviderLookupTest extends TestCase
         config()->set('svp.session_date_probe_backfill_days', 0);
     }
 
+    public function test_exam_session_by_id_uses_authoritative_read_only_endpoint_and_locale(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'data' => [
+                    'exam_session' => [
+                        'id' => 'opaque-session-17',
+                        'exam_date' => '2026-08-30',
+                        'test_center' => [
+                            'id' => 17,
+                            'name' => 'Bangladesh Korea TTC Dhaka',
+                            'city' => 'Dhaka',
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = (new TakamolProvider())
+            ->withToken('test-token')
+            ->examSession('opaque-session-17');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('opaque-session-17', data_get($response->getData(true), 'data.exam_session.id'));
+
+        Http::assertSent(function ($request): bool {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return $request->method() === 'GET'
+                && str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/v1/individual_labor_space/exam_sessions/opaque-session-17')
+                && ($query['locale'] ?? null) === 'en'
+                && $request->hasHeader('Authorization', 'Bearer test-token')
+                && $request->hasHeader('X-Tenant-Name', 'svp-international');
+        });
+    }
+
     public function test_sessions_are_filtered_by_category_and_exact_test_center(): void
     {
         Http::fake([

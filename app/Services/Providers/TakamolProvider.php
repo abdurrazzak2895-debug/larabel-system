@@ -645,7 +645,11 @@ class TakamolProvider implements BookingProviderInterface
 
     public function examSession(string $id): JsonResponse
     {
-        return $this->dispatch('GET', '/individual_labor_space/exam_sessions/'.$id);
+        return $this->dispatch(
+            'GET',
+            '/individual_labor_space/exam_sessions/'.rawurlencode(trim($id)),
+            ['locale' => 'en']
+        );
     }
 
     public function availableDates(?string $sessionId = null, array $params = []): JsonResponse

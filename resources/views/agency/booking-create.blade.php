@@ -460,15 +460,36 @@
                 return;
             }
             temporaryHoldButton.disabled = true;
-            temporaryHoldStatus.textContent = 'Creating the live SVP temporary hold…';
-            temporaryHoldRequest = fetch("{{ route('agency.bookings.temporary-hold') }}", {
+            temporaryHoldStatus.textContent = 'Verifying the live SVP session center…';
+            const verifyUrl = new URL("{{ route('agency.bookings.lookup.verify-session-center') }}", window.location.origin);
+            verifyUrl.searchParams.set('exam_session_id', payload.exam_session_id);
+            verifyUrl.searchParams.set('expected_test_center_id', payload.test_center_id);
+            verifyUrl.searchParams.set('expected_city', payload.city);
+            verifyUrl.searchParams.set('expected_exam_date', payload.exam_date);
+            temporaryHoldRequest = Promise.resolve().then(async function () {
+                const verification = await fetchJSON(verifyUrl.toString());
+                if (!verification.verified) {
+                    const actualName = verification.actual?.test_center_name || 'unknown center';
+                    const selectedName = testCenterSelect.options[testCenterSelect.selectedIndex]?.dataset?.centerName
+                        || testCenterSelect.options[testCenterSelect.selectedIndex]?.textContent
+                        || 'the selected test center';
+                    const message = 'Blocked before hold: live SVP session belongs to "' + actualName + '" instead of "' + selectedName + '" or its date/metadata is not valid.';
+                    if (sessionCenterError) {
+                        sessionCenterError.textContent = message;
+                        sessionCenterError.classList.remove('hidden');
+                    }
+                    throw new Error(message);
+                }
+                temporaryHoldStatus.textContent = 'Creating the live SVP temporary hold…';
+                return fetch("{{ route('agency.bookings.temporary-hold') }}", {
                 method: 'POST',
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
                 },
-                body: JSON.stringify(payload)
+                    body: JSON.stringify(payload)
+                });
             }).then(async response => {
                 const body = await response.json().catch(() => ({}));
                 if (!response.ok || body.success === false) {

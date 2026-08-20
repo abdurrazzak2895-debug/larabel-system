@@ -113,9 +113,11 @@ class SvpTemporaryHoldService
         $requestedCenter = (string) ($context['test_center_id'] ?? '');
         $selectedCenter = $this->sessionCenterId($selected);
         if ($selected !== null) {
-            // A session returned with an explicit center must match the
-            // selected center exactly. Never silently repair a real mismatch.
-            return $selectedCenter !== '' && $selectedCenter === $requestedCenter
+            // An explicit center must match the selected center exactly. A
+            // centerless list row is allowed through here because the hold
+            // controller performs the authoritative session-by-ID lookup
+            // immediately before creating the upstream hold.
+            return ($selectedCenter === '' || $selectedCenter === $requestedCenter)
                 ? $selected
                 : null;
         }
