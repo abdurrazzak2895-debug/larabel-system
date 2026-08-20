@@ -273,16 +273,32 @@ class TakamolProvider implements BookingProviderInterface
         $centerDates = [];
 
         foreach ($dateRecords as $record) {
-            if (! is_array($record)) {
+            if (is_array($record)) {
+                $normalized = self::formatSessionName($record);
+                $recordCenter = (string) ($normalized['test_center_id'] ?? '');
+                $date = self::normalizeExamDate($normalized['exam_date'] ?? null);
+            } elseif (is_scalar($record)) {
+                $date = self::normalizeExamDate($record);
+                $normalized = $date !== null
+                    ? $this->syntheticCenterDate($date, $centerId, $city)
+                    : [];
+                $recordCenter = $centerId;
+            } else {
                 continue;
             }
 
-            $normalized = self::formatSessionName($record);
-            $recordCenter = (string) ($normalized['test_center_id'] ?? '');
-            $date = (string) ($normalized['exam_date'] ?? '');
+            if ($date === null) {
+                continue;
+            }
 
-            if ($recordCenter === $centerId && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date) === 1) {
-                $centerDates[$date] = $normalized;
+            // Some SVP responses return category/city-wide date strings or
+            // date objects without center metadata. Those dates are still safe
+            // candidates because every date is queried again with the selected
+            // center_id and only sessions returned for that center are kept.
+            if ($recordCenter === '' || $recordCenter === $centerId) {
+                $centerDates[$date] = $recordCenter === ''
+                    ? $this->syntheticCenterDate($date, $centerId, $city) + $normalized
+                    : $normalized;
             }
         }
 
@@ -592,6 +608,20 @@ class TakamolProvider implements BookingProviderInterface
             'name' => $name !== null ? trim((string) $name) : null,
             'city' => $city !== null ? trim((string) $city) : null,
         ];
+    }
+
+    protected static function normalizeExamDate(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+        if (preg_match('/(\\d{4}-\\d{2}-\\d{2})/', $value, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
     }
 
     protected static function firstScalar(array $node, array $keys): string|int|float|null

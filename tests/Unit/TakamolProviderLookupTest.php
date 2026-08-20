@@ -241,6 +241,55 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_center_session_lookup_probes_bare_and_centerless_available_dates(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            if (str_ends_with($path, '/exam_sessions/available_dates')) {
+                return Http::response([
+                    'data' => [
+                        'available_dates' => [
+                            '2026-08-22',
+                            ['date' => '2026-08-23'],
+                        ],
+                    ],
+                ], 200);
+            }
+
+            $date = $query['exam_date'] ?? null;
+            return Http::response([
+                'data' => [
+                    'exam_sessions' => $date === '2026-08-23' ? [[
+                        'id' => 'session-2026-08-23',
+                    ]] : [],
+                ],
+            ], 200);
+        });
+
+        $payload = (new TakamolProvider())->withToken('test-token')->examSessionsForCenter([
+            'city' => 'Dhaka',
+            'category_id' => 'category-4',
+            'test_center_id' => '17',
+        ])->getData(true);
+
+        $this->assertSame(['session-2026-08-23'], array_column($payload['data']['sessions'], 'id'));
+        $this->assertSame(['2026-08-23'], array_column($payload['data']['sessions'], 'exam_date'));
+        $this->assertSame(['17'], array_column($payload['data']['sessions'], 'test_center_id'));
+        $this->assertSame(['2026-08-23'], array_column($payload['data']['available_dates'], 'exam_date'));
+
+        Http::assertSent(function ($request): bool {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return str_ends_with($path, '/exam_sessions')
+                && ! str_ends_with($path, '/available_dates')
+                && in_array($query['exam_date'] ?? null, ['2026-08-22', '2026-08-23'], true)
+                && ($query['test_center_id'] ?? null) === '17';
+        });
+    }
+
     public function test_explicit_date_lookup_bypasses_aggregate_metadata(): void
     {
         Http::fake(function ($request) {
