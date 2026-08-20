@@ -29,7 +29,11 @@ class BookingController extends Controller
     }
 
     /**
-     * Ensure an SVP bearer token is available, otherwise redirect to SVP login.
+     * Ensure an SVP bearer token is available and has not already expired.
+     *
+     * SVP returns a JSON 401 such as "Signature has expired" when the JWT
+     * lifetime ends. Detecting the expiry locally avoids rendering a booking
+     * wizard with an empty occupation list and lets the user re-authenticate.
      */
     private function ensureSvpToken(Request $request): ?string
     {
@@ -39,7 +43,61 @@ class BookingController extends Controller
             return null;
         }
 
+        if ($this->svpTokenExpired($token)) {
+            $this->forgetSvpSession($request);
+            return null;
+        }
+
         return $token;
+    }
+
+    private function svpTokenExpired(string $token): bool
+    {
+        $parts = explode('.', $token);
+        if (count($parts) < 2) {
+            return false;
+        }
+
+        $payload = json_decode($this->decodeJwtPart($parts[1]), true);
+        if (! is_array($payload) || ! is_numeric($payload['exp'] ?? null)) {
+            return false;
+        }
+
+        return (int) $payload['exp'] <= now()->timestamp;
+    }
+
+    private function decodeJwtPart(string $part): string
+    {
+        $part = strtr($part, '-_', '+/');
+        $padding = strlen($part) % 4;
+        if ($padding > 0) {
+            $part .= str_repeat('=', 4 - $padding);
+        }
+
+        $decoded = base64_decode($part, true);
+
+        return is_string($decoded) ? $decoded : '';
+    }
+
+    private function forgetSvpSession(Request $request): void
+    {
+        $request->session()->forget(['svp_token', 'svp_csrf', 'svp_login', 'svp_user_id']);
+    }
+
+    private function expiredSvpResponse(Request $request, mixed $response)
+    {
+        if ($response->getStatusCode() !== 401) {
+            return response()->json($response->getData(true), $response->getStatusCode());
+        }
+
+        $this->forgetSvpSession($request);
+
+        return response()->json([
+            'success' => false,
+            'requires_svp_login' => true,
+            'login_url' => route('svp.login.form', ['force' => 1]),
+            'error' => 'Your SVP session has expired. Sign in with SVP again, then retry the lookup.',
+        ], 401);
     }
 
     /**
@@ -627,7 +685,7 @@ class BookingController extends Controller
 
         try {
             $response = $this->booking->cities($token, $request->query('category_id'));
-            return response()->json($response->getData(true), $response->getStatusCode());
+            return $this->expiredSvpResponse($request, $response);
         } catch (\Throwable $e) {
             Log::error('SVP lookup cities failed', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Unable to fetch cities.'], 503);
@@ -645,7 +703,7 @@ class BookingController extends Controller
 
         try {
             $response = $this->booking->categoriesForOccupation($token, $request->query('occupation_id'));
-            return response()->json($response->getData(true), $response->getStatusCode());
+            return $this->expiredSvpResponse($request, $response);
         } catch (\Throwable $e) {
             Log::error('SVP lookup categories failed', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Unable to fetch categories.'], 503);
@@ -671,7 +729,7 @@ class BookingController extends Controller
                 (int) ($request->query('page') ?? 1),
                 1000
             );
-            return response()->json($response->getData(true), $response->getStatusCode());
+            return $this->expiredSvpResponse($request, $response);
         } catch (\Throwable $e) {
             Log::error('SVP lookup occupations failed', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Unable to fetch occupations.'], 503);
@@ -692,7 +750,7 @@ class BookingController extends Controller
 
         try {
             $response = $this->booking->testCenters($token, $request->query('city'), $request->query('category_id'));
-            return response()->json($response->getData(true), $response->getStatusCode());
+            return $this->expiredSvpResponse($request, $response);
         } catch (\Throwable $e) {
             Log::error('SVP lookup test-centers failed', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Unable to fetch test centers.'], 503);
@@ -721,6 +779,9 @@ class BookingController extends Controller
 
         try {
             $response = $this->booking->sessionsForCenter($token, $params);
+            if ($response->getStatusCode() === 401) {
+                return $this->expiredSvpResponse($request, $response);
+            }
             $payload = $response->getData(true);
 
             $this->holds->rememberSessionLookup($request, [
@@ -796,7 +857,7 @@ class BookingController extends Controller
                 $sessionId,
                 $request->only(['category_id', 'city'])
             );
-            return response()->json($response->getData(true), $response->getStatusCode());
+            return $this->expiredSvpResponse($request, $response);
         } catch (\Throwable $e) {
             Log::error('SVP availableDates failed', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Unable to fetch dates.'], 503);

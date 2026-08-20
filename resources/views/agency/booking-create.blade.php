@@ -580,11 +580,16 @@
 
         async function fetchJSON(url) {
             const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error('HTTP ' + response.status + ': ' + text);
+            const body = await response.json().catch(() => ({}));
+            if (response.status === 401) {
+                const loginUrl = body.login_url || "{{ route('svp.login.form', ['force' => 1]) }}";
+                window.location.assign(loginUrl);
+                throw new Error(body.error || 'Your SVP session has expired. Please sign in again.');
             }
-            return response.json();
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status + ': ' + (body.error || body.message || 'SVP lookup failed.'));
+            }
+            return body;
         }
 
         function normalizeOccupationRecord(item) {

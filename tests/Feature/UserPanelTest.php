@@ -368,4 +368,24 @@ class UserPanelTest extends TestCase
 
         $this->get(route('user.bookings.create'))->assertRedirect(route('svp.login.form'));
     }
+
+    public function test_agency_booking_create_clears_expired_svp_jwt_and_redirects_to_login(): void
+    {
+        $this->loginAgencyUser();
+
+        $encode = static function (array $payload): string {
+            $json = json_encode($payload, JSON_THROW_ON_ERROR);
+            $encoded = rtrim(strtr(base64_encode($json), '+/', '-_'), '=');
+
+            return $encoded;
+        };
+        $expiredToken = $encode(['alg' => 'HS256', 'typ' => 'JWT']).'.'
+            .$encode(['exp' => time() - 60, 'user_id' => 1195959]).'.signature';
+
+        $response = $this->withSession(['svp_token' => $expiredToken])
+            ->get(route('agency.bookings.create'));
+
+        $response->assertRedirect(route('svp.login.form'));
+        $this->assertNull(session('svp_token'));
+    }
 }
