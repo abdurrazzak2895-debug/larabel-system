@@ -834,14 +834,19 @@
                 const params = new URLSearchParams({city: city, category_id: categoryId, test_center_id: testCenterId});
                 const data = await fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString());
                 const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
-                availableDateCatalog = data?.data?.available_dates || data?.available_dates || [];
+                const availableDates = data?.data?.available_dates || data?.available_dates || data?.meta?.available_dates || [];
+                sessionCatalog = [];
+                availableDateCatalog = availableDates;
                 mergeSessionCatalog(sessions);
                 const dates = renderAvailableDates(sessionCatalog, availableDateCatalog);
-                renderSessionsForDate('');
                 if (dates.length) {
                     availableDateSelect.value = dates[0];
                     dateInput.value = dates[0];
+                    renderSessionsForDate(dates[0]);
                     await loadSessionsForDate(dates[0]);
+                } else {
+                    renderSessionsForDate('');
+                    if (temporaryHoldStatus) temporaryHoldStatus.textContent = 'No exam sessions or available dates returned for the selected test center.';
                 }
             } catch (e) {
                 console.error(e);
