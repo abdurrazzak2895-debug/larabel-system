@@ -254,11 +254,16 @@ class TakamolProviderLookupTest extends TestCase
 
             return Http::response([
                 'data' => [
-                    'exam_sessions' => [[
-                        'id' => 'session-explicit-2026-08-19',
-                        'exam_date' => $query['exam_date'] ?? null,
-                        'test_center_id' => '17',
-                    ]],
+                    'exam_sessions' => [
+                        [
+                            'id' => 'session-explicit-2026-08-19-first',
+                            'test_center_id' => '17',
+                        ],
+                        [
+                            'id' => 'session-explicit-2026-08-19-second',
+                            'test_center_id' => '17',
+                        ],
+                    ],
                 ],
             ], 200);
         });
@@ -270,9 +275,18 @@ class TakamolProviderLookupTest extends TestCase
             'exam_date' => '2026-08-19',
         ])->getData(true);
 
-        $this->assertSame('session-explicit-2026-08-19', $payload['data']['sessions'][0]['id']);
-        $this->assertSame('2026-08-19', $payload['data']['sessions'][0]['exam_date']);
-        $this->assertSame('17', $payload['data']['sessions'][0]['test_center_id']);
+        $this->assertSame(
+            ['session-explicit-2026-08-19-first', 'session-explicit-2026-08-19-second'],
+            array_column($payload['data']['sessions'], 'id'),
+        );
+        $this->assertSame(
+            ['2026-08-19', '2026-08-19'],
+            array_column($payload['data']['sessions'], 'exam_date'),
+        );
+        $this->assertSame(
+            ['17', '17'],
+            array_column($payload['data']['sessions'], 'test_center_id'),
+        );
         Http::assertNotSent(function ($request): bool {
             return str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/exam_sessions/available_dates');
         });
@@ -281,7 +295,7 @@ class TakamolProviderLookupTest extends TestCase
     public function test_center_session_lookup_backfills_dates_missing_from_available_metadata(): void
     {
         config()->set('svp.session_date_probe_backfill_days', 14);
-        $validDates = ['2026-08-19', '2026-08-20', '2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25'];
+        $validDates = ['2026-08-20', '2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25'];
 
         Http::fake(function ($request) use ($validDates) {
             $path = (string) parse_url($request->url(), PHP_URL_PATH);
@@ -333,7 +347,7 @@ class TakamolProviderLookupTest extends TestCase
 
             return str_ends_with($path, '/exam_sessions')
                 && ! str_ends_with($path, '/available_dates')
-                && in_array($query['exam_date'] ?? null, ['2026-08-19', '2026-08-20', '2026-08-22', '2026-08-23', '2026-08-24'], true)
+                && in_array($query['exam_date'] ?? null, ['2026-08-20', '2026-08-22', '2026-08-23', '2026-08-24'], true)
                 && ($query['test_center_id'] ?? null) === '17'
                 && ($query['available_seats'] ?? null) === 'greater_than::0';
         });

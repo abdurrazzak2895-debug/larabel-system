@@ -165,8 +165,25 @@ class TakamolProvider implements BookingProviderInterface
         }
 
         $requestedCenterId = isset($params['test_center_id']) ? (string) $params['test_center_id'] : null;
+        $requestedDate = isset($params['exam_date']) && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', (string) $params['exam_date']) === 1
+            ? (string) $params['exam_date']
+            : null;
         $sessions = array_map(
-            static fn ($node): array => is_array($node) ? self::formatSessionName($node) : ['id' => (string) $node, 'name' => (string) $node],
+            static function ($node) use ($requestedDate): array {
+                $session = is_array($node)
+                    ? self::formatSessionName($node)
+                    : ['id' => (string) $node, 'name' => (string) $node];
+
+                // Exact-date SVP responses may return opaque session rows with
+                // no date field. The requested date is authoritative in that
+                // response shape, so annotate the row for the date-first UI and
+                // for temporary-hold matching without overwriting a real date.
+                if ($requestedDate !== null && (string) ($session['exam_date'] ?? '') === '') {
+                    $session['exam_date'] = $requestedDate;
+                }
+
+                return $session;
+            },
             $sessions
         );
 
