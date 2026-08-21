@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\AgencyController;
 use App\Http\Controllers\Admin\TestCenterController;
+use App\Http\Controllers\Admin\SvpAvailabilityAccountController;
 use App\Http\Controllers\Agency\DashboardController as AgencyDashboardController;
 use App\Http\Controllers\Agency\DepositController as AgencyDepositController;
 use App\Http\Controllers\Agency\NotificationController as AgencyNotificationController;
@@ -113,6 +114,15 @@ Route::middleware('web')->group(function () {
     Route::prefix('test-centers')->name('test-centers.')->group(function () {
         Route::get('/', [TestCenterController::class, 'index'])->name('index');
         Route::post('/sync', [TestCenterController::class, 'sync'])->name('sync');
+    });
+
+    // Backend-managed SVP availability accounts (read-only availability only)
+    Route::prefix('svp-availability-accounts')->name('svp-availability-accounts.')->group(function () {
+        Route::get('/', [SvpAvailabilityAccountController::class, 'index'])->name('index');
+        Route::post('/', [SvpAvailabilityAccountController::class, 'store'])->name('store');
+        Route::post('/{account}/token', [SvpAvailabilityAccountController::class, 'seedToken'])->name('token');
+        Route::post('/{account}/activate', [SvpAvailabilityAccountController::class, 'activate'])->name('activate');
+        Route::post('/{account}/deactivate', [SvpAvailabilityAccountController::class, 'deactivate'])->name('deactivate');
     });
 
     // Settings
