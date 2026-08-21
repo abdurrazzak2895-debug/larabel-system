@@ -252,6 +252,51 @@ class SvpSessionCenterVerificationTest extends TestCase
             ->assertJsonPath('actual.city', 'Rajshahi');
     }
 
+    public function test_verifier_accepts_exact_center_name_when_svp_omits_center_id(): void
+    {
+        $agency = Agency::create([
+            'name' => 'Patuakhali Verification Agency',
+            'code' => 'SVERIFY7',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        Auth::guard('web')->login($user);
+
+        $service = $this->mock(BookingService::class);
+        $service->shouldReceive('examSession')
+            ->once()
+            ->with('test-token', 'opaque-session-patuakhali')
+            ->andReturn(response()->json([
+                'data' => [
+                    'attributes' => [
+                        'id' => 'opaque-session-patuakhali',
+                        'date' => '2026-08-30',
+                        'site' => [
+                            'data' => [
+                                'attributes' => [
+                                    'name' => 'Patuakhali Technical Training Centre',
+                                    'city' => 'Patuakhali',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200));
+
+        $result = app(SvpSessionVerifier::class)->verify(
+            'test-token',
+            'opaque-session-patuakhali',
+            '999',
+            'Patuakhali',
+            '2026-08-30',
+            'Patuakhali Technical Training Centre',
+        );
+
+        $this->assertTrue($result['verified']);
+        $this->assertTrue($result['checks']['center_match']);
+        $this->assertSame('Patuakhali Technical Training Centre', $result['actual']['test_center_name']);
+    }
+
     public function test_verification_does_not_claim_success_when_session_has_no_center_metadata(): void
     {
         $agency = Agency::create([

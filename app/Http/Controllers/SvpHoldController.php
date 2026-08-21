@@ -95,6 +95,7 @@ class SvpHoldController extends Controller
                 (string) $data['test_center_id'],
                 (string) $data['city'],
                 $selectedSessionDate,
+                (string) ($data['test_center_name'] ?? ''),
             );
 
             if (! $verification['success']) {
