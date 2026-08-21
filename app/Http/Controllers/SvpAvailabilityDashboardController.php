@@ -47,8 +47,20 @@ class SvpAvailabilityDashboardController extends Controller
     private function extractFilterList(array $payload, array $keys): array
     {
         foreach ($keys as $key) {
-            if (isset($payload[$key]) && is_array($payload[$key])) {
-                return array_values($payload[$key]);
+            $value = $payload[$key] ?? null;
+            if (! is_array($value)) {
+                continue;
+            }
+
+            if (array_is_list($value)) {
+                return array_values($value);
+            }
+
+            foreach (['cities', 'categories', 'data', 'items', 'results'] as $nestedKey) {
+                $nested = $value[$nestedKey] ?? null;
+                if (is_array($nested) && array_is_list($nested)) {
+                    return array_values($nested);
+                }
             }
         }
 

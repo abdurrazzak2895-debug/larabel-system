@@ -212,6 +212,46 @@ class SvpSessionCenterVerificationTest extends TestCase
         }
     }
 
+    public function test_verifier_accepts_direct_data_list_session_with_center_metadata(): void
+    {
+        $agency = Agency::create([
+            'name' => 'Direct List Agency',
+            'code' => 'SVERIFY6',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        Auth::guard('web')->login($user);
+
+        $service = $this->mock(BookingService::class);
+        $service->shouldReceive('examSession')
+            ->once()
+            ->with('test-token', 'opaque-session-rajshahi')
+            ->andReturn(response()->json([
+                'data' => [[
+                    'id' => 'opaque-session-rajshahi',
+                    'testCenterId' => 45,
+                    'testCenterName' => 'Rajshahi Technical Training Centre',
+                    'testCenterCity' => 'Rajshahi',
+                    'date' => '2026-08-30',
+                ]],
+            ], 200));
+
+        $response = $this->withSession(['svp_token' => 'test-token'])
+            ->getJson(route('agency.bookings.lookup.verify-session-center', [
+                'exam_session_id' => 'opaque-session-rajshahi',
+                'expected_test_center_id' => '45',
+                'expected_city' => 'Rajshahi',
+                'expected_exam_date' => '2026-08-30',
+            ]));
+
+        $response->assertOk()
+            ->assertJsonPath('verified', true)
+            ->assertJsonPath('checks.center_match', true)
+            ->assertJsonPath('actual.test_center_id', '45')
+            ->assertJsonPath('actual.test_center_name', 'Rajshahi Technical Training Centre')
+            ->assertJsonPath('actual.city', 'Rajshahi');
+    }
+
     public function test_verification_does_not_claim_success_when_session_has_no_center_metadata(): void
     {
         $agency = Agency::create([
