@@ -862,6 +862,10 @@ class TakamolProvider implements BookingProviderInterface
             $params['category_id'] = $categoryId;
         }
 
+        if ($city !== null && trim($city) !== '') {
+            $params['city'] = trim($city);
+        }
+
         $response = $this->dispatch('GET', '/visitor_space/test_centers', $params);
         $payload = json_decode($response->getContent(), true);
         $rawCenters = is_array($payload)

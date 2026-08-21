@@ -495,7 +495,8 @@ class TakamolProviderLookupTest extends TestCase
 
             return str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/v1/visitor_space/test_centers')
                 && (int) ($query['country_id'] ?? 0) === 78
-                && ($query['category_id'] ?? null) === 'category-4';
+                && ($query['category_id'] ?? null) === 'category-4'
+                && ($query['city'] ?? null) === 'Dhaka';
         });
     }
 
