@@ -120,7 +120,8 @@ class SvpAvailabilityDashboardController extends Controller
             $cacheKey,
             now()->addSeconds(max(1, (int) config('svp.availability_city_cache_ttl', 900))),
             function () use ($tokens, $categoryId): array {
-                foreach ($tokens as $token) {
+                $attemptLimit = max(1, (int) config('svp.availability_account_attempts', 3));
+                foreach (array_slice($tokens, 0, $attemptLimit) as $token) {
                     try {
                         $response = $this->booking->availabilityCities($token, $categoryId);
                         if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {

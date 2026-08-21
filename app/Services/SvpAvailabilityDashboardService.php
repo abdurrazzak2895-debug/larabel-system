@@ -165,7 +165,8 @@ class SvpAvailabilityDashboardService
         string $date,
         string $centerName,
     ): array {
-        foreach ($tokens as $token) {
+        $attemptLimit = max(1, (int) config('svp.availability_account_attempts', 3));
+        foreach (array_slice($tokens, 0, $attemptLimit) as $token) {
             try {
                 $verification = $this->verifier->verifyAvailability(
                     $token,
@@ -191,7 +192,8 @@ class SvpAvailabilityDashboardService
      */
     private function firstSuccessfulResponse(array $tokens, callable $request): mixed
     {
-        foreach ($tokens as $token) {
+        $attemptLimit = max(1, (int) config('svp.availability_account_attempts', 3));
+        foreach (array_slice($tokens, 0, $attemptLimit) as $token) {
             try {
                 $response = $request($token);
                 if (is_object($response) && method_exists($response, 'getStatusCode') && $response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {

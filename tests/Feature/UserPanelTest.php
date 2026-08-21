@@ -469,6 +469,37 @@ class UserPanelTest extends TestCase
         Http::assertSent(fn ($request): bool => $request->header('Authorization')[0] === 'Bearer backend-city-token');
     }
 
+    public function test_cached_city_endpoint_caps_backend_account_failover_attempts(): void
+    {
+        config(['svp.availability_account_attempts' => 2]);
+
+        foreach (['city-timeout-primary@example.com', 'city-timeout-secondary@example.com', 'city-timeout-third@example.com'] as $index => $email) {
+            SvpAvailabilityAccount::create([
+                'name' => 'City timeout account '.$index,
+                'email' => $email,
+                'access_token' => 'city-timeout-token-'.$index,
+                'active' => true,
+            ]);
+        }
+
+        Http::fake(function ($request) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/individual_labor_space/test_centers/cities')) {
+                return Http::response(['message' => 'upstream unavailable'], 503);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $this->loginAgencyUser();
+        $response = $this->withSession(['svp_token' => 'portal-user-token'])
+            ->getJson(route('svp.availability.cities', ['category_id' => '159']));
+
+        $response->assertStatus(504)
+            ->assertJsonPath('success', false);
+        Http::assertSentCount(2);
+        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer portal-user-token');
+    }
+
     public function test_verified_availability_rotates_backend_accounts_and_filters_unverified_sessions(): void
     {
         $primary = SvpAvailabilityAccount::create([

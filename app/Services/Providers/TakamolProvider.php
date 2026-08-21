@@ -73,7 +73,8 @@ class TakamolProvider implements BookingProviderInterface
     {
         $clone = clone $this;
         $clone->client = $clone->client
-            ->timeout(max(1, (int) config('svp.availability_timeout', 8)))
+            ->connectTimeout(max(1, (int) config('svp.availability_connect_timeout', 2)))
+            ->timeout(max(1, (int) config('svp.availability_timeout', 5)))
             ->retry(0, 0);
 
         return $clone;
