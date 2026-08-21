@@ -28,7 +28,7 @@ class SvpAvailabilityDashboardService
         ]));
 
         return Cache::remember($cacheKey, now()->addSeconds((int) config('svp.availability_cache_ttl', 20)), function () use ($token, $categoryId, $city, $date): array {
-            $centerResponse = $this->booking->testCenters($token, $city, $categoryId);
+            $centerResponse = $this->booking->availabilityTestCenters($token, $city, $categoryId);
             $centersPayload = $centerResponse->getData(true);
             $centers = $this->extractList($centersPayload, ['test_centers', 'centers']);
 
@@ -44,7 +44,7 @@ class SvpAvailabilityDashboardService
                     continue;
                 }
 
-                $sessionResponse = $this->booking->sessionsForCenter($token, array_filter([
+                $sessionResponse = $this->booking->availabilitySessionsForCenter($token, array_filter([
                     'category_id' => $categoryId,
                     'city' => $city,
                     'test_center_id' => $centerId,

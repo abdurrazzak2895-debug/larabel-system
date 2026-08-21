@@ -54,6 +54,9 @@ Route::middleware('web')->group(function () {
     Route::post('/svp/otp/verify', [SvpLoginController::class, 'verifyOtp'])->name('svp.otp.verify');
     Route::post('/svp/otp/resend', [SvpLoginController::class, 'resendOtp'])->name('svp.otp.resend');
 
+    Route::get('/availability/cities', [SvpAvailabilityDashboardController::class, 'cities'])
+        ->middleware('auth.multi')
+        ->name('svp.availability.cities');
     Route::get('/availability', [SvpAvailabilityDashboardController::class, 'index'])
         ->middleware('auth.multi')
         ->name('svp.availability');

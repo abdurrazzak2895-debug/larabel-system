@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Booking;
 use App\Models\Candidate;
 use App\Models\Setting;
+use App\Models\SvpAvailabilityAccount;
 use App\Models\User;
 use App\Services\WalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -404,8 +405,15 @@ class UserPanelTest extends TestCase
             return Http::response([], 404);
         });
 
+        SvpAvailabilityAccount::create([
+            'name' => 'Backend availability account',
+            'email' => 'backend-availability@example.com',
+            'access_token' => 'backend-svp-token',
+            'active' => true,
+        ]);
+
         $this->loginAgencyUser();
-        $response = $this->withSession(['svp_token' => 'test-svp-token'])
+        $response = $this->withSession(['svp_token' => 'portal-user-token'])
             ->getJson(route('svp.availability', [
                 'category_id' => '159',
                 'city' => 'Dhaka',
@@ -414,10 +422,39 @@ class UserPanelTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('filters.cities.0.name', 'Dhaka')
             ->assertJsonPath('data.rows.0.center_id', '45')
             ->assertJsonPath('data.rows.0.center_name', 'Bangladesh German TTC')
             ->assertJsonPath('data.rows.0.session_count', 1);
+
+        Http::assertSent(fn ($request): bool => str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/individual_labor_space/test_centers/cities')
+            && $request->header('Authorization')[0] === 'Bearer backend-svp-token');
+    }
+
+    public function test_cached_city_endpoint_uses_backend_token_and_avoids_duplicate_upstream_calls(): void
+    {
+        SvpAvailabilityAccount::create([
+            'name' => 'City cache account',
+            'email' => 'city-cache@example.com',
+            'access_token' => 'backend-city-token',
+            'active' => true,
+        ]);
+
+        Http::fake([
+            '*individual_labor_space/test_centers/cities*' => Http::response([
+                'data' => [['id' => 'Dhaka', 'name' => 'Dhaka'], ['id' => 'Rajshahi', 'name' => 'Rajshahi']],
+            ], 200),
+        ]);
+
+        $this->loginAgencyUser();
+        $first = $this->withSession(['svp_token' => 'portal-user-token'])
+            ->getJson(route('svp.availability.cities', ['category_id' => '159']));
+        $second = $this->withSession(['svp_token' => 'another-portal-token'])
+            ->getJson(route('svp.availability.cities', ['category_id' => '159']));
+
+        $first->assertOk()->assertJsonPath('success', true)->assertJsonPath('data.0.name', 'Dhaka');
+        $second->assertOk()->assertJsonPath('success', true)->assertJsonPath('data.1.name', 'Rajshahi');
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => $request->header('Authorization')[0] === 'Bearer backend-city-token');
     }
 
     public function test_guest_is_redirected_to_login_from_user_panel(): void

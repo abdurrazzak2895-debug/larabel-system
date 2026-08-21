@@ -51,6 +51,13 @@ class BookingService
     public function cities(string $token, ?string $categoryId = null) { return $this->provider->withToken($token)->cities($categoryId); }
     public function testCenters(string $token, ?string $city = null, ?string $categoryId = null) { return $this->provider->withToken($token)->testCentersForFilters($city, $categoryId); }
     public function categories(string $token) { return $this->provider->withToken($token)->categories(); }
+
+    /** Read-only availability lookups use the backend token and bounded upstream I/O. */
+    public function availabilityCategories(string $token) { return $this->provider->withToken($token)->forAvailability()->categories(); }
+    public function availabilityCities(string $token, ?string $categoryId = null) { return $this->provider->withToken($token)->forAvailability()->cities($categoryId); }
+    public function availabilityTestCenters(string $token, ?string $city = null, ?string $categoryId = null) { return $this->provider->withToken($token)->forAvailability()->testCentersForFilters($city, $categoryId); }
+    public function availabilitySessionsForCenter(string $token, array $params = []) { return $this->provider->withToken($token)->forAvailability()->examSessionsForCenter($params); }
+
     public function countries(string $token) { return $this->provider->withToken($token)->countries(); }
     public function categoriesForOccupation(string $token, ?string $occupationId = null) { return $this->provider->withToken($token)->categoriesForOccupation($occupationId); }
     public function examConstraints(string $token) { return $this->provider->withToken($token)->examConstraints(); }

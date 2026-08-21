@@ -109,8 +109,39 @@
             </section>`).join('');
     }
 
-    async function refresh() {
+    async function loadCities() {
         if (!category.value) {
+            city.disabled = true;
+            city.innerHTML = '<option value="">Select category first</option>';
+            return;
+        }
+
+        controller?.abort();
+        controller = new AbortController();
+        city.disabled = true;
+        city.innerHTML = '<option value="">Loading cities…</option>';
+        results.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-600">Select a city to check availability.</div>';
+
+        try {
+            const params = new URLSearchParams({category_id: category.value});
+            const response = await fetch(`{{ route('svp.availability.cities') }}?${params}`, {headers: {Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, signal: controller.signal});
+            const payload = await response.json();
+            if (!response.ok || payload.success !== true) throw new Error(payload.message || 'City lookup failed.');
+            const cities = payload.data ?? [];
+            city.innerHTML = '<option value="">Select city</option>' + cities.map(item => { const value = cityName(item); return `<option value="${esc(value)}">${esc(value)}</option>`; }).join('');
+            city.disabled = cities.length === 0;
+            if (!cities.length) results.innerHTML = '<div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">No cities are currently available for this category.</div>';
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                city.innerHTML = '<option value="">City lookup unavailable</option>';
+                city.disabled = true;
+                results.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-800">${esc(error.message)}</div>`;
+            }
+        }
+    }
+
+    async function refresh() {
+        if (!category.value || !city.value) {
             results.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-600">Select a category and city to check availability.</div>';
             return;
         }
@@ -125,17 +156,7 @@
             const response = await fetch(`${form.action}?${params}`, {headers: {Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, signal: controller.signal});
             const payload = await response.json();
             if (!response.ok || payload.success !== true) throw new Error(payload.message || 'Availability request failed.');
-            if (!city.value) {
-                results.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-600">Select a city to check availability.</div>';
-            } else {
-                renderRows(payload.data);
-            }
-            const cities = payload.filters?.cities ?? [];
-            if (cities.length) {
-                const selected = city.value;
-                city.innerHTML = '<option value="">Select city</option>' + cities.map(item => { const value = cityName(item); return `<option value="${esc(value)}">${esc(value)}</option>`; }).join('');
-                city.value = selected;
-            }
+            renderRows(payload.data);
         } catch (error) {
             if (error.name !== 'AbortError') results.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-800">${esc(error.message)}</div>`;
         } finally {
@@ -145,7 +166,7 @@
     }
 
     function schedule() { clearTimeout(timer); timer = setTimeout(refresh, 350); }
-    category.addEventListener('change', () => { city.value = ''; schedule(); });
+    category.addEventListener('change', () => { city.value = ''; loadCities(); });
     city.addEventListener('change', schedule);
     date.addEventListener('change', schedule);
     form.addEventListener('submit', event => { event.preventDefault(); refresh(); });
