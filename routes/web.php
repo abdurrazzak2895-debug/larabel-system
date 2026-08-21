@@ -23,6 +23,7 @@ use App\Http\Controllers\AgencyPanelController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SvpLoginController;
 use App\Http\Controllers\SvpSessionVerificationController;
+use App\Http\Controllers\SvpAvailabilityDashboardController;
 use App\Http\Controllers\User\BookingController as UserBookingController;
 use App\Http\Controllers\User\DashboardController as UserDashboardController;
 use App\Http\Controllers\User\DepositController as UserDepositController;
@@ -51,6 +52,10 @@ Route::middleware('web')->group(function () {
     Route::get('/svp/otp', [SvpLoginController::class, 'showOtpForm'])->name('svp.otp.form');
     Route::post('/svp/otp/verify', [SvpLoginController::class, 'verifyOtp'])->name('svp.otp.verify');
     Route::post('/svp/otp/resend', [SvpLoginController::class, 'resendOtp'])->name('svp.otp.resend');
+
+    Route::get('/availability', [SvpAvailabilityDashboardController::class, 'index'])
+        ->middleware('auth.multi')
+        ->name('svp.availability');
 
     // -------------------------------
     // Super Admin panel

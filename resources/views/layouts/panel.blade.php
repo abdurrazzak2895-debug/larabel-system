@@ -91,6 +91,7 @@
                 <div class="space-y-1">
                     {!! $__navLink('Dashboard', 'user.dashboard', $__routeName === 'user.dashboard', 'home') !!}
                     {!! $__navLink('My Bookings', 'user.bookings.index', str_starts_with((string) $__routeName, 'user.bookings'), 'calendar') !!}
+                    {!! $__navLink('Availability', 'svp.availability', $__routeName === 'svp.availability', 'calendar') !!}
                     {!! $__navLink('Wallet', 'user.wallets.index', str_starts_with((string) $__routeName, 'user.wallets'), 'wallet') !!}
                     {!! $__navLink('Deposits', 'user.deposits.index', str_starts_with((string) $__routeName, 'user.deposits'), 'banknotes') !!}
                     {!! $__navLink('Refunds', 'user.refunds.index', str_starts_with((string) $__routeName, 'user.refunds'), 'rotate') !!}

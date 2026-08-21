@@ -380,7 +380,7 @@ class TakamolProviderLookupTest extends TestCase
     public function test_center_session_lookup_backfills_dates_missing_from_available_metadata(): void
     {
         config()->set('svp.session_date_probe_backfill_days', 14);
-        $validDates = ['2026-08-20', '2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25'];
+        $validDates = ['2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25'];
 
         Http::fake(function ($request) use ($validDates) {
             $path = (string) parse_url($request->url(), PHP_URL_PATH);
@@ -432,7 +432,7 @@ class TakamolProviderLookupTest extends TestCase
 
             return str_ends_with($path, '/exam_sessions')
                 && ! str_ends_with($path, '/available_dates')
-                && in_array($query['exam_date'] ?? null, ['2026-08-20', '2026-08-22', '2026-08-23', '2026-08-24'], true)
+                && in_array($query['exam_date'] ?? null, ['2026-08-22', '2026-08-23', '2026-08-24'], true)
                 && ($query['test_center_id'] ?? null) === '17'
                 && ($query['available_seats'] ?? null) === 'greater_than::0';
         });
