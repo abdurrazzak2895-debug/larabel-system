@@ -57,6 +57,7 @@ class BookingService
     public function availabilityCities(string $token, ?string $categoryId = null) { return $this->provider->withToken($token)->forAvailability()->cities($categoryId); }
     public function availabilityTestCenters(string $token, ?string $city = null, ?string $categoryId = null) { return $this->provider->withToken($token)->forAvailability()->testCentersForFilters($city, $categoryId); }
     public function availabilitySessionsForCenter(string $token, array $params = []) { return $this->provider->withToken($token)->forAvailability()->examSessionsForCenter($params); }
+    public function availabilityExamSession(string $token, string $id) { return $this->provider->withToken($token)->forAvailability()->examSession($id); }
 
     public function countries(string $token) { return $this->provider->withToken($token)->countries(); }
     public function categoriesForOccupation(string $token, ?string $occupationId = null) { return $this->provider->withToken($token)->categoriesForOccupation($occupationId); }

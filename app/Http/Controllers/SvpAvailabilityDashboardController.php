@@ -20,24 +20,25 @@ class SvpAvailabilityDashboardController extends Controller
 
     public function index(Request $request)
     {
-        $token = $this->resolveAvailabilityToken();
+        $tokens = $this->resolveAvailabilityTokens();
+        $token = $tokens[0] ?? null;
         $categoryId = trim((string) $request->query('category_id', ''));
         $city = trim((string) $request->query('city', ''));
         $date = $request->query('date');
         $categories = $token && ! $request->expectsJson()
             ? $this->booking->availabilityCategories($token)->getData(true)
             : [];
-        $cities = $token && $categoryId !== '' ? $this->cachedCities($token, $categoryId) : [];
+        $cities = $tokens !== [] && $categoryId !== '' ? $this->cachedCities($tokens, $categoryId) : [];
         $result = ['rows' => [], 'fetched_at' => null];
 
         // Never start the expensive center/session fan-out until the user has
         // selected a city. Category changes use the dedicated cached endpoint.
-        if ($token && $categoryId !== '' && $city !== '') {
-            $result = $this->availability->lookup($token, $categoryId, $city, is_string($date) ? $date : null);
+        if ($tokens !== [] && $categoryId !== '' && $city !== '') {
+            $result = $this->availability->lookup($tokens, $categoryId, $city, is_string($date) ? $date : null);
         }
 
         if ($request->expectsJson()) {
-            if (! $token) {
+            if ($tokens === []) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No usable backend SVP availability account is configured.',
@@ -64,7 +65,8 @@ class SvpAvailabilityDashboardController extends Controller
             ], 422);
         }
 
-        $token = $this->resolveAvailabilityToken();
+        $tokens = $this->resolveAvailabilityTokens();
+        $token = $tokens[0] ?? null;
         if (! $token) {
             return response()->json([
                 'success' => false,
@@ -73,7 +75,7 @@ class SvpAvailabilityDashboardController extends Controller
         }
 
         try {
-            $cities = $this->cachedCities($token, $categoryId);
+            $cities = $this->cachedCities($tokens, $categoryId);
 
             return response()->json([
                 'success' => true,
@@ -90,21 +92,26 @@ class SvpAvailabilityDashboardController extends Controller
         }
     }
 
-    private function resolveAvailabilityToken(): ?string
+    /** @return array<int, string> */
+    private function resolveAvailabilityTokens(): array
     {
         try {
             // Deliberately do not read the authenticated portal user session here.
-            return $this->tokens->resolve();
+            return $this->tokens->resolvePool();
         } catch (\Throwable $exception) {
             report($exception);
 
-            return null;
+            return [];
         }
     }
 
-    private function cachedCities(string $token, string $categoryId): array
+    /**
+     * @param array<int, string> $tokens
+     * @return array<string, mixed>
+     */
+    private function cachedCities(array $tokens, string $categoryId): array
     {
-        $cacheKey = 'svp:availability:cities:'.sha1(json_encode([
+        $cacheKey = 'svp:availability:cities:v2:'.sha1(json_encode([
             'category_id' => $categoryId,
             'country_id' => config('svp.country_id', 78),
         ]));
@@ -112,7 +119,20 @@ class SvpAvailabilityDashboardController extends Controller
         return Cache::remember(
             $cacheKey,
             now()->addSeconds(max(1, (int) config('svp.availability_city_cache_ttl', 900))),
-            fn (): array => $this->booking->availabilityCities($token, $categoryId)->getData(true)
+            function () use ($tokens, $categoryId): array {
+                foreach ($tokens as $token) {
+                    try {
+                        $response = $this->booking->availabilityCities($token, $categoryId);
+                        if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
+                            return $response->getData(true);
+                        }
+                    } catch (\Throwable $exception) {
+                        report($exception);
+                    }
+                }
+
+                throw new \RuntimeException('All backend SVP city lookup accounts failed.');
+            }
         );
     }
 

@@ -7,7 +7,10 @@ use Illuminate\Support\Str;
 
 class SvpAvailabilityDashboardService
 {
-    public function __construct(private BookingService $booking) {}
+    public function __construct(
+        private BookingService $booking,
+        private SvpSessionVerifier $verifier,
+    ) {}
 
     /**
      * Aggregate read-only SVP session availability by date and center.
@@ -15,25 +18,40 @@ class SvpAvailabilityDashboardService
      *
      * @return array{rows: array<int, array<string, mixed>>, fetched_at: string}
      */
-    public function lookup(string $token, string $categoryId, string $city, ?string $date = null): array
+    /**
+     * @param array<int, string>|string $tokens Backend-managed SVP tokens only.
+     */
+    public function lookup(array|string $tokens, string $categoryId, string $city, ?string $date = null): array
     {
+        $tokens = is_array($tokens) ? array_values(array_filter($tokens, static fn ($token): bool => is_string($token) && trim($token) !== '')) : [trim($tokens)];
         $categoryId = trim($categoryId);
         $city = trim($city);
         $date = $date && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : null;
 
-        $cacheKey = 'svp:availability-dashboard:'.sha1(json_encode([
+        $cacheKey = 'svp:availability-dashboard:v2:'.sha1(json_encode([
             'category_id' => $categoryId,
             'city' => Str::lower($city),
             'date' => $date,
         ]));
 
-        return Cache::remember($cacheKey, now()->addSeconds((int) config('svp.availability_cache_ttl', 20)), function () use ($token, $categoryId, $city, $date): array {
-            $centerResponse = $this->booking->availabilityTestCenters($token, $city, $categoryId);
+        return Cache::remember($cacheKey, now()->addSeconds((int) config('svp.availability_cache_ttl', 20)), function () use ($tokens, $categoryId, $city, $date): array {
+            if ($tokens === []) {
+                return ['rows' => [], 'fetched_at' => now()->toIso8601String()];
+            }
+
+            $centerResponse = $this->firstSuccessfulResponse(
+                $tokens,
+                fn (string $token) => $this->booking->availabilityTestCenters($token, $city, $categoryId),
+            );
+            if ($centerResponse === null) {
+                return ['rows' => [], 'fetched_at' => now()->toIso8601String(), 'verified_only' => true];
+            }
+
             $centersPayload = $centerResponse->getData(true);
             $centers = $this->extractList($centersPayload, ['test_centers', 'centers']);
 
             $rows = [];
-            foreach ($centers as $center) {
+            foreach ($centers as $centerIndex => $center) {
                 if (! is_array($center)) {
                     continue;
                 }
@@ -44,16 +62,20 @@ class SvpAvailabilityDashboardService
                     continue;
                 }
 
-                $sessionResponse = $this->booking->availabilitySessionsForCenter($token, array_filter([
+                $sessionParameters = array_filter([
                     'category_id' => $categoryId,
                     'city' => $city,
                     'test_center_id' => $centerId,
                     'exam_date' => $date,
                     'available_seats' => 'greater_than::0',
                     'country_id' => config('svp.country_id', 78),
-                ], static fn ($value) => $value !== null && $value !== ''));
+                ], static fn ($value) => $value !== null && $value !== '');
+                $sessionResponse = $this->firstSuccessfulResponse(
+                    $this->rotateTokens($tokens, $centerIndex),
+                    fn (string $token) => $this->booking->availabilitySessionsForCenter($token, $sessionParameters),
+                );
 
-                if ($sessionResponse->getStatusCode() >= 400) {
+                if ($sessionResponse === null) {
                     continue;
                 }
 
@@ -66,28 +88,57 @@ class SvpAvailabilityDashboardService
                         continue;
                     }
 
-                    $sessionDate = $this->normalizeDate($session['exam_date'] ?? $session['date'] ?? $session['examDate'] ?? $date);
-                    if ($sessionDate === null || ($date !== null && $sessionDate !== $date)) {
+                    $sessionId = trim((string) ($session['id'] ?? $session['exam_session_id'] ?? $session['session_id'] ?? ''));
+                    if ($sessionId === '') {
+                        continue;
+                    }
+
+                    $listedDate = $this->normalizeDate($session['exam_date'] ?? $session['date'] ?? $session['examDate'] ?? $date);
+                    if ($listedDate === null || ($date !== null && $listedDate !== $date)) {
+                        continue;
+                    }
+
+                    $verification = $this->verifySessionAcrossAccounts(
+                        $tokens,
+                        $sessionId,
+                        $centerId,
+                        $city,
+                        $listedDate,
+                        $centerName,
+                    );
+                    if (! ($verification['verified'] ?? false)) {
+                        continue;
+                    }
+
+                    $verifiedDate = $this->normalizeDate(data_get($verification, 'session.exam_date'));
+                    if ($verifiedDate === null || ($date !== null && $verifiedDate !== $date)) {
                         continue;
                     }
 
                     $shift = trim((string) ($session['shift_name'] ?? $session['shift'] ?? $session['session_name'] ?? $session['name'] ?? 'Session'));
-                    $grouped[$sessionDate]['sessions'][] = [
-                        'id' => (string) ($session['id'] ?? $session['exam_session_id'] ?? ''),
+                    $grouped[$verifiedDate]['sessions'][$sessionId] = [
+                        'id' => $sessionId,
                         'shift' => $shift,
+                        'verified' => true,
                     ];
                 }
 
                 foreach ($grouped as $sessionDate => $data) {
+                    $verifiedSessions = array_values($data['sessions']);
+                    if ($verifiedSessions === []) {
+                        continue;
+                    }
+
                     $rows[] = [
                         'city' => $city,
                         'category_id' => $categoryId,
                         'date' => $sessionDate,
                         'center_id' => $centerId,
                         'center_name' => $centerName,
-                        'available' => count($data['sessions']) > 0,
-                        'session_count' => count($data['sessions']),
-                        'sessions' => $data['sessions'],
+                        'available' => true,
+                        'session_count' => count($verifiedSessions),
+                        'sessions' => $verifiedSessions,
+                        'verified' => true,
                     ];
                 }
             }
@@ -97,8 +148,75 @@ class SvpAvailabilityDashboardService
             return [
                 'rows' => $rows,
                 'fetched_at' => now()->toIso8601String(),
+                'verified_only' => true,
             ];
         });
+    }
+
+    /**
+     * @param array<int, string> $tokens
+     * @return array<string, mixed>
+     */
+    private function verifySessionAcrossAccounts(
+        array $tokens,
+        string $sessionId,
+        string $centerId,
+        string $city,
+        string $date,
+        string $centerName,
+    ): array {
+        foreach ($tokens as $token) {
+            try {
+                $verification = $this->verifier->verifyAvailability(
+                    $token,
+                    $sessionId,
+                    $centerId,
+                    $city,
+                    $date,
+                    $centerName,
+                );
+                if (($verification['verified'] ?? false) === true) {
+                    return $verification;
+                }
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        return ['verified' => false];
+    }
+
+    /**
+     * @param array<int, string> $tokens
+     */
+    private function firstSuccessfulResponse(array $tokens, callable $request): mixed
+    {
+        foreach ($tokens as $token) {
+            try {
+                $response = $request($token);
+                if (is_object($response) && method_exists($response, 'getStatusCode') && $response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
+                    return $response;
+                }
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<int, string> $tokens
+     * @return array<int, string>
+     */
+    private function rotateTokens(array $tokens, int $offset): array
+    {
+        if ($tokens === []) {
+            return [];
+        }
+
+        $offset %= count($tokens);
+        return array_values(array_merge(array_slice($tokens, $offset), array_slice($tokens, 0, $offset)));
     }
 
     /** @return array<int, mixed> */

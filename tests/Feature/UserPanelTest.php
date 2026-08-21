@@ -389,6 +389,16 @@ class UserPanelTest extends TestCase
                 ]], 200);
             }
 
+            if (str_ends_with($path, '/exam_sessions/session-german-2026-08-30')) {
+                return Http::response(['data' => ['exam_session' => [
+                    'id' => 'session-german-2026-08-30',
+                    'exam_date' => '2026-08-30',
+                    'test_center_id' => 45,
+                    'test_center_name' => 'Bangladesh German TTC',
+                    'test_center_city' => 'Dhaka',
+                ]]], 200);
+            }
+
             if (str_ends_with($path, '/individual_labor_space/exam_sessions')) {
                 if ((string) ($query['test_center_id'] ?? '') !== '45') {
                     return Http::response(['data' => ['exam_sessions' => []]], 200);
@@ -424,7 +434,9 @@ class UserPanelTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.rows.0.center_id', '45')
             ->assertJsonPath('data.rows.0.center_name', 'Bangladesh German TTC')
-            ->assertJsonPath('data.rows.0.session_count', 1);
+            ->assertJsonPath('data.rows.0.session_count', 1)
+            ->assertJsonPath('data.rows.0.verified', true)
+            ->assertJsonPath('data.verified_only', true);
 
         Http::assertSent(fn ($request): bool => str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/individual_labor_space/test_centers/cities')
             && $request->header('Authorization')[0] === 'Bearer backend-svp-token');
@@ -455,6 +467,84 @@ class UserPanelTest extends TestCase
         $second->assertOk()->assertJsonPath('success', true)->assertJsonPath('data.1.name', 'Rajshahi');
         Http::assertSentCount(1);
         Http::assertSent(fn ($request): bool => $request->header('Authorization')[0] === 'Bearer backend-city-token');
+    }
+
+    public function test_verified_availability_rotates_backend_accounts_and_filters_unverified_sessions(): void
+    {
+        $primary = SvpAvailabilityAccount::create([
+            'name' => 'Primary verification account',
+            'email' => 'primary-verification@example.com',
+            'access_token' => 'backend-primary-token',
+            'active' => true,
+            'last_used_at' => now()->subMinute(),
+        ]);
+        SvpAvailabilityAccount::create([
+            'name' => 'Secondary verification account',
+            'email' => 'secondary-verification@example.com',
+            'access_token' => 'backend-secondary-token',
+            'active' => true,
+            'last_used_at' => now(),
+        ]);
+
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $authorization = $request->header('Authorization')[0] ?? '';
+
+            if ($authorization === 'Bearer backend-primary-token') {
+                return Http::response(['message' => 'expired'], 401);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/test_centers/cities')) {
+                return Http::response(['data' => [['id' => 'Dhaka', 'name' => 'Dhaka']]], 200);
+            }
+
+            if (str_ends_with($path, '/visitor_space/test_centers')) {
+                return Http::response(['data' => [['id' => '45', 'name' => 'Bangladesh German TTC', 'city' => 'Dhaka']]], 200);
+            }
+
+            if (str_ends_with($path, '/exam_sessions/verified-session-45')) {
+                return Http::response(['data' => ['exam_session' => [
+                    'id' => 'verified-session-45',
+                    'exam_date' => '2026-08-30',
+                    'test_center_id' => 45,
+                    'test_center_name' => 'Bangladesh German TTC',
+                    'test_center_city' => 'Dhaka',
+                ]]], 200);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/exam_sessions')) {
+                if ((string) ($query['test_center_id'] ?? '') !== '45') {
+                    return Http::response(['data' => ['exam_sessions' => []]], 200);
+                }
+
+                return Http::response(['data' => ['exam_sessions' => [[
+                    'id' => 'verified-session-45',
+                    'exam_date' => '2026-08-30',
+                    'name' => 'First Shift',
+                    'available_seats' => 2,
+                ]]]], 200);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $this->loginAgencyUser();
+        $response = $this->withSession(['svp_token' => 'portal-user-token'])
+            ->getJson(route('svp.availability', [
+                'category_id' => '159',
+                'city' => 'Dhaka',
+                'date' => '2026-08-30',
+            ]));
+
+        $response->assertOk()
+            ->assertJsonPath('data.verified_only', true)
+            ->assertJsonPath('data.rows.0.center_id', '45')
+            ->assertJsonPath('data.rows.0.sessions.0.verified', true);
+
+        Http::assertSent(fn ($request): bool => str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/exam_sessions/verified-session-45')
+            && ($request->header('Authorization')[0] ?? '') === 'Bearer backend-secondary-token');
+        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer portal-user-token');
     }
 
     public function test_guest_is_redirected_to_login_from_user_panel(): void

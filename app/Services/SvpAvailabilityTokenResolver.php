@@ -36,6 +36,40 @@ final class SvpAvailabilityTokenResolver
         return (string) $account->access_token;
     }
 
+    /**
+     * Return all active, non-expired backend tokens in least-recently-used order.
+     * Portal user/session tokens are intentionally never considered here.
+     *
+     * @return array<int, string>
+     */
+    public function resolvePool(): array
+    {
+        $tokens = SvpAvailabilityAccount::query()
+            ->where('active', true)
+            ->whereNotNull('access_token')
+            ->where(function ($query): void {
+                $query->whereNull('token_expires_at')
+                    ->orWhere('token_expires_at', '>', now()->addSeconds(60));
+            })
+            ->orderBy('last_used_at')
+            ->get()
+            ->map(static fn (SvpAvailabilityAccount $account): string => (string) $account->access_token)
+            ->filter(static fn (string $token): bool => $token !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($tokens !== []) {
+            SvpAvailabilityAccount::query()
+                ->where('active', true)
+                ->whereNotNull('access_token')
+                ->whereIn('access_token', $tokens)
+                ->update(['last_used_at' => now()]);
+        }
+
+        return $tokens;
+    }
+
     public function rememberToken(
         SvpAvailabilityAccount $account,
         string $token,
