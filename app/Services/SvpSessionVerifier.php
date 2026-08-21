@@ -35,6 +35,7 @@ class SvpSessionVerifier
             $expectedCity,
             $expectedDate,
             $expectedCenterName,
+            false,
         );
     }
 
@@ -58,6 +59,7 @@ class SvpSessionVerifier
             $expectedCity,
             $expectedDate,
             $expectedCenterName,
+            true,
         );
     }
 
@@ -71,6 +73,7 @@ class SvpSessionVerifier
         ?string $expectedCity,
         ?string $expectedDate,
         ?string $expectedCenterName,
+        bool $allowScopedCenterFallback,
     ): array {
         $payload = $response->getData(true);
         $status = $response->getStatusCode();
@@ -85,10 +88,14 @@ class SvpSessionVerifier
         $centerNameMatch = $center['id'] === null
             && filled($expectedCenterName)
             && $this->normalizeLabel($center['name']) === $this->normalizeLabel($expectedCenterName);
-        $centerMatch = $centerIdMatch || $centerNameMatch;
         $cityMatch = $expectedCity === null || trim($expectedCity) === ''
             ? null
             : ($center['city'] !== null && mb_strtolower($center['city']) === mb_strtolower(trim($expectedCity)));
+        $scopedCenterFallback = $allowScopedCenterFallback
+            && $center['id'] === null
+            && $center['name'] === null
+            && $cityMatch === true;
+        $centerMatch = $centerIdMatch || $centerNameMatch || $scopedCenterFallback;
         $dateMatch = $normalizedExpectedDate === null
             ? null
             : ($actualDate !== null && $actualDate === $normalizedExpectedDate);
@@ -130,6 +137,7 @@ class SvpSessionVerifier
             ],
             'checks' => [
                 'center_match' => $centerMatch,
+                'center_scope_fallback' => $scopedCenterFallback,
                 'city_match' => $cityMatch,
                 'date_match' => $dateMatch,
                 'session_center_present' => $center['id'] !== null,

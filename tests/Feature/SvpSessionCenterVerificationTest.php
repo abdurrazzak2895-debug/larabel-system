@@ -297,6 +297,40 @@ class SvpSessionCenterVerificationTest extends TestCase
         $this->assertSame('Patuakhali Technical Training Centre', $result['actual']['test_center_name']);
     }
 
+    public function test_availability_verification_uses_scoped_center_when_live_detail_omits_center_id_and_name(): void
+    {
+        $service = $this->mock(BookingService::class);
+        $service->shouldReceive('availabilityExamSession')
+            ->once()
+            ->with('backend-token', 'opaque-session-khulna')
+            ->andReturn(response()->json([
+                'id' => 'opaque-session-khulna',
+                'category' => ['id' => 59, 'english_name' => 'Tailoring'],
+                'start_date_in_browser_time_zone' => '2026-08-27',
+                'start_date_in_tc_time_zone' => '2026-08-27',
+                'test_center' => [
+                    'city' => 'Khulna',
+                    'country_id' => 78,
+                ],
+            ], 200));
+
+        $result = app(SvpSessionVerifier::class)->verifyAvailability(
+            'backend-token',
+            'opaque-session-khulna',
+            '156',
+            'Khulna',
+            '2026-08-27',
+            'Khulna Technical Training Centre',
+        );
+
+        $this->assertTrue($result['verified']);
+        $this->assertTrue($result['checks']['center_match']);
+        $this->assertTrue($result['checks']['center_scope_fallback']);
+        $this->assertTrue($result['checks']['city_match']);
+        $this->assertTrue($result['checks']['date_match']);
+        $this->assertFalse($result['checks']['session_center_present']);
+    }
+
     public function test_verification_does_not_claim_success_when_session_has_no_center_metadata(): void
     {
         $agency = Agency::create([
