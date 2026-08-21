@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class SvpAvailabilityDashboardService
@@ -44,6 +45,13 @@ class SvpAvailabilityDashboardService
                 fn (string $token) => $this->booking->availabilityTestCenters($token, $city, $categoryId),
             );
             if ($centerResponse === null) {
+                Log::warning('SVP availability center lookup failed', [
+                    'category_id' => $categoryId,
+                    'city' => $city,
+                    'date' => $date,
+                    'verified_only' => true,
+                ]);
+
                 return ['rows' => [], 'fetched_at' => now()->toIso8601String(), 'verified_only' => true];
             }
 
@@ -51,6 +59,7 @@ class SvpAvailabilityDashboardService
             $centers = $this->extractList($centersPayload, ['test_centers', 'centers']);
 
             $rows = [];
+            $diagnostics = [];
             foreach ($centers as $centerIndex => $center) {
                 if (! is_array($center)) {
                     continue;
@@ -81,6 +90,15 @@ class SvpAvailabilityDashboardService
 
                 $sessionsPayload = $sessionResponse->getData(true);
                 $sessions = $this->extractList($sessionsPayload, ['sessions', 'exam_sessions', 'available_sessions']);
+                $diagnostic = [
+                    'center_id' => $centerId,
+                    'center_name' => $centerName,
+                    'session_status' => $sessionResponse->getStatusCode(),
+                    'upstream_sessions' => count($sessions),
+                    'sessions_with_id' => 0,
+                    'date_matches' => 0,
+                    'verified_sessions' => 0,
+                ];
                 $grouped = [];
 
                 foreach ($sessions as $session) {
@@ -92,11 +110,13 @@ class SvpAvailabilityDashboardService
                     if ($sessionId === '') {
                         continue;
                     }
+                    $diagnostic['sessions_with_id']++;
 
                     $listedDate = $this->normalizeDate($session['exam_date'] ?? $session['date'] ?? $session['examDate'] ?? $date);
                     if ($listedDate === null || ($date !== null && $listedDate !== $date)) {
                         continue;
                     }
+                    $diagnostic['date_matches']++;
 
                     $verification = $this->verifySessionAcrossAccounts(
                         $tokens,
@@ -109,6 +129,7 @@ class SvpAvailabilityDashboardService
                     if (! ($verification['verified'] ?? false)) {
                         continue;
                     }
+                    $diagnostic['verified_sessions']++;
 
                     $verifiedDate = $this->normalizeDate(data_get($verification, 'session.exam_date'));
                     if ($verifiedDate === null || ($date !== null && $verifiedDate !== $date)) {
@@ -122,6 +143,8 @@ class SvpAvailabilityDashboardService
                         'verified' => true,
                     ];
                 }
+
+                $diagnostics[] = $diagnostic;
 
                 foreach ($grouped as $sessionDate => $data) {
                     $verifiedSessions = array_values($data['sessions']);
@@ -144,6 +167,16 @@ class SvpAvailabilityDashboardService
             }
 
             usort($rows, static fn (array $a, array $b): int => [$a['date'], $a['center_name']] <=> [$b['date'], $b['center_name']]);
+
+            Log::info('SVP availability lookup diagnostics', [
+                'category_id' => $categoryId,
+                'city' => $city,
+                'date' => $date,
+                'center_count' => count($centers),
+                'row_count' => count($rows),
+                'centers' => $diagnostics,
+                'verified_only' => true,
+            ]);
 
             return [
                 'rows' => $rows,
