@@ -968,15 +968,47 @@ class TakamolProvider implements BookingProviderInterface
      */
     private function extractOccupationRecords(array $payload): array
     {
-        $container = $payload['data'] ?? $payload;
+        $records = [];
+        $visit = function ($node, int $depth = 0) use (&$visit, &$records): void {
+            if ($depth > 6 || ! is_array($node)) {
+                return;
+            }
 
-        if (is_array($container) && is_array($container['occupations'] ?? null)) {
-            $records = $container['occupations'];
-        } elseif (is_array($payload['occupations'] ?? null)) {
-            $records = $payload['occupations'];
-        } else {
-            $records = is_array($container) && array_is_list($container) ? $container : [];
-        }
+            if (array_is_list($node)) {
+                foreach ($node as $item) {
+                    $visit($item, $depth + 1);
+                }
+
+                return;
+            }
+
+            // JSON:API-style occupations keep the record ID beside an
+            // attributes object. Flatten only this explicit occupation node;
+            // do not mistake a nested category object for an occupation.
+            if (is_array($node['attributes'] ?? null)
+                && (array_key_exists('categories', $node['attributes']) || array_key_exists('category', $node['attributes']))) {
+                $records[] = array_merge($node['attributes'], [
+                    'id' => $node['id'] ?? $node['occupation_id'] ?? null,
+                    'occupation_id' => $node['occupation_id'] ?? $node['id'] ?? null,
+                ]);
+                return;
+            }
+
+            // An occupation is identified by its category collection. This
+            // prevents a wrapper or a category record from being misclassified.
+            if (array_key_exists('categories', $node) || array_key_exists('category', $node)) {
+                $records[] = $node;
+                return;
+            }
+
+            foreach (['data', 'occupations', 'occupation', 'items', 'results', 'result', 'attributes'] as $key) {
+                if (array_key_exists($key, $node)) {
+                    $visit($node[$key], $depth + 1);
+                }
+            }
+        };
+
+        $visit($payload);
 
         return collect($records)
             ->filter(static fn ($occupation): bool => is_array($occupation))
@@ -995,6 +1027,8 @@ class TakamolProvider implements BookingProviderInterface
                     'name' => $name,
                 ];
             })
+            ->filter(static fn (array $occupation): bool => $occupation['id'] !== '')
+            ->unique('id')
             ->values()
             ->all();
     }
@@ -1007,6 +1041,13 @@ class TakamolProvider implements BookingProviderInterface
     private function extractOccupationCategories(array $occupation): array
     {
         $rawCategories = $occupation['categories'] ?? null;
+        if (! is_array($rawCategories) && is_array($occupation['attributes'] ?? null)) {
+            $rawCategories = $occupation['attributes']['categories'] ?? $occupation['attributes']['category'] ?? null;
+        }
+
+        if (is_array($rawCategories) && ! array_is_list($rawCategories)) {
+            $rawCategories = $rawCategories['data'] ?? $rawCategories['items'] ?? [$rawCategories];
+        }
 
         if (! is_array($rawCategories)) {
             $rawCategories = is_array($occupation['category'] ?? null)
@@ -1017,18 +1058,23 @@ class TakamolProvider implements BookingProviderInterface
         return collect($rawCategories)
             ->filter(static fn ($category): bool => is_array($category))
             ->map(static function (array $category): array {
-                $id = trim((string) ($category['id'] ?? $category['category_id'] ?? ''));
+                $attributes = is_array($category['attributes'] ?? null) ? $category['attributes'] : [];
+                $rawId = $category['id'] ?? $category['category_id'] ?? $attributes['id'] ?? $attributes['category_id'] ?? '';
+                $id = $attributes !== [] ? trim((string) $rawId) : $rawId;
                 $name = trim((string) (
                     $category['name']
                     ?? $category['english_name']
                     ?? $category['arabic_name']
+                    ?? $attributes['name']
+                    ?? $attributes['english_name']
+                    ?? $attributes['arabic_name']
                     ?? $id
                 ));
 
-                return $category + [
+                return array_replace($category, [
                     'id'   => $id,
                     'name' => $name,
-                ];
+                ]);
             })
             ->filter(static fn (array $category): bool => $category['id'] !== '' && $category['name'] !== '')
             ->unique('id')
@@ -1042,6 +1088,9 @@ class TakamolProvider implements BookingProviderInterface
             'page' => 1,
             'per_page' => 10000,
         ]);
+        if ($occupationsResponse->getStatusCode() < 200 || $occupationsResponse->getStatusCode() >= 300) {
+            return $occupationsResponse;
+        }
         $data = json_decode($occupationsResponse->getContent(), true);
         $occupations = $this->extractOccupationRecords(is_array($data) ? $data : []);
 
@@ -1064,6 +1113,9 @@ class TakamolProvider implements BookingProviderInterface
             'page' => 1,
             'per_page' => 10000,
         ]);
+        if ($occupationsResponse->getStatusCode() < 200 || $occupationsResponse->getStatusCode() >= 300) {
+            return $occupationsResponse;
+        }
         $data = json_decode($occupationsResponse->getContent(), true);
         $occupations = $this->extractOccupationRecords(is_array($data) ? $data : []);
 

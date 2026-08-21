@@ -25,8 +25,8 @@ class SvpAvailabilityDashboardController extends Controller
         $categoryId = trim((string) $request->query('category_id', ''));
         $city = trim((string) $request->query('city', ''));
         $date = $request->query('date');
-        $categories = $token && ! $request->expectsJson()
-            ? $this->booking->availabilityCategories($token)->getData(true)
+        $categories = $tokens !== [] && ! $request->expectsJson()
+            ? $this->cachedCategories($tokens)
             : [];
         $cities = $tokens !== [] && $categoryId !== '' ? $this->cachedCities($tokens, $categoryId) : [];
         $result = ['rows' => [], 'fetched_at' => null];
@@ -103,6 +103,46 @@ class SvpAvailabilityDashboardController extends Controller
 
             return [];
         }
+    }
+
+    /**
+     * Load and cache the category catalog through the backend SVP account pool.
+     * A successful non-empty response from any usable account wins; an empty
+     * response from one account must not hide categories available from another.
+     *
+     * @param array<int, string> $tokens
+     * @return array<int, mixed>
+     */
+    private function cachedCategories(array $tokens): array
+    {
+        return Cache::remember(
+            'svp:availability:categories:v2',
+            now()->addSeconds(max(1, (int) config('svp.availability_category_cache_ttl', 900))),
+            function () use ($tokens): array {
+                $attemptLimit = max(1, (int) config('svp.availability_account_attempts', 3));
+                $successful = false;
+
+                foreach (array_slice($tokens, 0, $attemptLimit) as $token) {
+                    try {
+                        $response = $this->booking->availabilityCategories($token);
+                        if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+                            continue;
+                        }
+
+                        $successful = true;
+                        $payload = $response->getData(true);
+                        $categories = $this->extractFilterList($payload, ['data', 'categories']);
+                        if ($categories !== []) {
+                            return $categories;
+                        }
+                    } catch (\Throwable $exception) {
+                        report($exception);
+                    }
+                }
+
+                return $successful ? [] : throw new \RuntimeException('All backend SVP category lookup accounts failed.');
+            }
+        );
     }
 
     /**

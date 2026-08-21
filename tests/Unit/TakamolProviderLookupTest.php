@@ -582,4 +582,41 @@ class TakamolProviderLookupTest extends TestCase
             ],
         ], $response->getData(true)['data']);
     }
+
+    public function test_categories_normalizes_nested_live_catalog_envelope(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'data' => [
+                    'items' => [
+                        [
+                            'id' => 2061,
+                            'attributes' => [
+                                'name' => 'Load and Unload Worker',
+                                'categories' => [
+                                    'data' => [[
+                                        'id' => 159,
+                                        'attributes' => [
+                                            'english_name' => 'Load and unload workers',
+                                        ],
+                                    ]],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = (new TakamolProvider())->withToken('test-token')->categories();
+
+        $this->assertSame([
+            [
+                'id' => '159',
+                'attributes' => ['english_name' => 'Load and unload workers'],
+                'name' => 'Load and unload workers',
+            ],
+        ], $response->getData(true)['data']);
+    }
+
 }
