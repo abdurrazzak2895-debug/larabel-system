@@ -102,6 +102,46 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_sessions_extract_nested_json_api_items_and_attributes_metadata(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'data' => [
+                    'items' => [[
+                        'type' => 'exam_session',
+                        'attributes' => [
+                            'id' => 'json-api-session-45',
+                            'start_date_in_browser_time_zone' => '2026-08-24T09:00:00+06:00',
+                            'test_center' => [
+                                'data' => [
+                                    'attributes' => [
+                                        'id' => 45,
+                                        'name' => 'Bangladesh German TTC',
+                                        'city' => 'Khulna',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ]],
+                ],
+            ], 200),
+        ]);
+
+        $payload = (new TakamolProvider())->withToken('test-token')->examSessions([
+            'city' => 'Khulna',
+            'category_id' => '159',
+            'test_center_id' => '45',
+            'exam_date' => '2026-08-24',
+        ])->getData(true);
+
+        $session = $payload['data']['sessions'][0];
+        $this->assertSame('json-api-session-45', $session['id']);
+        $this->assertSame('45', $session['test_center_id']);
+        $this->assertSame('Bangladesh German TTC', $session['test_center_name']);
+        $this->assertSame('Khulna', $session['test_center_city']);
+        $this->assertSame('2026-08-24', $session['exam_date']);
+    }
+
     public function test_sessions_extract_nested_site_center_metadata(): void
     {
         Http::fake([
@@ -188,6 +228,39 @@ class TakamolProviderLookupTest extends TestCase
                 && (int) ($query['country_id'] ?? 0) === 78
                 && ($query['category_id'] ?? null) === 'category-4';
         });
+    }
+
+    public function test_centers_normalize_nested_json_api_resources(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'data' => [
+                    'test_centers' => [
+                        'data' => [[
+                            'type' => 'test_center',
+                            'attributes' => [
+                                'id' => 223,
+                                'name' => 'Khulna Technical Training Centre',
+                                'city' => 'Khulna',
+                            ],
+                        ]],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $payload = (new TakamolProvider())->withToken('test-token')->testCentersForFilters('Khulna', '159')->getData(true);
+
+        $this->assertSame([
+            [
+                'id' => '223',
+                'name' => 'Khulna Technical Training Centre',
+                'city' => 'Khulna',
+                'address' => null,
+                'status' => null,
+                'country_code' => null,
+            ],
+        ], $payload['data']);
     }
 
     public function test_available_dates_use_category_and_city_contract(): void

@@ -174,7 +174,7 @@ class TakamolProvider implements BookingProviderInterface
             return $response;
         }
 
-        $sessions = $this->extractList($payload, ['exam_sessions', 'sessions', 'available_sessions']);
+        $sessions = $this->extractList($payload, ['exam_sessions', 'sessions', 'available_sessions', 'items', 'results', 'records']);
         if ($sessions === null) {
             return $response;
         }
@@ -349,8 +349,8 @@ class TakamolProvider implements BookingProviderInterface
                 continue;
             }
 
-            $dateSessions = array_values(array_filter(
-                $this->extractList($datePayload, ['exam_sessions', 'sessions', 'available_sessions']) ?? [],
+                $dateSessions = array_values(array_filter(
+                $this->extractList($datePayload, ['exam_sessions', 'sessions', 'available_sessions', 'items', 'results', 'records']) ?? [],
                 static fn ($session): bool => is_array($session),
             ));
             if ($dateSessions === []) {
@@ -449,21 +449,21 @@ class TakamolProvider implements BookingProviderInterface
      */
     protected function extractAvailableDateRecords(array $payload): array
     {
-        $candidates = [
-            $payload['available_dates'] ?? null,
-            $payload['dates'] ?? null,
-            data_get($payload, 'data.available_dates'),
-            data_get($payload, 'data.dates'),
-            data_get($payload, 'data'),
-        ];
+        $records = $this->extractList($payload, [
+            'available_dates',
+            'dates',
+            'items',
+            'results',
+            'records',
+        ]);
 
-        foreach ($candidates as $candidate) {
-            if (is_array($candidate) && array_is_list($candidate)) {
-                return array_values($candidate);
-            }
+        if (is_array($records)) {
+            return array_values($records);
         }
 
-        return [];
+        // A few SVP responses use a bare JSON:API `data` list for dates.
+        $data = $payload['data'] ?? null;
+        return is_array($data) && array_is_list($data) ? array_values($data) : [];
     }
 
     /**
@@ -497,24 +497,47 @@ class TakamolProvider implements BookingProviderInterface
      */
     protected function extractList(array $payload, array $keys): ?array
     {
-        $candidates = [
-            data_get($payload, 'data.exam_sessions'),
-            data_get($payload, 'data.sessions'),
-            data_get($payload, 'data.available_sessions'),
-            data_get($payload, 'data'),
-        ];
-
-        foreach (array_merge($keys, []) as $key) {
-            $candidates[] = $payload[$key] ?? null;
-        }
-
-        foreach ($candidates as $candidate) {
-            if (is_array($candidate) && array_is_list($candidate)) {
-                return array_values($candidate);
+        $visit = function (mixed $node, int $depth = 0) use (&$visit, $keys): ?array {
+            if (! is_array($node) || $depth > 6) {
+                return null;
             }
-        }
 
-        return null;
+            if (array_is_list($node)) {
+                return array_values($node);
+            }
+
+            foreach ($keys as $key) {
+                if (! array_key_exists($key, $node)) {
+                    continue;
+                }
+
+                $candidate = $node[$key];
+                if (is_array($candidate) && array_is_list($candidate)) {
+                    return array_values($candidate);
+                }
+
+                $nested = $visit($candidate, $depth + 1);
+                if ($nested !== null) {
+                    return $nested;
+                }
+            }
+
+            // Traverse common response envelopes so `data.items`,
+            // `data.attributes.items`, and `response.data.results` work even
+            // when the upstream resource adds another wrapper layer.
+            foreach (['data', 'attributes', 'result', 'response', 'payload'] as $wrapper) {
+                if (isset($node[$wrapper]) && is_array($node[$wrapper])) {
+                    $nested = $visit($node[$wrapper], $depth + 1);
+                    if ($nested !== null) {
+                        return $nested;
+                    }
+                }
+            }
+
+            return null;
+        };
+
+        return $visit($payload);
     }
 
     /**
@@ -523,16 +546,35 @@ class TakamolProvider implements BookingProviderInterface
      */
     protected static function formatSessionName(array $node): array
     {
+        // JSON:API session resources may keep the opaque identifier under
+        // attributes while the surrounding node contains only `type`/`id`.
+        // Prefer the resource/session identifiers and never borrow a nested
+        // center id as the session id.
+        if ((string) ($node['id'] ?? '') === '') {
+            $nestedId = data_get($node, 'attributes.id')
+                ?? data_get($node, 'data.attributes.id')
+                ?? data_get($node, 'data.id')
+                ?? $node['exam_session_id']
+                ?? $node['session_id']
+                ?? null;
+            if (is_scalar($nestedId) && (string) $nestedId !== '') {
+                $node['id'] = (string) $nestedId;
+            }
+        }
+
         $center = self::extractCenterMetadata($node);
         $centerId = $center['id'] ?? null;
         $centerName = $center['name'] ?? null;
         $city = $center['city'] ?? null;
-        $date = $node['exam_date']
-            ?? $node['test_date']
-            ?? $node['date']
-            ?? $node['start_date_in_browser_time_zone']
-            ?? $node['start_date_in_tc_time_zone']
-            ?? null;
+        $date = self::firstScalarDeep($node, [
+            'exam_date',
+            'test_date',
+            'date',
+            'start_date',
+            'start_at',
+            'start_date_in_browser_time_zone',
+            'start_date_in_tc_time_zone',
+        ], 3);
         $category = is_array($node['category'] ?? null)
             ? ($node['category']['english_name'] ?? $node['category']['arabic_name'] ?? null)
             : null;
@@ -645,6 +687,25 @@ class TakamolProvider implements BookingProviderInterface
             $value = $node[$key] ?? null;
             if (is_scalar($value) && (string) $value !== '') {
                 return $value;
+            }
+        }
+
+        return null;
+    }
+
+    protected static function firstScalarDeep(array $node, array $keys, int $depth = 3): string|int|float|null
+    {
+        $value = self::firstScalar($node, $keys);
+        if ($value !== null || $depth <= 0) {
+            return $value;
+        }
+
+        foreach ($node as $nested) {
+            if (is_array($nested)) {
+                $value = self::firstScalarDeep($nested, $keys, $depth - 1);
+                if ($value !== null) {
+                    return $value;
+                }
             }
         }
 
@@ -884,17 +945,19 @@ class TakamolProvider implements BookingProviderInterface
         $response = $this->dispatch('GET', '/visitor_space/test_centers', $params);
         $payload = json_decode($response->getContent(), true);
         $rawCenters = is_array($payload)
-            ? ($payload['test_centers'] ?? $payload['data']['test_centers'] ?? $payload['data'] ?? [])
+            ? ($this->extractList($payload, ['test_centers', 'centers', 'items', 'results', 'records']) ?? [])
             : [];
 
         $centers = collect(is_array($rawCenters) ? $rawCenters : [])
             ->filter(fn ($center): bool => is_array($center))
             ->map(static function (array $center): ?array {
+                $metadata = self::extractCenterMetadata($center);
                 $address = is_array($center['address'] ?? null) ? $center['address'] : [];
-                $id = trim((string) ($center['id'] ?? $center['svp_id'] ?? ''));
-                $name = trim((string) ($center['name'] ?? $center['test_center_name'] ?? $id));
+                $id = trim((string) ($metadata['id'] ?? $center['id'] ?? $center['svp_id'] ?? ''));
+                $name = trim((string) ($metadata['name'] ?? $center['name'] ?? $center['test_center_name'] ?? $id));
                 $centerCity = trim((string) (
-                    $center['city']
+                    $metadata['city']
+                    ?? $center['city']
                     ?? $center['locality']
                     ?? $address['city']
                     ?? $address['locality']
