@@ -7,6 +7,7 @@ use App\Services\SvpAvailabilityDashboardService;
 use App\Services\SvpAvailabilityTokenResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Validator;
 
 class SvpAvailabilityDashboardController extends Controller
 {
@@ -52,6 +53,66 @@ class SvpAvailabilityDashboardController extends Controller
         }
 
         return view('availability.index', compact('categories', 'cities', 'categoryId', 'city', 'date', 'result'));
+    }
+
+    /**
+     * Return verified sessions grouped by exact center and date.
+     *
+     * This endpoint is intentionally backed only by the server-managed SVP
+     * account pool. It never reads the authenticated portal user's session
+     * token and never creates a hold or reservation.
+     */
+    public function sessionPerCenterBot(Request $request)
+    {
+        $validator = Validator::make($request->query(), [
+            'category_id' => ['required', 'string', 'max:100'],
+            'city' => ['required', 'string', 'max:150'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => $validator->errors()->toArray(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+        $tokens = $this->resolveAvailabilityTokens();
+        if ($tokens === []) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No usable backend SVP availability account is configured.',
+            ], 503);
+        }
+
+        try {
+            $result = $this->availability->lookup(
+                $tokens,
+                (string) $validated['category_id'],
+                trim((string) $validated['city']),
+                isset($validated['date']) ? (string) $validated['date'] : null,
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'category_id' => (string) $validated['category_id'],
+                    'city' => trim((string) $validated['city']),
+                    'date' => $validated['date'] ?? null,
+                    'verified_only' => true,
+                    'fetched_at' => $result['fetched_at'] ?? null,
+                    'centers' => array_values($result['rows'] ?? []),
+                ],
+            ]);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'The backend SVP availability lookup failed. Please try again shortly.',
+            ], 504);
+        }
     }
 
     /** Return category-scoped cities from a backend-account-backed cache. */

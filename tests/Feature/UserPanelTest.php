@@ -442,6 +442,80 @@ class UserPanelTest extends TestCase
             && $request->header('Authorization')[0] === 'Bearer backend-svp-token');
     }
 
+    public function test_session_per_center_bot_returns_verified_rows_from_backend_accounts_only(): void
+    {
+        SvpAvailabilityAccount::create([
+            'name' => 'Per-center bot account',
+            'email' => 'per-center-bot@example.com',
+            'access_token' => 'backend-bot-token',
+            'active' => true,
+        ]);
+
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            if (str_ends_with($path, '/visitor_space/test_centers')) {
+                return Http::response(['data' => [
+                    ['id' => '45', 'name' => 'Bot Exact Centre', 'city' => 'Bot City'],
+                ]], 200);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/exam_sessions')) {
+                return Http::response(['data' => ['exam_sessions' => [[
+                    'id' => 'bot-session-2030-09-02',
+                    'exam_date' => '2030-09-02',
+                    'name' => 'First Shift',
+                    'available_seats' => 3,
+                ]]]], 200);
+            }
+
+            if (str_ends_with($path, '/exam_sessions/bot-session-2030-09-02')) {
+                return Http::response(['data' => ['exam_session' => [
+                    'id' => 'bot-session-2030-09-02',
+                    'exam_date' => '2030-09-02',
+                    'test_center_id' => 45,
+                    'test_center_name' => 'Bot Exact Centre',
+                    'test_center_city' => 'Bot City',
+                ]]], 200);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $this->loginAgencyUser();
+        $response = $this->withSession(['svp_token' => 'portal-user-token'])
+            ->getJson(route('svp.session-per-center-bot', [
+                'category_id' => '991',
+                'city' => 'Bot City',
+                'date' => '2030-09-02',
+            ]));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.category_id', '991')
+            ->assertJsonPath('data.city', 'Bot City')
+            ->assertJsonPath('data.verified_only', true)
+            ->assertJsonPath('data.centers.0.center_id', '45')
+            ->assertJsonPath('data.centers.0.center_name', 'Bot Exact Centre')
+            ->assertJsonPath('data.centers.0.date', '2030-09-02')
+            ->assertJsonPath('data.centers.0.sessions.0.id', 'bot-session-2030-09-02')
+            ->assertJsonPath('data.centers.0.sessions.0.verified', true);
+
+        Http::assertSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer backend-bot-token');
+        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer portal-user-token');
+    }
+
+    public function test_session_per_center_bot_requires_category_and_city(): void
+    {
+        $this->loginAgencyUser();
+
+        $this->getJson(route('svp.session-per-center-bot'))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.category_id.0', 'The category id field is required.')
+            ->assertJsonPath('errors.city.0', 'The city field is required.');
+    }
+
     public function test_cached_city_endpoint_uses_backend_token_and_avoids_duplicate_upstream_calls(): void
     {
         SvpAvailabilityAccount::create([

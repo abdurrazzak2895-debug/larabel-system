@@ -60,6 +60,9 @@ Route::middleware('web')->group(function () {
     Route::get('/availability', [SvpAvailabilityDashboardController::class, 'index'])
         ->middleware('auth.multi')
         ->name('svp.availability');
+    Route::get('/sessionpercenterbot', [SvpAvailabilityDashboardController::class, 'sessionPerCenterBot'])
+        ->middleware('auth.multi')
+        ->name('svp.session-per-center-bot');
 
     // -------------------------------
     // Super Admin panel
