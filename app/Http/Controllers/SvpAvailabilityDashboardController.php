@@ -115,8 +115,9 @@ class SvpAvailabilityDashboardController extends Controller
      */
     private function cachedCategories(array $tokens): array
     {
-        return Cache::remember(
-            'svp:availability:categories:v2',
+        try {
+            return Cache::remember(
+                'svp:availability:categories:v2',
             now()->addSeconds(max(1, (int) config('svp.availability_category_cache_ttl', 900))),
             function () use ($tokens): array {
                 $attemptLimit = max(1, (int) config('svp.availability_account_attempts', 3));
@@ -140,9 +141,14 @@ class SvpAvailabilityDashboardController extends Controller
                     }
                 }
 
-                return $successful ? [] : throw new \RuntimeException('All backend SVP category lookup accounts failed.');
-            }
-        );
+                    return $successful ? [] : throw new \RuntimeException('All backend SVP category lookup accounts failed.');
+                }
+            );
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return [];
+        }
     }
 
     /**

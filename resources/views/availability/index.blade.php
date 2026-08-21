@@ -19,9 +19,14 @@
 
         <form method="GET" action="{{ route('svp.availability') }}" class="mt-5 grid grid-cols-1 md:grid-cols-4 gap-3">
             <label class="text-sm font-medium text-slate-700">Category
+                @php
+                    $categoryOptions = is_array($categories) && array_is_list($categories)
+                        ? $categories
+                        : ($categories['data'] ?? $categories['categories'] ?? []);
+                @endphp
                 <select name="category_id" class="mt-1 w-full rounded-xl border-slate-300" required>
                     <option value="">Select category</option>
-                    @foreach (($categories['data'] ?? $categories['categories'] ?? []) as $category)
+                    @foreach ($categoryOptions as $category)
                         @php $id = (string) ($category['id'] ?? $category['category_id'] ?? ''); @endphp
                         @if ($id !== '')<option value="{{ $id }}" @selected($categoryId === $id)>{{ $category['name'] ?? $category['english_name'] ?? $id }}</option>@endif
                     @endforeach

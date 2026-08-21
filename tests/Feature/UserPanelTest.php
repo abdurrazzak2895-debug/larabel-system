@@ -578,6 +578,65 @@ class UserPanelTest extends TestCase
         Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer portal-user-token');
     }
 
+    public function test_availability_page_renders_category_options_from_backend_account(): void
+    {
+        SvpAvailabilityAccount::create([
+            'name' => 'Category catalog account',
+            'email' => 'category-catalog@example.com',
+            'access_token' => 'backend-category-token',
+            'active' => true,
+        ]);
+
+        Http::fake([
+            '*individual_labor_space/occupations*' => Http::response([
+                'data' => [
+                    'items' => [[
+                        'id' => 2061,
+                        'attributes' => [
+                            'categories' => [
+                                'data' => [[
+                                    'id' => 159,
+                                    'attributes' => ['english_name' => 'Load and unload workers'],
+                                ]],
+                            ],
+                        ],
+                    ]],
+                ],
+            ], 200),
+        ]);
+
+        $this->loginAgencyUser();
+        $response = $this->withSession(['svp_token' => 'portal-user-token'])
+            ->get(route('svp.availability'));
+
+        $response->assertOk()
+            ->assertSee('Load and unload workers')
+            ->assertSee('value="159"', false);
+        Http::assertSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer backend-category-token');
+        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer portal-user-token');
+    }
+
+    public function test_availability_page_degrades_gracefully_when_backend_category_accounts_fail(): void
+    {
+        SvpAvailabilityAccount::create([
+            'name' => 'Expired category account',
+            'email' => 'expired-category@example.com',
+            'access_token' => 'expired-category-token',
+            'active' => true,
+        ]);
+
+        Http::fake([
+            '*individual_labor_space/occupations*' => Http::response(['message' => 'Signature has expired'], 401),
+        ]);
+
+        $this->loginAgencyUser();
+        $response = $this->get(route('svp.availability'));
+
+        $response->assertOk()
+            ->assertSee('Select category')
+            ->assertDontSee('Server Error');
+    }
+
     public function test_guest_is_redirected_to_login_from_user_panel(): void
     {
         $this->get(route('user.dashboard'))->assertRedirect(route('login'));
