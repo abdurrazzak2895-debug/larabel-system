@@ -24,7 +24,12 @@ class SvpAvailabilityDashboardController extends Controller
         $city = trim((string) $request->query('city', 'Dhaka'));
         $date = $request->query('date');
 
-        $categories = $token ? $this->booking->categories($token)->getData(true) : [];
+        // The full category catalog is already rendered on the initial page. Do not
+        // refetch it for every AJAX city/date filter request; that upstream call is
+        // comparatively slow and can make the city selector appear stuck loading.
+        $categories = $token && ! $request->expectsJson()
+            ? $this->booking->categories($token)->getData(true)
+            : [];
         $cities = $token ? $this->booking->cities($token, $categoryId ?: null)->getData(true) : [];
         $result = ['rows' => [], 'fetched_at' => null];
 
