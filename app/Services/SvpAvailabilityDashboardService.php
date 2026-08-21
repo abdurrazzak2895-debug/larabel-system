@@ -59,7 +59,6 @@ class SvpAvailabilityDashboardService
             $centers = $this->extractList($centersPayload, ['test_centers', 'centers']);
 
             $rows = [];
-            $diagnostics = [];
             foreach ($centers as $centerIndex => $center) {
                 if (! is_array($center)) {
                     continue;
@@ -90,16 +89,6 @@ class SvpAvailabilityDashboardService
 
                 $sessionsPayload = $sessionResponse->getData(true);
                 $sessions = $this->extractList($sessionsPayload, ['sessions', 'exam_sessions', 'available_sessions']);
-                $diagnostic = [
-                    'center_id' => $centerId,
-                    'center_name' => $centerName,
-                    'session_status' => $sessionResponse->getStatusCode(),
-                    'upstream_sessions' => count($sessions),
-                    'sessions_with_id' => 0,
-                    'date_matches' => 0,
-                    'verified_sessions' => 0,
-                    'verification_rejections' => [],
-                ];
                 $grouped = [];
 
                 foreach ($sessions as $session) {
@@ -111,14 +100,10 @@ class SvpAvailabilityDashboardService
                     if ($sessionId === '') {
                         continue;
                     }
-                    $diagnostic['sessions_with_id']++;
-
                     $listedDate = $this->normalizeDate($session['exam_date'] ?? $session['date'] ?? $session['examDate'] ?? $date);
                     if ($listedDate === null || ($date !== null && $listedDate !== $date)) {
                         continue;
                     }
-                    $diagnostic['date_matches']++;
-
                     $verification = $this->verifySessionAcrossAccounts(
                         $tokens,
                         $sessionId,
@@ -128,18 +113,8 @@ class SvpAvailabilityDashboardService
                         $centerName,
                     );
                     if (! ($verification['verified'] ?? false)) {
-                        if (count($diagnostic['verification_rejections']) < 5) {
-                            $diagnostic['verification_rejections'][] = [
-                                'session_hash' => substr(sha1($sessionId), 0, 12),
-                                'upstream_status' => $verification['upstream_status'] ?? null,
-                                'checks' => $verification['checks'] ?? [],
-                                'actual' => $verification['actual'] ?? [],
-                                'expected' => $verification['expected'] ?? [],
-                            ];
-                        }
                         continue;
                     }
-                    $diagnostic['verified_sessions']++;
 
                     $verifiedDate = $this->normalizeDate(data_get($verification, 'session.exam_date'));
                     if ($verifiedDate === null || ($date !== null && $verifiedDate !== $date)) {
@@ -153,8 +128,6 @@ class SvpAvailabilityDashboardService
                         'verified' => true,
                     ];
                 }
-
-                $diagnostics[] = $diagnostic;
 
                 foreach ($grouped as $sessionDate => $data) {
                     $verifiedSessions = array_values($data['sessions']);
@@ -178,15 +151,6 @@ class SvpAvailabilityDashboardService
 
             usort($rows, static fn (array $a, array $b): int => [$a['date'], $a['center_name']] <=> [$b['date'], $b['center_name']]);
 
-            Log::info('SVP availability lookup diagnostics', [
-                'category_id' => $categoryId,
-                'city' => $city,
-                'date' => $date,
-                'center_count' => count($centers),
-                'row_count' => count($rows),
-                'centers' => $diagnostics,
-                'verified_only' => true,
-            ]);
 
             return [
                 'rows' => $rows,
@@ -225,16 +189,6 @@ class SvpAvailabilityDashboardService
                     return $verification;
                 }
             } catch (\Throwable $exception) {
-                $upstreamStatus = null;
-                if (method_exists($exception, 'response') && $exception->response()) {
-                    $upstreamStatus = $exception->response()->status();
-                }
-                Log::warning('SVP availability verification exception', [
-                    'session_hash' => substr(sha1($sessionId), 0, 12),
-                    'upstream_status' => $upstreamStatus,
-                    'exception' => get_class($exception),
-                    'message' => preg_replace('/Bearer\\s+[^\\s]+/i', 'Bearer [redacted]', $exception->getMessage()),
-                ]);
                 report($exception);
             }
         }
