@@ -132,18 +132,7 @@ class BookingService
             // Hold it before touching SVP, then debit only after SVP confirms the
             // reservation. This prevents a successful external booking without
             // the portal fee being accounted for.
-            $portalFee = $this->portalBookingFee($agencyId);
-            $portalFeeReference = $this->portalFeeReference($booking);
-            if ($portalFee > 0
-                && ! $this->walletTransaction($booking, 'booking_hold', $portalFeeReference)
-                && ! $this->walletTransaction($booking, 'booking_debit', $portalFeeReference)) {
-                $this->wallet->hold(
-                    $agencyId,
-                    $portalFee,
-                    $portalFeeReference,
-                    ['booking_id' => $booking->id, 'purpose' => 'portal_booking_fee']
-                );
-            }
+            $this->ensurePortalBookingFeeHeld($booking, 'portal_booking_fee');
 
             // 2. Create the real SVP reservation. The selected exam_session_id
             // is the authoritative center assignment; site_id/site_city are
@@ -310,17 +299,9 @@ class BookingService
                 'request_payload' => $data + ['reservation_id' => $reservationId],
             ]);
 
-            $portalFee = $this->portalBookingFee($agencyId);
-            $portalFeeReference = $this->portalFeeReference($booking);
-            if ($portalFee > 0
-                && ! $this->walletTransaction($booking, 'booking_hold', $portalFeeReference)
-                && ! $this->walletTransaction($booking, 'booking_debit', $portalFeeReference)) {
-                $this->wallet->hold($agencyId, $portalFee, $portalFeeReference, [
-                    'booking_id' => $booking->id,
-                    'purpose' => 'portal_booking_fee_reschedule',
-                    'reservation_id' => $reservationId,
-                ]);
-            }
+            $this->ensurePortalBookingFeeHeld($booking, 'portal_booking_fee_reschedule', [
+                'reservation_id' => $reservationId,
+            ]);
 
             $provider = $this->provider->withToken($token);
             $rescheduleResponse = $provider->rescheduleReservation($reservationId, [
@@ -834,6 +815,34 @@ class BookingService
         $fee = is_numeric($configured) ? (float) $configured : 0.0;
 
         return max(0.0, round($fee, 2));
+    }
+
+    /**
+     * Reserve the portal fee exactly once before contacting SVP.
+     *
+     * The wallet belongs to the agency, including when the initiating actor is
+     * an agency user. Keeping this operation idempotent lets payment callbacks
+     * and retries safely converge on one hold/debit pair.
+     *
+     * @param array<string, mixed> $meta
+     */
+    protected function ensurePortalBookingFeeHeld(Booking $booking, string $purpose = 'portal_booking_fee', array $meta = []): void
+    {
+        $fee = $this->portalBookingFee((int) $booking->agency_id);
+        if ($fee <= 0) {
+            return;
+        }
+
+        $reference = $this->portalFeeReference($booking);
+        if ($this->walletTransaction($booking, 'booking_hold', $reference)
+            || $this->walletTransaction($booking, 'booking_debit', $reference)) {
+            return;
+        }
+
+        $this->wallet->hold((int) $booking->agency_id, $fee, $reference, array_merge([
+            'booking_id' => $booking->id,
+            'purpose' => $purpose,
+        ], $meta));
     }
 
     public function finalizePortalBookingFee(Booking $booking): void

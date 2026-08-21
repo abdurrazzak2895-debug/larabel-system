@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Booking;
 use App\Models\Candidate;
+use App\Models\Setting;
 use App\Models\User;
+use App\Services\WalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -190,6 +192,12 @@ class UserPanelTest extends TestCase
         ]);
 
         $user = $this->loginAgencyUser();
+        Setting::create(['key' => 'booking_price', 'value' => '100.00', 'agency_id' => null]);
+        $walletBefore = app(WalletService::class)->getWallet($user->agency_id);
+        $availableBefore = (float) $walletBefore->available_balance;
+        $reservedBefore = (float) $walletBefore->reserved_balance;
+        app(WalletService::class)->deposit($user->agency_id, 250.00, 'RESCHEDULE-TEST-DEPOSIT');
+
         $candidate = Candidate::create([
             'user_id' => $user->id,
             'agency_id' => $user->agency_id,
@@ -286,6 +294,22 @@ class UserPanelTest extends TestCase
             'test_center_id' => '17',
             'exam_session_id' => 'reschedule-session-1',
             'booking_status' => 'booked',
+        ]);
+        $booking = Booking::where('reservation_id', '5370112')->latest('id')->firstOrFail();
+        $this->assertDatabaseHas('wallet_transactions', [
+            'type' => 'booking_hold',
+            'amount' => 100.00,
+            'reference' => 'portal-booking-fee-'.$booking->id,
+        ]);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'type' => 'booking_debit',
+            'amount' => 100.00,
+            'reference' => 'portal-booking-fee-'.$booking->id,
+        ]);
+        $this->assertDatabaseHas('agency_wallets', [
+            'agency_id' => $user->agency_id,
+            'available_balance' => $availableBefore + 150.00,
+            'reserved_balance' => $reservedBefore,
         ]);
 
         Http::assertSent(function ($request) {
