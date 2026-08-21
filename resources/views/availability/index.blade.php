@@ -43,6 +43,7 @@
         </form>
     </div>
 
+    <div id="availability-results" aria-live="polite">
     @if ($categoryId && $city && count($result['rows']) === 0)
         <div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">No currently available sessions were returned for this category, city and date.</div>
     @endif
@@ -69,5 +70,86 @@
             </div>
         </section>
     @endforeach
+    </div>
 </div>
+
+@push('scripts')
+<script>
+(() => {
+    const form = document.querySelector('form[action="{{ route('svp.availability') }}"]');
+    const results = document.getElementById('availability-results');
+    const category = form?.querySelector('[name="category_id"]');
+    const city = form?.querySelector('[name="city"]');
+    const date = form?.querySelector('[name="date"]');
+    const button = form?.querySelector('button');
+    if (!form || !results || !category || !city || !date) return;
+
+    let timer;
+    let controller;
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+    const cityName = item => typeof item === 'object' ? (item.name ?? item.city ?? '') : item;
+    const categoryId = item => typeof item === 'object' ? (item.id ?? item.category_id ?? '') : item;
+
+    function renderRows(data) {
+        const rows = data?.rows ?? [];
+        if (!rows.length) {
+            results.innerHTML = '<div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">No currently available sessions were returned for this category, city and date.</div>';
+            return;
+        }
+        const grouped = rows.reduce((acc, row) => ((acc[row.date] ??= []).push(row), acc), {});
+        results.innerHTML = Object.entries(grouped).map(([examDate, items]) => `
+            <section class="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm mb-6">
+                <div class="bg-slate-50 px-5 py-4 border-b border-slate-200">
+                    <h3 class="text-lg font-bold text-slate-900">${esc(new Date(examDate + 'T00:00:00').toLocaleDateString(undefined, {day:'2-digit', month:'short', year:'numeric'}))}</h3>
+                    <p class="text-sm text-slate-500">${esc(city.value)} · ${items.reduce((sum, row) => sum + Number(row.session_count || 0), 0)} available session(s)</p>
+                </div>
+                <div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-white text-slate-500"><tr><th class="px-5 py-3 text-left font-semibold">Center Name</th><th class="px-5 py-3 text-left font-semibold">Exam Slot</th><th class="px-5 py-3 text-center font-semibold">Sessions</th></tr></thead><tbody class="divide-y divide-slate-100">
+                ${items.map(row => `<tr><td class="px-5 py-3 font-medium text-slate-800">${esc(row.center_name)}</td><td class="px-5 py-3"><span class="font-semibold text-emerald-600">Available</span></td><td class="px-5 py-3 text-center font-semibold text-slate-700">${esc(row.session_count)}</td></tr>`).join('')}
+                </tbody></table></div>
+            </section>`).join('');
+    }
+
+    async function refresh() {
+        if (!category.value) {
+            results.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-600">Select a category and city to check availability.</div>';
+            return;
+        }
+        controller?.abort();
+        controller = new AbortController();
+        button.disabled = true;
+        button.textContent = 'Loading…';
+        results.innerHTML = '<div class="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-blue-800">Loading available centers…</div>';
+        const params = new URLSearchParams({category_id: category.value, city: city.value});
+        if (date.value) params.set('date', date.value);
+        try {
+            const response = await fetch(`${form.action}?${params}`, {headers: {Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, signal: controller.signal});
+            const payload = await response.json();
+            if (!response.ok || payload.success !== true) throw new Error(payload.message || 'Availability request failed.');
+            if (!city.value) {
+                results.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-600">Select a city to check availability.</div>';
+            } else {
+                renderRows(payload.data);
+            }
+            const cities = payload.filters?.cities ?? [];
+            if (cities.length) {
+                const selected = city.value;
+                city.innerHTML = '<option value="">Select city</option>' + cities.map(item => { const value = cityName(item); return `<option value="${esc(value)}">${esc(value)}</option>`; }).join('');
+                city.value = selected;
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') results.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-800">${esc(error.message)}</div>`;
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Check availability';
+        }
+    }
+
+    function schedule() { clearTimeout(timer); timer = setTimeout(refresh, 350); }
+    category.addEventListener('change', () => { city.value = ''; schedule(); });
+    city.addEventListener('change', schedule);
+    date.addEventListener('change', schedule);
+    form.addEventListener('submit', event => { event.preventDefault(); refresh(); });
+})();
+</script>
+@endpush
 @endsection

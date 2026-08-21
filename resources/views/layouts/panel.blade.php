@@ -228,6 +228,8 @@
 {{-- Overlay for mobile --}}
 <div id="panel-overlay" class="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm hidden lg:hidden"></div>
 
+@stack('scripts')
+
 <script>
     const sidebar = document.getElementById('panel-sidebar');
     const overlay = document.getElementById('panel-overlay');

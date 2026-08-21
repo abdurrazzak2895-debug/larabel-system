@@ -34,9 +34,24 @@ class SvpAvailabilityDashboardController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $result,
+                'filters' => [
+                    'categories' => $this->extractFilterList($categories, ['categories', 'data']),
+                    'cities' => $this->extractFilterList($cities, ['cities', 'data']),
+                ],
             ]);
         }
 
         return view('availability.index', compact('categories', 'cities', 'categoryId', 'city', 'date', 'result'));
+    }
+
+    private function extractFilterList(array $payload, array $keys): array
+    {
+        foreach ($keys as $key) {
+            if (isset($payload[$key]) && is_array($payload[$key])) {
+                return array_values($payload[$key]);
+            }
+        }
+
+        return [];
     }
 }

@@ -344,6 +344,58 @@ class UserPanelTest extends TestCase
             ->assertDontSee('>loading<', false);
     }
 
+    public function test_availability_dashboard_returns_ajax_filters_and_available_center_rows(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            if (str_ends_with($path, '/individual_labor_space/occupations')) {
+                return Http::response(['data' => [['id' => '159', 'name' => 'Load and Unload Worker']]], 200);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/test_centers/cities')) {
+                return Http::response(['data' => [['id' => 'Dhaka', 'name' => 'Dhaka']]], 200);
+            }
+
+            if (str_ends_with($path, '/visitor_space/test_centers')) {
+                return Http::response(['data' => [
+                    ['id' => '45', 'name' => 'Bangladesh German TTC', 'city' => 'Dhaka'],
+                ]], 200);
+            }
+
+            if (str_ends_with($path, '/individual_labor_space/exam_sessions')) {
+                if ((string) ($query['test_center_id'] ?? '') !== '45') {
+                    return Http::response(['data' => ['exam_sessions' => []]], 200);
+                }
+
+                return Http::response(['data' => ['exam_sessions' => [[
+                    'id' => 'session-german-2026-08-30',
+                    'exam_date' => '2026-08-30',
+                    'name' => 'First Shift',
+                    'available_seats' => 2,
+                ]]]], 200);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $this->loginAgencyUser();
+        $response = $this->withSession(['svp_token' => 'test-svp-token'])
+            ->getJson(route('svp.availability', [
+                'category_id' => '159',
+                'city' => 'Dhaka',
+                'date' => '2026-08-30',
+            ]));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('filters.cities.0.name', 'Dhaka')
+            ->assertJsonPath('data.rows.0.center_id', '45')
+            ->assertJsonPath('data.rows.0.center_name', 'Bangladesh German TTC')
+            ->assertJsonPath('data.rows.0.session_count', 1);
+    }
+
     public function test_guest_is_redirected_to_login_from_user_panel(): void
     {
         $this->get(route('user.dashboard'))->assertRedirect(route('login'));
