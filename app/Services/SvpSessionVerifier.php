@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Log;
+
 /**
  * Performs the authoritative, read-only SVP exam-session lookup.
  *
@@ -91,6 +93,16 @@ class SvpSessionVerifier
             ? null
             : ($actualDate !== null && $actualDate === $normalizedExpectedDate);
         $upstreamSuccess = $status >= 200 && $status < 300;
+
+        if ($upstreamSuccess && ($center['id'] === null || $center['name'] === null)) {
+            Log::info('SVP availability verifier center envelope', [
+                'session_hash' => substr(sha1($examSessionId), 0, 12),
+                'payload_keys' => array_keys($payload),
+                'session_keys' => array_keys($session),
+                'center_keys' => array_values(array_filter(array_keys($session), static fn (string $key): bool => preg_match('/center|centre|site|location|city|date/i', $key) === 1)),
+                'center_scalars' => $this->centerScalarFields($session),
+            ]);
+        }
 
         return [
             'success' => $upstreamSuccess,
@@ -324,6 +336,33 @@ class SvpSessionVerifier
     private function normalizeLabel(?string $value): string
     {
         return mb_strtolower(trim((string) preg_replace('/\\s+/', ' ', (string) $value)));
+    }
+
+    /**
+     * @param array<string, mixed> $session
+     * @return array<string, scalar|null>
+     */
+    private function centerScalarFields(array $session): array
+    {
+        $fields = [];
+        $visit = function (mixed $node, string $path = '', int $depth = 0) use (&$visit, &$fields): void {
+            if (! is_array($node) || $depth > 4 || count($fields) >= 40) {
+                return;
+            }
+
+            foreach ($node as $key => $value) {
+                $key = (string) $key;
+                $nextPath = $path === '' ? $key : $path.'.'.$key;
+                if (is_scalar($value) && preg_match('/center|centre|site|location|city|date|id|code|name/i', $key) === 1) {
+                    $fields[$nextPath] = is_string($value) ? trim(substr($value, 0, 120)) : $value;
+                } elseif (is_array($value)) {
+                    $visit($value, $nextPath, $depth + 1);
+                }
+            }
+        };
+
+        $visit($session);
+        return $fields;
     }
 
     private function normalizeDate(mixed $value): ?string
