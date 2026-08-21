@@ -54,6 +54,8 @@ return [
         ['id' => '45', 'name' => 'Bangladesh German TTC', 'city' => 'Dhaka', 'country_code' => 'BD'],
         ['id' => '17', 'name' => 'Bangladesh Korea TTC Dhaka', 'city' => 'Dhaka', 'country_code' => 'BD'],
     ],
+    // Availability uses backend-managed accounts by default. Enable only during migration.
+    'allow_session_availability_fallback' => (bool) env('SVP_ALLOW_SESSION_AVAILABILITY_FALLBACK', false),
     'log_requests'  => (bool) env('SVP_LOG_REQUESTS', true),
     'log_channel'   => env('SVP_LOG_CHANNEL', 'daily'),
 

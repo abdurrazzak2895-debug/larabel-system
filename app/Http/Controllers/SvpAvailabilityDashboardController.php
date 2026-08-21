@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\BookingService;
 use App\Services\SvpAvailabilityDashboardService;
+use App\Services\SvpAvailabilityTokenResolver;
 use Illuminate\Http\Request;
 
 class SvpAvailabilityDashboardController extends Controller
@@ -11,13 +12,14 @@ class SvpAvailabilityDashboardController extends Controller
     public function __construct(
         private SvpAvailabilityDashboardService $availability,
         private BookingService $booking,
+        private SvpAvailabilityTokenResolver $tokens,
     ) {
         $this->middleware('auth.multi');
     }
 
     public function index(Request $request)
     {
-        $token = $request->session()->get('svp_token');
+        $token = $this->resolveAvailabilityToken($request);
         $categoryId = trim((string) $request->query('category_id', ''));
         $city = trim((string) $request->query('city', 'Dhaka'));
         $date = $request->query('date');
@@ -42,6 +44,23 @@ class SvpAvailabilityDashboardController extends Controller
         }
 
         return view('availability.index', compact('categories', 'cities', 'categoryId', 'city', 'date', 'result'));
+    }
+
+    private function resolveAvailabilityToken(Request $request): ?string
+    {
+        try {
+            return $this->tokens->resolve();
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            $sessionToken = $request->session()->get('svp_token');
+
+            // Backend accounts remain the default. Keep a session token as a safe
+            // migration/test fallback when no usable backend account is seeded.
+            return (config('svp.allow_session_availability_fallback', false) || filled($sessionToken))
+                ? $sessionToken
+                : null;
+        }
     }
 
     private function extractFilterList(array $payload, array $keys): array

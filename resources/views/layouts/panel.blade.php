@@ -124,6 +124,7 @@
                     {!! $__navLink('Notifications', 'admin.notifications.index', str_starts_with((string) $__routeName, 'admin.notifications'), 'bell') !!}
                     {!! $__navLink('Audit Logs', 'admin.audit-logs.index', str_starts_with((string) $__routeName, 'admin.audit-logs'), 'list') !!}
                     {!! $__navLink('Settings', 'admin.settings.index', str_starts_with((string) $__routeName, 'admin.settings'), 'settings') !!}
+                    {!! $__navLink('SVP Availability Accounts', 'admin.svp-availability-accounts.index', str_starts_with((string) $__routeName, 'admin.svp-availability-accounts'), 'users') !!}
                 </div>
             </div>
             @endif
