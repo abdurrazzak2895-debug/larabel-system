@@ -209,6 +209,7 @@ class SvpAvailabilityDashboardService
         string $centerName,
     ): array {
         $attemptLimit = max(1, (int) config('svp.availability_account_attempts', 3));
+        $lastVerification = null;
         foreach (array_slice($tokens, 0, $attemptLimit) as $token) {
             try {
                 $verification = $this->verifier->verifyAvailability(
@@ -219,15 +220,28 @@ class SvpAvailabilityDashboardService
                     $date,
                     $centerName,
                 );
+                $lastVerification = $verification;
                 if (($verification['verified'] ?? false) === true) {
                     return $verification;
                 }
             } catch (\Throwable $exception) {
+                $upstreamStatus = null;
+                if (method_exists($exception, 'response') && $exception->response()) {
+                    $upstreamStatus = $exception->response()->status();
+                }
+                Log::warning('SVP availability verification exception', [
+                    'session_hash' => substr(sha1($sessionId), 0, 12),
+                    'upstream_status' => $upstreamStatus,
+                    'exception' => get_class($exception),
+                    'message' => preg_replace('/Bearer\\s+[^\\s]+/i', 'Bearer [redacted]', $exception->getMessage()),
+                ]);
                 report($exception);
             }
         }
 
-        return ['verified' => false];
+        return is_array($lastVerification)
+            ? array_replace($lastVerification, ['verified' => false])
+            : ['verified' => false];
     }
 
     /**
