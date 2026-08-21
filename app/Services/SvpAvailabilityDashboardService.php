@@ -98,6 +98,7 @@ class SvpAvailabilityDashboardService
                     'sessions_with_id' => 0,
                     'date_matches' => 0,
                     'verified_sessions' => 0,
+                    'verification_rejections' => [],
                 ];
                 $grouped = [];
 
@@ -127,6 +128,15 @@ class SvpAvailabilityDashboardService
                         $centerName,
                     );
                     if (! ($verification['verified'] ?? false)) {
+                        if (count($diagnostic['verification_rejections']) < 5) {
+                            $diagnostic['verification_rejections'][] = [
+                                'session_hash' => substr(sha1($sessionId), 0, 12),
+                                'upstream_status' => $verification['upstream_status'] ?? null,
+                                'checks' => $verification['checks'] ?? [],
+                                'actual' => $verification['actual'] ?? [],
+                                'expected' => $verification['expected'] ?? [],
+                            ];
+                        }
                         continue;
                     }
                     $diagnostic['verified_sessions']++;
