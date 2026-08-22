@@ -42,17 +42,17 @@ Route::get('/', function () {
 // -------------------------------
 Route::middleware('web')->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
-    Route::post('/login', [LoginController::class, 'login'])->name('login.attempt');
+    Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:5,1')->name('login.attempt');
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
     // -------------------------------
     // SVP / Takamol real API login (email+password -> OTP -> bearer token)
     // -------------------------------
     Route::get('/svp/login', [SvpLoginController::class, 'showLoginForm'])->name('svp.login.form');
-    Route::post('/svp/login', [SvpLoginController::class, 'login'])->name('svp.login.attempt');
+    Route::post('/svp/login', [SvpLoginController::class, 'login'])->middleware('throttle:5,1')->name('svp.login.attempt');
     Route::get('/svp/otp', [SvpLoginController::class, 'showOtpForm'])->name('svp.otp.form');
-    Route::post('/svp/otp/verify', [SvpLoginController::class, 'verifyOtp'])->name('svp.otp.verify');
-    Route::post('/svp/otp/resend', [SvpLoginController::class, 'resendOtp'])->name('svp.otp.resend');
+    Route::post('/svp/otp/verify', [SvpLoginController::class, 'verifyOtp'])->middleware('throttle:10,1')->name('svp.otp.verify');
+    Route::post('/svp/otp/resend', [SvpLoginController::class, 'resendOtp'])->middleware('throttle:3,1')->name('svp.otp.resend');
 
     Route::get('/availability/cities', [SvpAvailabilityDashboardController::class, 'cities'])
         ->middleware('auth.multi')

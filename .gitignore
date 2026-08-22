@@ -30,3 +30,8 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 /.lake/
+
+# One-off root-level debug/scratch scripts must never be committed — several
+# past ones hardcoded live SVP credentials and bearer tokens. If you need a
+# throwaway script, keep it outside the repo or under a gitignored /scratch/.
+/*.php

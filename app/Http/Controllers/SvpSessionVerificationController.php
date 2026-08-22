@@ -30,6 +30,7 @@ class SvpSessionVerificationController extends Controller
         $data = $request->validate([
             'exam_session_id' => ['required', 'string', 'max:255'],
             'expected_test_center_id' => ['required', 'string', 'max:80'],
+            'expected_test_center_name' => ['nullable', 'string', 'max:255'],
             'expected_city' => ['nullable', 'string', 'max:120'],
             'expected_exam_date' => ['nullable', 'date_format:Y-m-d'],
         ]);
@@ -48,6 +49,7 @@ class SvpSessionVerificationController extends Controller
                 $data['expected_test_center_id'],
                 $data['expected_city'] ?? null,
                 $data['expected_exam_date'] ?? null,
+                $data['expected_test_center_name'] ?? null,
             );
 
             return response()->json($result, (int) $result['upstream_status']);

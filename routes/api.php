@@ -25,8 +25,8 @@ Route::prefix('v1')->group(function (): void {
     // Authentication (no Bearer token)
     // -----------------------------------------------------------------
     Route::prefix('sessions')->group(function (): void {
-        Route::post('/login', [AuthController::class, 'login']);
-        Route::post('/otp',   [AuthController::class, 'verifyOtp']);
+        Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+        Route::post('/otp',   [AuthController::class, 'verifyOtp'])->middleware('throttle:10,1');
     });
 
     // -----------------------------------------------------------------
@@ -104,4 +104,4 @@ Route::prefix('v1')->group(function (): void {
 // ---------------------------------------------------------------------
 Route::any('svp/{any}', [\App\Http\Controllers\SvpProxyController::class, 'proxy'])
     ->where('any', '.*')
-    ->middleware(\App\Http\Middleware\HandleSvpCors::class);
+    ->middleware([\App\Http\Middleware\HandleSvpCors::class, 'throttle:60,1']);
