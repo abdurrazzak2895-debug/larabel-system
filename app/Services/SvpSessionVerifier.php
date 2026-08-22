@@ -39,6 +39,31 @@ class SvpSessionVerifier
     }
 
     /**
+     * Booking preflight check for SVP deployments whose authoritative detail
+     * omits center id/name. The hold controller may call this only after the
+     * selected ID has come from the server-side exact-center session snapshot.
+     * City and date must still be confirmed by the authoritative detail.
+     */
+    public function verifyForHold(
+        string $token,
+        string $examSessionId,
+        string $expectedCenterId,
+        ?string $expectedCity = null,
+        ?string $expectedDate = null,
+        ?string $expectedCenterName = null,
+    ): array {
+        return $this->evaluate(
+            $this->booking->examSession($token, $examSessionId),
+            $examSessionId,
+            $expectedCenterId,
+            $expectedCity,
+            $expectedDate,
+            $expectedCenterName,
+            true,
+        );
+    }
+
+    /**
      * Same authoritative check as verify(), but with the bounded/no-retry
      * availability client. This is intentionally read-only and is used only
      * before exposing sessions on the availability dashboard.

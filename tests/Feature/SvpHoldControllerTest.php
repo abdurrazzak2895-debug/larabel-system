@@ -405,6 +405,69 @@ class SvpHoldControllerTest extends TestCase
         $this->assertFalse($payload['verification']['checks']['session_center_present']);
     }
 
+    public function test_hold_is_allowed_for_german_ttc_when_authoritative_detail_omits_center_but_confirms_city_and_date(): void
+    {
+        $booking = Mockery::mock(BookingService::class);
+        $booking->shouldReceive('examSession')
+            ->once()
+            ->with('svp-token', 'german-ttc-session')
+            ->andReturn(response()->json([
+                'data' => [
+                    'exam_session' => [
+                        'id' => 'german-ttc-session',
+                        'exam_date' => '2026-08-23',
+                        'test_center' => [
+                            'city' => 'Dhaka',
+                        ],
+                    ],
+                ],
+            ], 200));
+        $booking->shouldReceive('temporarySeat')
+            ->once()
+            ->with('svp-token', [
+                'exam_session_id' => ['german-ttc-session'],
+                'methodology' => 'in_person',
+            ])
+            ->andReturn(response()->json([
+                'id' => 5270002,
+                'expired_at' => '23/08/2026 06:00',
+            ], 201));
+        $this->app->instance(BookingService::class, $booking);
+
+        $request = Request::create('/user/bookings/temporary-hold', 'POST', [
+            'occupation_id' => '159',
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '45',
+            'test_center_name' => 'Bangladesh German TTC',
+            'exam_session_id' => 'german-ttc-session',
+            'exam_date' => '2026-08-23',
+        ]);
+        $request->setLaravelSession(app('session.store'));
+        $request->session()->start();
+        $request->session()->put('svp_token', 'svp-token');
+
+        app(SvpTemporaryHoldService::class)->rememberSessionLookup($request, [
+            'category_id' => '159',
+            'city' => 'Dhaka',
+            'test_center_id' => '45',
+        ], [
+            'data' => [
+                'sessions' => [[
+                    'id' => 'german-ttc-session',
+                    'exam_date' => '2026-08-23',
+                ]],
+            ],
+        ]);
+
+        $response = app(SvpHoldController::class)->store($request);
+        $payload = $response->getData(true);
+
+        $this->assertSame(201, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+        $this->assertSame('Bangladesh German TTC', $payload['selection']['test_center_name']);
+    }
+
     public function test_hold_is_allowed_when_authoritative_session_confirms_center_and_date(): void
     {
         $booking = Mockery::mock(BookingService::class);

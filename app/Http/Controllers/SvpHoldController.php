@@ -89,7 +89,7 @@ class SvpHoldController extends Controller
             // authenticated GET /exam_sessions/{id}?locale=en confirms the
             // exact center and date. This call is read-only; no upstream
             // mutation happens until the guard has returned verified=true.
-            $verification = $this->sessionVerifier->verify(
+            $verification = $this->sessionVerifier->verifyForHold(
                 $token,
                 $resolvedSessionId,
                 (string) $data['test_center_id'],
