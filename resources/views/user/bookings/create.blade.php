@@ -293,7 +293,15 @@
     }
 
     function sessionCenterName(session) {
-        return session?.test_center_name || session?.site_name || session?.center_name || session?.test_center?.name || session?.site?.name || session?.center?.name || 'Unknown center';
+        const explicit = session?.test_center_name || session?.site_name || session?.center_name || session?.test_center?.name || session?.site?.name || session?.center?.name;
+        if (explicit) return explicit;
+        // This SVP deployment's session list omits test_center.id/name entirely
+        // (only city/country come back). The list is already scoped to the
+        // center the user selected, so fall back to that known name instead
+        // of showing "Unknown center" for every row.
+        const selectedName = testCenterSelect?.options?.[testCenterSelect.selectedIndex]?.dataset?.centerName
+            || testCenterSelect?.options?.[testCenterSelect.selectedIndex]?.textContent;
+        return (selectedName && selectedName.trim()) || 'Unknown center';
     }
 
     function normalizeAvailableDate(item) {
@@ -390,7 +398,12 @@
         const html = Object.keys(grouped).sort().map(function (date) {
             const rows = grouped[date].map(function (session, index) {
                 const centerId = sessionCenterId(session);
-                const matches = centerId !== '' && centerId === selectedCenterId;
+                // A centerless session (this SVP deployment omits test_center
+                // id/name from the list response) is trusted as belonging to
+                // the requested center, matching resolveCenterSession's and
+                // verifyForHold's scoped-fallback logic on the backend. Only
+                // an EXPLICIT different center id is a real mismatch.
+                const matches = centerId === '' || centerId === selectedCenterId;
                 const sessionId = session.id || session.exam_session_id || '';
                 return '<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + escapeHtml(shiftLabel(session, index)) + '</span> · Session ' + escapeHtml(String(sessionId).slice(0, 18)) + ' · ' + escapeHtml(sessionCenterName(session)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>';
             }).join('');
@@ -572,9 +585,20 @@
                 const date = option.dataset.date || 'Unknown date';
                 const sameDateIndex = sessionDateCounts[date] || 0;
                 sessionDateCounts[date] = sameDateIndex + 1;
-                const centerText = centerName ? ' · ' + centerName : ' · Center metadata unavailable';
+                // This SVP deployment's session list omits test_center.id
+                // entirely (only city/country come back) — centerId is '' for
+                // essentially every row. Treat a centerless row as trusted-
+                // scoped to the requested center (the list itself was fetched
+                // filtered by test_center_id), matching resolveCenterSession's
+                // and verifyForHold's fallback on the backend. Only disable
+                // an option when it carries an EXPLICIT, different center id.
+                const resolvedCenterName = centerName
+                    || testCenterSelect?.options?.[testCenterSelect.selectedIndex]?.dataset?.centerName
+                    || testCenterSelect?.options?.[testCenterSelect.selectedIndex]?.textContent
+                    || '';
+                const centerText = resolvedCenterName ? ' · ' + resolvedCenterName : ' · Center metadata unavailable';
                 option.textContent = date + ' — ' + shiftLabel(item, sameDateIndex) + centerText;
-                option.disabled = !centerId || (testCenterSelect?.value && String(centerId) !== String(testCenterSelect.value));
+                option.disabled = !!(centerId && testCenterSelect?.value && String(centerId) !== String(testCenterSelect.value));
             } else {
                 option.textContent = baseLabel;
             }
