@@ -90,10 +90,19 @@
     if (!form || !results || !category || !city || !date) return;
 
     let timer;
-    let controller;
+    let cityController;
+    let availabilityController;
+    let cityRequestId = 0;
+    let availabilityRequestId = 0;
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
     const cityName = item => typeof item === 'object' ? (item.name ?? item.city ?? '') : item;
     const categoryId = item => typeof item === 'object' ? (item.id ?? item.category_id ?? '') : item;
+
+    function cancelAvailability() {
+        availabilityRequestId += 1;
+        availabilityController?.abort();
+        availabilityController = null;
+    }
 
     function renderRows(data) {
         const rows = data?.rows ?? [];
@@ -121,27 +130,38 @@
             return;
         }
 
-        controller?.abort();
-        controller = new AbortController();
+        const requestId = ++cityRequestId;
+        cityController?.abort();
+        const requestController = new AbortController();
+        cityController = requestController;
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            requestController.abort();
+        }, 15000);
         city.disabled = true;
         city.innerHTML = '<option value="">Loading cities…</option>';
         results.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-600">Select a city to check availability.</div>';
 
         try {
             const params = new URLSearchParams({category_id: category.value});
-            const response = await fetch(`{{ route('svp.availability.cities') }}?${params}`, {headers: {Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, signal: controller.signal});
+            const response = await fetch(`{{ route('svp.availability.cities') }}?${params}`, {headers: {Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, signal: requestController.signal});
             const payload = await response.json();
+            if (requestId !== cityRequestId) return;
             if (!response.ok || payload.success !== true) throw new Error(payload.message || 'City lookup failed.');
             const cities = payload.data ?? [];
             city.innerHTML = '<option value="">Select city</option>' + cities.map(item => { const value = cityName(item); return `<option value="${esc(value)}">${esc(value)}</option>`; }).join('');
             city.disabled = cities.length === 0;
             if (!cities.length) results.innerHTML = '<div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">No cities are currently available for this category.</div>';
         } catch (error) {
-            if (error.name !== 'AbortError') {
-                city.innerHTML = '<option value="">City lookup unavailable</option>';
-                city.disabled = true;
-                results.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-800">${esc(error.message)}</div>`;
-            }
+            if (requestId !== cityRequestId || (error.name === 'AbortError' && !timedOut)) return;
+            city.innerHTML = '<option value="">City lookup unavailable</option>';
+            city.disabled = true;
+            const message = timedOut ? 'City lookup timed out. Please try again.' : (error.message || 'City lookup failed.');
+            results.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-800">${esc(message)}</div>`;
+        } finally {
+            clearTimeout(timeoutId);
+            if (cityController === requestController) cityController = null;
         }
     }
 
@@ -150,31 +170,49 @@
             results.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-600">Select a category and city to check availability.</div>';
             return;
         }
-        controller?.abort();
-        controller = new AbortController();
+        cancelAvailability();
+        const requestId = availabilityRequestId;
+        const requestController = new AbortController();
+        availabilityController = requestController;
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            requestController.abort();
+        }, 30000);
         button.disabled = true;
         button.textContent = 'Loading…';
         results.innerHTML = '<div class="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-blue-800">Loading available centers…</div>';
         const params = new URLSearchParams({category_id: category.value, city: city.value});
         if (date.value) params.set('date', date.value);
         try {
-            const response = await fetch(`${form.action}?${params}`, {headers: {Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, signal: controller.signal});
+            const response = await fetch(`${form.action}?${params}`, {headers: {Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, signal: requestController.signal});
             const payload = await response.json();
+            if (requestId !== availabilityRequestId) return;
             if (!response.ok || payload.success !== true) throw new Error(payload.message || 'Availability request failed.');
-            renderRows(payload.data);
+            renderRows(payload.data ?? payload);
         } catch (error) {
-            if (error.name !== 'AbortError') results.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-800">${esc(error.message)}</div>`;
+            if (requestId !== availabilityRequestId || (error.name === 'AbortError' && !timedOut)) return;
+            const message = timedOut ? 'Availability lookup timed out. Please try again.' : (error.message || 'Availability request failed.');
+            results.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-800">${esc(message)}</div>`;
         } finally {
-            button.disabled = false;
-            button.textContent = 'Check availability';
+            clearTimeout(timeoutId);
+            if (requestId === availabilityRequestId) {
+                button.disabled = false;
+                button.textContent = 'Check availability';
+            }
+            if (availabilityController === requestController) availabilityController = null;
         }
     }
 
-    function schedule() { clearTimeout(timer); timer = setTimeout(refresh, 350); }
-    category.addEventListener('change', () => { city.value = ''; loadCities(); });
+    function schedule() {
+        clearTimeout(timer);
+        cancelAvailability();
+        timer = setTimeout(refresh, 350);
+    }
+    category.addEventListener('change', () => { cancelAvailability(); city.value = ''; loadCities(); });
     city.addEventListener('change', schedule);
     date.addEventListener('change', schedule);
-    form.addEventListener('submit', event => { event.preventDefault(); refresh(); });
+    form.addEventListener('submit', event => { event.preventDefault(); clearTimeout(timer); refresh(); });
 })();
 </script>
 @endpush
