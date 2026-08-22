@@ -129,12 +129,13 @@
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC booking</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="available_session_date" class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
-                    <select id="available_session_date" required
-                        class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
+                    @include('user.bookings.partials.svp-calendar', ['calendarId' => 'booking-availability-calendar'])
+                    <select id="available_session_date" aria-hidden="true" tabindex="-1"
+                        class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select a test center first…</option>
                     </select>
-                    <p class="text-xs text-slate-400 mt-1">Every date returned by SVP for the selected center is shown automatically.</p>
+                    <p class="text-xs text-slate-400 mt-1">Only days returned live by SVP for the selected center are clickable. Pick a day, then choose its session/shift.</p>
                     <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available session / shift</label>
                     <select name="exam_session_id" id="exam_session_id" required
                         class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
@@ -246,6 +247,20 @@
     let creditStatusRequest = null;
     let sessionCatalog = [];
     let availableDateCatalog = [];
+    let availabilityCalendar = null;
+
+    function mountAvailabilityCalendar() {
+        if (!window.SvpCalendar || availabilityCalendar) return;
+        availabilityCalendar = window.SvpCalendar.create('booking-availability-calendar', {
+            emptyText: 'Pick a test center to load its open exam dates.',
+            onSelect: function (date) {
+                if (!date || date === availableDateSelect.value) return;
+                availableDateSelect.value = date;
+                availableDateSelect.dispatchEvent(new Event('change'));
+            }
+        });
+    }
+    mountAvailabilityCalendar();
 
     async function loadCreditStatus() {
         const candidateId = candidateSelect?.value;
@@ -332,6 +347,10 @@
             availableDateSelect.appendChild(option);
         });
         availableDateSelect.disabled = sortedDates.length === 0;
+        if (availabilityCalendar) {
+            availabilityCalendar.setDates(sortedDates);
+            availabilityCalendar.setSelected(availableDateSelect.value, true);
+        }
         return sortedDates;
     }
 
@@ -365,6 +384,7 @@
             mergeSessionCatalog(sessions);
             renderAvailableDates(sessionCatalog, availableDateCatalog);
             availableDateSelect.value = date;
+            availabilityCalendar?.setSelected(date, true);
             dateInput.value = date;
             renderSessionsForDate(date);
             if (!sessions.length) {
@@ -915,6 +935,7 @@
                 const dates = renderAvailableDates(sessionCatalog, availableDateCatalog);
                 if (dates.length) {
                     availableDateSelect.value = dates[0];
+                    availabilityCalendar?.setSelected(dates[0], true);
                     dateInput.value = dates[0];
                     renderSessionsForDate(dates[0]);
                     await loadSessionsForDate(dates[0]);

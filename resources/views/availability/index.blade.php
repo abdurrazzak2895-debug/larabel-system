@@ -10,7 +10,7 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-widest text-brand-600">Read-only live lookup</p>
                 <h2 class="mt-1 text-2xl font-bold text-slate-900">Available centers by date</h2>
-                <p class="mt-1 text-sm text-slate-500">Only sessions returned by the authenticated SVP availability endpoint are shown.</p>
+                <p class="mt-1 text-sm text-slate-500">Only sessions returned by the authenticated SVP availability endpoint are shown. Every session is re-checked against SVP's authoritative session record — expand "Verify sessions" to see the real test center reported by SVP.</p>
             </div>
             @if ($result['fetched_at'])
                 <p class="text-xs text-slate-400">Fetched {{ \Carbon\Carbon::parse($result['fetched_at'])->diffForHumans() }}</p>
@@ -61,14 +61,10 @@
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
-                    <thead class="bg-white text-slate-500"><tr><th class="px-5 py-3 text-left font-semibold">Center Name</th><th class="px-5 py-3 text-left font-semibold">Exam Slot</th><th class="px-5 py-3 text-center font-semibold">Sessions</th></tr></thead>
+                    <thead class="bg-white text-slate-500"><tr><th class="px-5 py-3 text-left font-semibold">Center Name</th><th class="px-5 py-3 text-left font-semibold">Exam Slot</th><th class="px-5 py-3 text-center font-semibold">Sessions</th><th class="px-5 py-3 text-right font-semibold">Verification</th></tr></thead>
                     <tbody class="divide-y divide-slate-100">
                     @foreach ($rows as $row)
-                        <tr>
-                            <td class="px-5 py-3 font-medium text-slate-800">{{ $row['center_name'] }}</td>
-                            <td class="px-5 py-3"><span class="font-semibold text-emerald-600">Available</span></td>
-                            <td class="px-5 py-3 text-center font-semibold text-slate-700">{{ $row['session_count'] }}</td>
-                        </tr>
+                        @include('availability.partials.session-verification', ['row' => $row, 'ctxCity' => $city])
                     @endforeach
                     </tbody>
                 </table>
@@ -104,6 +100,37 @@
         availabilityController = null;
     }
 
+    function chip(text) {
+        return `<span class="text-[11px] rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-slate-600">${esc(text)}</span>`;
+    }
+
+    function sessionCard(session, examDate) {
+        const real = session.real_test_center || {};
+        const isExact = real.match === 'exact';
+        const sid = String(session.id || '');
+        const shortId = sid.length > 20 ? sid.slice(0, 12) + '…' + sid.slice(-6) : sid;
+        const realLabel = real.name || (real.id ? 'Test center ID ' + real.id : 'Not published by SVP');
+        const badges = [
+            isExact ? '<span class="text-[11px] font-bold rounded-full px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200">&#10003; Verified</span>'
+                    : '<span class="text-[11px] font-bold rounded-full px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200">&#10003; Verified</span>',
+            `<span class="text-xs font-semibold text-slate-800">${esc(session.shift || 'Session')}</span>`,
+            `<code class="text-[10px] text-slate-400" title="${esc(sid)}">${esc(shortId)}</code>`,
+            session.status ? chip(session.status) : '',
+            session.time_zone_name ? chip(session.time_zone_name) : '',
+        ].filter(Boolean).join(' ');
+        return `
+            <div class="rounded-xl border p-3 ${isExact ? 'border-emerald-200' : 'border-amber-200'}">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">${badges}</div>
+                <dl class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-[11px]">
+                    <div><dt class="uppercase tracking-wide text-slate-400">Real center (SVP)</dt><dd class="font-semibold text-slate-700">${esc(realLabel)}</dd></div>
+                    <div><dt class="uppercase tracking-wide text-slate-400">City</dt><dd class="font-semibold text-slate-700">${esc(real.city || city.value)}</dd></div>
+                    <div><dt class="uppercase tracking-wide text-slate-400">Match type</dt><dd class="font-semibold ${isExact ? 'text-emerald-700' : 'text-amber-700'}">${isExact ? 'Exact center' : 'City scope only'}</dd></div>
+                    <div><dt class="uppercase tracking-wide text-slate-400">Session date (SVP)</dt><dd class="font-semibold text-slate-700">${esc(new Date(examDate + 'T00:00:00').toLocaleDateString(undefined, {day:'2-digit', month:'short', year:'numeric'}))}</dd></div>
+                </dl>
+                ${isExact ? '' : '<p class="mt-2 text-[11px] text-amber-700">SVP\'s authoritative session record confirms this city but omits the test-center id/name, so the center shown above is matched by city scope.</p>'}
+            </div>`;
+    }
+
     function renderRows(data) {
         const rows = data?.rows ?? [];
         if (!rows.length) {
@@ -117,11 +144,42 @@
                     <h3 class="text-lg font-bold text-slate-900">${esc(new Date(examDate + 'T00:00:00').toLocaleDateString(undefined, {day:'2-digit', month:'short', year:'numeric'}))}</h3>
                     <p class="text-sm text-slate-500">${esc(city.value)} · ${items.reduce((sum, row) => sum + Number(row.session_count || 0), 0)} available session(s)</p>
                 </div>
-                <div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-white text-slate-500"><tr><th class="px-5 py-3 text-left font-semibold">Center Name</th><th class="px-5 py-3 text-left font-semibold">Exam Slot</th><th class="px-5 py-3 text-center font-semibold">Sessions</th></tr></thead><tbody class="divide-y divide-slate-100">
-                ${items.map(row => `<tr><td class="px-5 py-3 font-medium text-slate-800">${esc(row.center_name)}</td><td class="px-5 py-3"><span class="font-semibold text-emerald-600">Available</span></td><td class="px-5 py-3 text-center font-semibold text-slate-700">${esc(row.session_count)}</td></tr>`).join('')}
+                <div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-white text-slate-500"><tr><th class="px-5 py-3 text-left font-semibold">Center Name</th><th class="px-5 py-3 text-left font-semibold">Exam Slot</th><th class="px-5 py-3 text-center font-semibold">Sessions</th><th class="px-5 py-3 text-right font-semibold">Verification</th></tr></thead><tbody class="divide-y divide-slate-100">
+                ${items.map(row => {
+                    const sessions = row.sessions || [];
+                    const exactCount = sessions.filter(s => s?.real_test_center?.match === 'exact').length;
+                    return `
+                    <tr>
+                        <td class="px-5 py-3 font-medium text-slate-800">${esc(row.center_name)}</td>
+                        <td class="px-5 py-3"><span class="font-semibold text-emerald-600">Available</span></td>
+                        <td class="px-5 py-3 text-center font-semibold text-slate-700">${esc(row.session_count)}</td>
+                        <td class="px-5 py-3 text-right">
+                            <button type="button" data-verify-toggle class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-50 transition">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                Verify ${sessions.length} session${sessions.length === 1 ? '' : 's'}
+                            </button>
+                        </td>
+                    </tr>
+                    <tr data-verify-panel class="hidden"><td colspan="4" class="bg-slate-50/70 px-5 pb-4">
+                        <div class="rounded-xl border border-slate-200 bg-white p-4">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Per-session real test center — checked live against SVP</p>
+                                <p class="text-[11px] text-slate-400">${exactCount} exact center · ${sessions.length - exactCount} city scope</p>
+                            </div>
+                            <div class="space-y-2">${sessions.map(s => sessionCard(s, examDate)).join('') || '<p class="text-xs text-slate-500">No verified sessions to display.</p>'}</div>
+                        </div>
+                    </td></tr>`;
+                }).join('')}
                 </tbody></table></div>
             </section>`).join('');
     }
+
+    results.addEventListener('click', event => {
+        const toggle = event.target.closest('[data-verify-toggle]');
+        if (!toggle) return;
+        const panel = toggle.closest('tr')?.nextElementSibling;
+        if (panel?.hasAttribute('data-verify-panel')) panel.classList.toggle('hidden');
+    });
 
     async function loadCities() {
         if (!category.value) {

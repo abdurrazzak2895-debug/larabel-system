@@ -119,8 +119,11 @@
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">New session and date</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="available_session_date" class="block text-sm font-medium text-slate-700 mb-1">Available exam date</label>
-                    <select id="available_session_date" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Available exam date</label>
+                    @include('user.bookings.partials.svp-calendar', ['calendarId' => 'reschedule-availability-calendar'])
+                    {{-- Hidden mirror of the calendar selection so existing lookup logic keeps working --}}
+                    <select id="available_session_date" aria-hidden="true" tabindex="-1"
+                        class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select a test center first…</option>
                     </select>
                     <p class="text-xs text-slate-400 mt-1">Every date returned by SVP for the selected center is shown automatically.</p>
@@ -214,6 +217,20 @@
     let creditRequest = null;
     let sessionSnapshot = [];
     let availableDateCatalog = [];
+    let availabilityCalendar = null;
+
+    function mountAvailabilityCalendar() {
+        if (!window.SvpCalendar || availabilityCalendar) return;
+        availabilityCalendar = window.SvpCalendar.create('reschedule-availability-calendar', {
+            emptyText: 'Pick a test center to load its open exam dates.',
+            onSelect: function (date) {
+                if (!date || date === availableDate.value) return;
+                availableDate.value = date;
+                availableDate.dispatchEvent(new Event('change'));
+            }
+        });
+    }
+    mountAvailabilityCalendar();
 
     const esc = value => String(value ?? '').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[ch]));
     const sessionDate = item => String(item?.exam_date || item?.test_date || item?.date || item?.start_date_in_browser_time_zone || item?.start_date_in_tc_time_zone || '').substring(0, 10);
@@ -254,6 +271,10 @@
             availableDate.appendChild(option);
         });
         availableDate.disabled = sorted.length === 0;
+        if (availabilityCalendar) {
+            availabilityCalendar.setDates(sorted);
+            availabilityCalendar.setSelected(availableDate.value, true);
+        }
         return sorted;
     }
 
@@ -341,6 +362,7 @@
             mergeSessionSnapshot(body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || []);
             renderAvailableDates();
             availableDate.value = dateValue;
+            availabilityCalendar?.setSelected(dateValue, true);
             renderSessions([], dateValue);
         } catch (error) {
             session.innerHTML = '<option value="">Could not load sessions for this date</option>';
@@ -427,6 +449,7 @@
             const dates = renderAvailableDates();
             if (dates.length) {
                 availableDate.value = dates[0];
+                availabilityCalendar?.setSelected(dates[0], true);
                 date.value = dates[0];
                 renderSessions([], dates[0]);
                 await loadSessionsForDate(dates[0]);

@@ -122,10 +122,31 @@ class SvpAvailabilityDashboardService
                     }
 
                     $shift = trim((string) ($session['shift_name'] ?? $session['shift'] ?? $session['session_name'] ?? $session['name'] ?? 'Session'));
+                    $checks = is_array($verification['checks'] ?? null) ? $verification['checks'] : [];
+                    $actualCenterId = data_get($verification, 'actual.test_center_id');
+                    $actualCenterName = data_get($verification, 'actual.test_center_name');
+                    $actualCenterCity = data_get($verification, 'actual.city');
                     $grouped[$verifiedDate]['sessions'][$sessionId] = [
                         'id' => $sessionId,
                         'shift' => $shift,
                         'verified' => true,
+                        // What SVP's authoritative single-session endpoint really
+                        // reports for this session. This deployment's list payload
+                        // omits test_center id/name (city only), so "exact" means
+                        // the detail response itself carried a center id.
+                        'real_test_center' => [
+                            'id' => filled($actualCenterId) ? (string) $actualCenterId : null,
+                            'name' => filled($actualCenterName) ? (string) $actualCenterName : null,
+                            'city' => filled($actualCenterCity) ? (string) $actualCenterCity : $city,
+                            'match' => ! empty($checks['session_center_present']) ? 'exact' : 'city_scope',
+                            'fallback_used' => (bool) ($checks['center_scope_fallback'] ?? false),
+                        ],
+                        'time_zone_name' => isset($session['time_zone_name']) && trim((string) $session['time_zone_name']) !== ''
+                            ? trim((string) $session['time_zone_name'])
+                            : null,
+                        'status' => isset($session['status']) && trim((string) $session['status']) !== ''
+                            ? trim((string) $session['status'])
+                            : null,
                     ];
                 }
 
