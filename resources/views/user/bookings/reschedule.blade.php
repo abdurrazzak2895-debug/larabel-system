@@ -337,7 +337,13 @@
             option.dataset.centerName = sessionCenterName(item);
             option.dataset.date = dateValue;
             option.textContent = (dateValue || 'Unknown date') + ' — ' + shiftLabel(item, index) + ' · ' + (option.dataset.centerName || option.dataset.name || 'Unknown test center');
-            option.disabled = !option.dataset.centerId || option.dataset.centerId !== String(center.value);
+            // This SVP deployment's session list can omit test_center id/name
+            // entirely (city-only). A centerless session is trusted as
+            // belonging to the requested center — the list itself was fetched
+            // filtered by test_center_id — matching resolveCenterSession's/
+            // verifyForHold's fallback on the backend. Only an EXPLICIT,
+            // different center id is a real mismatch.
+            option.disabled = !!(option.dataset.centerId && option.dataset.centerId !== String(center.value));
             session.appendChild(option);
         });
         const grouped = {};
@@ -345,7 +351,8 @@
             const d = sessionDate(item) || 'Unknown date';
             grouped[d] = grouped[d] || [];
             const id = item.id || item.exam_session_id || '';
-            const matches = sessionCenterId(item) === String(center.value);
+            const itemCenterId = sessionCenterId(item);
+            const matches = itemCenterId === '' || itemCenterId === String(center.value);
             grouped[d].push('<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + esc(shiftLabel(item, index)) + '</span> · Session ' + esc(id) + ' · ' + esc(sessionCenterName(item)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>');
         });
         const html = Object.keys(grouped).sort().map(d => '<div class="mb-2 last:mb-0"><div class="font-semibold text-slate-700">' + esc(d) + '</div>' + grouped[d].join('') + '</div>').join('');
@@ -476,7 +483,9 @@
     async function createHold() {
         if (holdRequest) return;
         const selected = session.options[session.selectedIndex];
-        if (!selected || !selected.value || !selected.dataset.centerId || selected.dataset.centerId !== String(center.value)) {
+        // Centerless (empty dataset.centerId) is trusted for this SVP tenant —
+        // only an explicit, different center id is a real mismatch.
+        if (!selected || !selected.value || (selected.dataset.centerId && selected.dataset.centerId !== String(center.value))) {
             holdStatus.textContent = 'The selected session does not belong to the selected test center.'; return;
         }
         const payload = {occupation_id: occupation.value, category_id: category.value, city: city.value, test_center_id: center.value, test_center_name: centerName.value, exam_session_id: session.value, exam_date: date.value};
@@ -506,7 +515,9 @@
     session.addEventListener('change', function () {
         const option = session.options[session.selectedIndex];
         centerError.classList.add('hidden'); dateError.classList.add('hidden');
-        if (option?.dataset?.centerId !== String(center.value)) { session.value = ''; resetHold('The selected session belongs to another test center and is blocked.'); const sessionCenterName = option?.dataset?.centerName || option?.dataset?.name || 'another test center'; const selectedCenterName = center.options[center.selectedIndex]?.dataset?.name || center.options[center.selectedIndex]?.textContent || 'the selected test center'; centerError.textContent = 'Blocked: session center "' + sessionCenterName + '" does not match selected center "' + selectedCenterName + '".'; centerError.classList.remove('hidden'); return; }
+        // Centerless (empty dataset.centerId) is trusted for this SVP tenant —
+        // only an explicit, different center id is a real mismatch.
+        if (option?.dataset?.centerId && option.dataset.centerId !== String(center.value)) { session.value = ''; resetHold('The selected session belongs to another test center and is blocked.'); const sessionCenterName = option?.dataset?.centerName || option?.dataset?.name || 'another test center'; const selectedCenterName = center.options[center.selectedIndex]?.dataset?.name || center.options[center.selectedIndex]?.textContent || 'the selected test center'; centerError.textContent = 'Blocked: session center "' + sessionCenterName + '" does not match selected center "' + selectedCenterName + '".'; centerError.classList.remove('hidden'); return; }
         sessionName.value = option?.dataset?.name || option?.textContent || ''; date.value = option?.dataset?.date || ''; holdPanel.classList.remove('hidden'); resetHold('Create a temporary hold for this exact session and date before confirming.'); syncActionButtons();
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date.value)) { dateError.textContent = 'The selected SVP session did not return an exam date.'; dateError.classList.remove('hidden'); holdButton.disabled = true; }
     });
