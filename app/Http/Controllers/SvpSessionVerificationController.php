@@ -43,7 +43,14 @@ class SvpSessionVerificationController extends Controller
         }
 
         try {
-            $result = $this->verifier->verify(
+            // This preflight exists only to preview whether the hold-creation
+            // endpoint (SvpHoldController::store) will accept this session, so
+            // it must apply the exact same matching rules that call uses --
+            // including the scoped city fallback for SVP deployments whose
+            // authoritative exam_session detail omits center id/name entirely.
+            // Using the stricter verify() here previously blocked sessions
+            // that the real hold endpoint would have accepted.
+            $result = $this->verifier->verifyForHold(
                 $token,
                 $data['exam_session_id'],
                 $data['expected_test_center_id'],
