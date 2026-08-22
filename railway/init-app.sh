@@ -18,10 +18,13 @@ mkdir -p storage/framework/views
 mkdir -p storage/logs
 chmod -R 775 storage bootstrap/cache
 
-# 2. Generate APP_KEY if it is missing (idempotent)
+# 2. Require a persistent APP_KEY. The portal session-cookie credential is
+#    encrypted at rest, so generating a new key during a redeploy would make
+#    existing credentials unreadable and invalidate application sessions.
 if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "base64:" ]; then
-    echo "==> APP_KEY is empty — generating one..."
-    php artisan key:generate --force --no-interaction
+    echo "==> ERROR: APP_KEY is required and must be persistent across deploys."
+    echo "    Generate it once with: php artisan key:generate --show"
+    exit 1
 fi
 
 # 3. Create the public/storage -> storage/app/public symlink

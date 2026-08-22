@@ -117,21 +117,25 @@ Open the **Variables** tab of the `App` service and add every variable from
 | `ADMIN_EMAIL` | `admin@takamol.com` | Platform admin login (seeded) |
 | `ADMIN_PASSWORD` | `ChangeMe123!` | Change to a strong password |
 | `PACC_BASE_URL` / `PACC_CLIENT_ID` / `PACC_CLIENT_SECRET` / `PACC_AGENCY_CODE` | your PACC/SVP values | External service integration |
+| `PORTAL_AVAILABILITY_BASE_URL` | `https://svp-international.xyz` | Read-only portal availability origin |
+| `PORTAL_AVAILABILITY_TIMEOUT` | `15` | Portal lookup timeout in seconds |
+| `PORTAL_AVAILABILITY_CONNECT_TIMEOUT` | `5` | Portal connection timeout in seconds |
+| `PORTAL_AVAILABILITY_CACHE_TTL` | `30` | Short live-availability cache in seconds |
+| `PORTAL_AVAILABILITY_CREDENTIAL_CACHE_TTL` | `60` | Credential-cache setting |
+| `PORTAL_AVAILABILITY_DELAY_MS` | `250` | Request pacing setting; no background poller is enabled |
 
 > 💡 **Tip:** add these once at the **Project → Environment → Variables** level so the
 > Worker and Cron services inherit them automatically.
 
-### Step 5 — Generate the APP_KEY
+### Step 5 — Generate and preserve the APP_KEY
 
-Run this on your local machine (inside `svp-app`) and paste the output into `APP_KEY`:
+Generate this once on a trusted local machine and paste the output into the Railway Project/Environment variables. **Do not generate a new key on every deploy.** The portal availability session cookie is encrypted with this key, and changing it makes saved portal credentials unreadable and invalidates application sessions:
 
 ```bash
 php artisan key:generate --show
 ```
 
-It prints a `base64:...` value. If `APP_KEY` is left empty, the pre-deploy script
-generates one automatically on first deploy — but it is better to set it explicitly so
-it never changes between redeploys (that would invalidate sessions).
+It prints a `base64:...` value. The pre-deploy script now fails fast when `APP_KEY` is missing instead of generating a transient deployment-specific key.
 
 ### Step 6 — Deploy
 
