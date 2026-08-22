@@ -21,6 +21,10 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## Portal Availability
+
+The repository includes an isolated, read-only adapter for the authenticated portal availability chain. See [`docs/portal-availability.md`](docs/portal-availability.md) for migration, deployment, credential handling, dashboard usage, and validation instructions. The existing official SVP/Takamol booking flow remains separate and unchanged.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.

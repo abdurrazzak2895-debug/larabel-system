@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\AgencyController;
 use App\Http\Controllers\Admin\TestCenterController;
+use App\Http\Controllers\Admin\PortalAvailabilityController;
 use App\Http\Controllers\Admin\SvpAvailabilityAccountController;
 use App\Http\Controllers\Agency\DashboardController as AgencyDashboardController;
 use App\Http\Controllers\Agency\DepositController as AgencyDepositController;
@@ -120,6 +121,18 @@ Route::middleware('web')->group(function () {
     Route::prefix('test-centers')->name('test-centers.')->group(function () {
         Route::get('/', [TestCenterController::class, 'index'])->name('index');
         Route::post('/sync', [TestCenterController::class, 'sync'])->name('sync');
+    });
+
+    // Portal availability adapter (read-only occupations, dates, and centers)
+    Route::prefix('portal-availability')->name('portal-availability.')->group(function () {
+        Route::get('/', [PortalAvailabilityController::class, 'index'])->name('index');
+        Route::post('/credentials', [PortalAvailabilityController::class, 'storeCredential'])->name('credentials.store');
+        Route::put('/credentials/{credential}', [PortalAvailabilityController::class, 'updateCredential'])->name('credentials.update');
+        Route::post('/credentials/{credential}/activate', [PortalAvailabilityController::class, 'activate'])->name('credentials.activate');
+        Route::post('/credentials/{credential}/deactivate', [PortalAvailabilityController::class, 'deactivate'])->name('credentials.deactivate');
+        Route::get('/occupations', [PortalAvailabilityController::class, 'occupations'])->name('occupations');
+        Route::post('/dates', [PortalAvailabilityController::class, 'dates'])->name('dates');
+        Route::post('/centers', [PortalAvailabilityController::class, 'centers'])->name('centers');
     });
 
     // Backend-managed SVP availability accounts (read-only availability only)
