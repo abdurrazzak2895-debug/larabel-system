@@ -203,11 +203,15 @@
 
     function selectedOccupation() { return occupations.find(item => String(item.occupation_id) === String(occupation.value)); }
 
+    function updateSearchButton() {
+        searchDatesButton.disabled = !(credential.value && selectedOccupation() && language.value);
+    }
+
     function renderLanguages() {
         const item = selectedOccupation();
         language.innerHTML = item ? '<option value="">Select language</option>' + (item.languages || []).map(lang => `<option value="${esc(lang.code)}">${esc(lang.name || lang.code)} (${esc(lang.code)})</option>`).join('') : '<option value="">Select occupation first</option>';
         language.disabled = !item;
-        searchDatesButton.disabled = !(credential.value && item && language.value);
+        updateSearchButton();
     }
 
     function renderOccupations() {
@@ -297,7 +301,7 @@
 
     credential.addEventListener('change', loadOccupations);
     occupation.addEventListener('change', () => { renderLanguages(); centersPanel.classList.add('hidden'); datesPanel.classList.add('hidden'); });
-    language.addEventListener('change', renderLanguages);
+    language.addEventListener('change', updateSearchButton);
     searchDatesButton.addEventListener('click', loadDates);
     refreshButton.addEventListener('click', refreshAll);
     autoRefresh.addEventListener('change', () => { clearInterval(refreshTimer); refreshTimer = autoRefresh.checked ? setInterval(refreshAll, 60000) : null; });
