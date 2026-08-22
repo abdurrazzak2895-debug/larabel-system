@@ -122,6 +122,7 @@ class SvpAvailabilityDashboardService
                     }
 
                     $shift = trim((string) ($session['shift_name'] ?? $session['shift'] ?? $session['session_name'] ?? $session['name'] ?? 'Session'));
+                    $shiftNumberFromName = preg_match('/(?:shift|session)\s*([0-9]+)/i', $shift, $shiftNameMatch) === 1 ? (int) $shiftNameMatch[1] : null;
                     $checks = is_array($verification['checks'] ?? null) ? $verification['checks'] : [];
                     $actualCenterId = data_get($verification, 'actual.test_center_id');
                     $actualCenterName = data_get($verification, 'actual.test_center_name');
@@ -147,6 +148,7 @@ class SvpAvailabilityDashboardService
                         'status' => isset($session['status']) && trim((string) $session['status']) !== ''
                             ? trim((string) $session['status'])
                             : null,
+                        'shift_number_from_name' => $shiftNumberFromName,
                     ];
                 }
 
@@ -154,6 +156,18 @@ class SvpAvailabilityDashboardService
                     $verifiedSessions = array_values($data['sessions']);
                     if ($verifiedSessions === []) {
                         continue;
+                    }
+
+                    // SVP names every slot of a day with the same generic label,
+                    // so number the shifts explicitly (explicit "shift N" in the
+                    // name wins, otherwise list order per date).
+                    $autoNumber = 0;
+                    foreach ($verifiedSessions as $index => $verifiedSession) {
+                        $autoNumber += 1;
+                        $number = $verifiedSession['shift_number_from_name'] ?? $autoNumber;
+                        $verifiedSessions[$index]['shift_number'] = $number;
+                        $verifiedSessions[$index]['shift_label'] = 'Shift ' . $number;
+                        unset($verifiedSessions[$index]['shift_number_from_name']);
                     }
 
                     $rows[] = [

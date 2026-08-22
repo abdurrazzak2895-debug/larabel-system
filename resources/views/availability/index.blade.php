@@ -104,16 +104,18 @@
         return `<span class="text-[11px] rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-slate-600">${esc(text)}</span>`;
     }
 
-    function sessionCard(session, examDate) {
+    function sessionCard(row, session, examDate) {
         const real = session.real_test_center || {};
         const isExact = real.match === 'exact';
         const sid = String(session.id || '');
         const shortId = sid.length > 20 ? sid.slice(0, 12) + '…' + sid.slice(-6) : sid;
+        const shiftLabel = session.shift_label || session.shift || 'Session';
         const realLabel = real.name || (real.id ? 'Test center ID ' + real.id : 'Not published by SVP');
         const badges = [
             isExact ? '<span class="text-[11px] font-bold rounded-full px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200">&#10003; Verified</span>'
                     : '<span class="text-[11px] font-bold rounded-full px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200">&#10003; Verified</span>',
-            `<span class="text-xs font-semibold text-slate-800">${esc(session.shift || 'Session')}</span>`,
+            `<span class="inline-flex items-center rounded-lg bg-brand-50 border border-brand-200 px-2 py-0.5 text-[11px] font-bold text-brand-700">${esc(shiftLabel)}</span>`,
+            `<span class="text-xs font-semibold text-slate-800" title="${esc(session.shift || '')}">${esc(row.center_name)}</span>`,
             `<code class="text-[10px] text-slate-400" title="${esc(sid)}">${esc(shortId)}</code>`,
             session.status ? chip(session.status) : '',
             session.time_zone_name ? chip(session.time_zone_name) : '',
@@ -122,12 +124,12 @@
             <div class="rounded-xl border p-3 ${isExact ? 'border-emerald-200' : 'border-amber-200'}">
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">${badges}</div>
                 <dl class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-[11px]">
-                    <div><dt class="uppercase tracking-wide text-slate-400">Real center (SVP)</dt><dd class="font-semibold text-slate-700">${esc(realLabel)}</dd></div>
-                    <div><dt class="uppercase tracking-wide text-slate-400">City</dt><dd class="font-semibold text-slate-700">${esc(real.city || city.value)}</dd></div>
-                    <div><dt class="uppercase tracking-wide text-slate-400">Match type</dt><dd class="font-semibold ${isExact ? 'text-emerald-700' : 'text-amber-700'}">${isExact ? 'Exact center' : 'City scope only'}</dd></div>
+                    <div><dt class="uppercase tracking-wide text-slate-400">Test centre (listed under)</dt><dd class="font-semibold text-slate-700">${esc(row.center_name)}</dd></div>
+                    <div><dt class="uppercase tracking-wide text-slate-400">Real center per SVP</dt><dd class="font-semibold text-slate-700">${esc(realLabel)}</dd></div>
+                    <div><dt class="uppercase tracking-wide text-slate-400">City / match type</dt><dd class="font-semibold ${isExact ? 'text-emerald-700' : 'text-amber-700'}">${esc(real.city || city.value)} · ${isExact ? 'Exact' : 'City scope'}</dd></div>
                     <div><dt class="uppercase tracking-wide text-slate-400">Session date (SVP)</dt><dd class="font-semibold text-slate-700">${esc(new Date(examDate + 'T00:00:00').toLocaleDateString(undefined, {day:'2-digit', month:'short', year:'numeric'}))}</dd></div>
                 </dl>
-                ${isExact ? '' : '<p class="mt-2 text-[11px] text-amber-700">SVP\'s authoritative session record confirms this city but omits the test-center id/name, so the center shown above is matched by city scope.</p>'}
+                ${isExact ? '' : '<p class="mt-2 text-[11px] text-amber-700">SVP\'s authoritative session record confirms the city but omits the test-center id/name for this deployment; the session is listed under ' + esc(row.center_name) + ', the centre it was queried against.</p>'}
             </div>`;
     }
 
@@ -166,7 +168,8 @@
                                 <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Per-session real test center — checked live against SVP</p>
                                 <p class="text-[11px] text-slate-400">${exactCount} exact center · ${sessions.length - exactCount} city scope</p>
                             </div>
-                            <div class="space-y-2">${sessions.map(s => sessionCard(s, examDate)).join('') || '<p class="text-xs text-slate-500">No verified sessions to display.</p>'}</div>
+                            <p class="mb-3 text-[11px] text-slate-400">Each entry is a separate bookable shift returned live by SVP for <span class="font-semibold">${esc(row.center_name)}</span> on this date — session IDs are unique and never shared between centers.</p>
+                            <div class="space-y-2">${sessions.map(s => sessionCard(row, s, examDate)).join('') || '<p class="text-xs text-slate-500">No verified sessions to display.</p>'}</div>
                         </div>
                     </td></tr>`;
                 }).join('')}

@@ -22,6 +22,7 @@
                 <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Per-session real test center — checked live against SVP</p>
                 <p class="text-[11px] text-slate-400">{{ $exactCount }} exact center · {{ $sessions->count() - $exactCount }} city scope</p>
             </div>
+            <p class="mb-3 text-[11px] text-slate-400">Each entry is a separate bookable shift returned live by SVP for <span class="font-semibold">{{ $row['center_name'] }}</span> on this date — session IDs are unique and never shared between centers.</p>
             <div class="space-y-2">
                 @forelse ($sessions as $session)
                     @php
@@ -38,7 +39,8 @@
                             <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold {{ $isExact ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200' }}">
                                 ✓ Verified
                             </span>
-                            <span class="text-xs font-semibold text-slate-800">{{ $session['shift'] ?? 'Session' }}</span>
+                            <span class="inline-flex items-center rounded-lg bg-brand-50 border border-brand-200 px-2 py-0.5 text-[11px] font-bold text-brand-700">{{ $session['shift_label'] ?? ($session['shift'] ?? 'Session') }}</span>
+                            <span class="text-xs font-semibold text-slate-800" title="{{ $session['shift'] ?? '' }}">{{ $row['center_name'] }}</span>
                             <code class="text-[10px] text-slate-400" title="{{ $sid }}">{{ $shortId }}</code>
                             @if (($session['status'] ?? null))
                                 <span class="text-[11px] rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-slate-600">{{ $session['status'] }}</span>
@@ -66,7 +68,7 @@
                             </div>
                         </dl>
                         @if (! $isExact)
-                            <p class="mt-2 text-[11px] text-amber-700">SVP's authoritative session record confirms this city but omits the test-center id/name, so the center shown above is matched by city scope.</p>
+                            <p class="mt-2 text-[11px] text-amber-700">SVP's authoritative session record confirms the city but omits the test-center id/name for this deployment; the session is listed under {{ $row['center_name'] }}, the centre it was queried against.</p>
                         @endif
                     </div>
                 @empty
