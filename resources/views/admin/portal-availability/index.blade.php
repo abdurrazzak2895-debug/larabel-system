@@ -5,11 +5,9 @@
 
 @section('content')
 <div class="space-y-6" id="portal-availability-app"
-     data-urls='@json([
-        "occupations" => route("admin.portal-availability.occupations"),
-        "dates" => route("admin.portal-availability.dates"),
-        "centers" => route("admin.portal-availability.centers"),
-     ])'
+     data-occupations-url="{{ route('admin.portal-availability.occupations') }}"
+     data-dates-url="{{ route('admin.portal-availability.dates') }}"
+     data-centers-url="{{ route('admin.portal-availability.centers') }}"
      data-csrf="{{ csrf_token() }}">
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -153,7 +151,11 @@
 (() => {
     const app = document.getElementById('portal-availability-app');
     if (!app) return;
-    const urls = JSON.parse(app.dataset.urls || '{}');
+    const urls = {
+        occupations: app.dataset.occupationsUrl,
+        dates: app.dataset.datesUrl,
+        centers: app.dataset.centersUrl,
+    };
     const csrf = app.dataset.csrf;
     const credential = document.getElementById('portal-credential');
     const occupation = document.getElementById('portal-occupation');
