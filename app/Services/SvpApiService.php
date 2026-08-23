@@ -66,6 +66,20 @@ class SvpApiService
         return $this->post('/api/v1/sessions/otp', $payload);
     }
 
+    private function containsTokenKey(array $payload): bool
+    {
+        foreach ($payload as $key => $value) {
+            if (in_array($key, ['token', 'access_token', 'access'], true) && is_string($value) && trim($value) !== '') {
+                return true;
+            }
+            if (is_array($value) && $this->containsTokenKey($value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Perform the POST request with the tenant header.
      *
@@ -91,8 +105,9 @@ class SvpApiService
             if (config('svp.log_requests', false)) {
                 Log::channel(config('svp.log_channel', 'daily'))->info('SVP API request', [
                     'method' => 'POST',
-                    'url'    => $this->baseUrl . $path,
-                    'body'   => $payload,
+                    'path' => $path,
+                    'payload_keys' => array_keys($payload),
+                    'user_payload_keys' => is_array($payload['user'] ?? null) ? array_keys($payload['user']) : [],
                 ]);
             }
 
@@ -103,7 +118,8 @@ class SvpApiService
             if (config('svp.log_requests', false)) {
                 Log::channel(config('svp.log_channel', 'daily'))->info('SVP API response', [
                     'status' => $response->status(),
-                    'body'   => $body,
+                    'response_keys' => is_array($body) ? array_keys($body) : [],
+                    'contains_access_token' => $this->containsTokenKey(is_array($body) ? $body : []),
                 ]);
             }
 

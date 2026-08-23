@@ -883,7 +883,7 @@
 
             try {
                 setLoading(testCenterSelect, true);
-                const url = "{{ route('user.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId);
+                const url = "{{ route('user.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId) + "&occupation_id=" + encodeURIComponent(occupationSelect.value) + "&language_code=" + encodeURIComponent(document.getElementById('language_code')?.value || 'LOABB');
                 const data = await fetchJSON(url);
                 const centers = data?.data?.test_centers || (data && Array.isArray(data.data) ? data.data : []);
                 populateSelect(testCenterSelect, centers, 'id', 'name');

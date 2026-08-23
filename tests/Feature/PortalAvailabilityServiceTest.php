@@ -90,6 +90,58 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertArrayNotHasKey('user_id', $center);
     }
 
+    public function test_portal_booking_lookup_methods_return_verified_filter_data(): void
+    {
+        PortalAvailabilityCredential::query()->create([
+            'name' => 'Booking lookup session',
+            'portal_account_id' => 'portal-account-booking',
+            'session_cookie' => 'session=booking-authorized',
+            'active' => true,
+        ]);
+
+        $provider = new class implements PortalAvailabilityProviderInterface
+        {
+            public function occupations(string $sessionCookie): array
+            {
+                return [[
+                    'name' => 'Load and Unload Worker',
+                    'occupation_id' => 2061,
+                    'category_id' => 159,
+                    'category_name' => 'Load and unload workers',
+                    'languages' => [['code' => 'LOABB', 'name' => 'Bengali']],
+                ]];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => [['city' => 'Khulna', 'date' => '2030-09-01']]];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                return ['centers' => [[
+                    'test_center_name' => 'Jashore TTC',
+                    'test_center_id' => 171,
+                    'test_time' => '09:30 AM',
+                    'available_seats' => 3,
+                ]]];
+            }
+        };
+
+        $service = new PortalAvailabilityService($provider);
+        $this->assertSame('Load and Unload Worker', $service->bookingOccupations('load')[0]['name']);
+        $this->assertSame([
+            ['id' => '159', 'name' => 'Load and unload workers'],
+        ], $service->bookingCategories('2061'));
+        $this->assertSame([
+            ['name' => 'Khulna'],
+        ], $service->bookingCities('159'));
+        $centers = $service->bookingCenters('159', 'Khulna', '2061', 'LOABB')['test_centers'];
+        $this->assertSame('171', (string) $centers[0]['id']);
+        $this->assertSame('Jashore TTC', $centers[0]['name']);
+        $this->assertSame(3, $centers[0]['available_seats']);
+    }
+
     public function test_admin_can_load_occupations_without_exposing_the_session_cookie(): void
     {
         $permission = Permission::query()->create(['name' => 'manage agencies', 'slug' => 'manage-agencies']);

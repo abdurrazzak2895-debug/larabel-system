@@ -13,7 +13,6 @@ use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\AgencyController;
 use App\Http\Controllers\Admin\TestCenterController;
 use App\Http\Controllers\Admin\PortalAvailabilityController;
-use App\Http\Controllers\Admin\SvpAvailabilityAccountController;
 use App\Http\Controllers\Agency\DashboardController as AgencyDashboardController;
 use App\Http\Controllers\Agency\DepositController as AgencyDepositController;
 use App\Http\Controllers\Agency\NotificationController as AgencyNotificationController;
@@ -25,7 +24,6 @@ use App\Http\Controllers\AgencyPanelController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SvpLoginController;
 use App\Http\Controllers\SvpSessionVerificationController;
-use App\Http\Controllers\SvpAvailabilityDashboardController;
 use App\Http\Controllers\User\BookingController as UserBookingController;
 use App\Http\Controllers\User\DashboardController as UserDashboardController;
 use App\Http\Controllers\User\DepositController as UserDepositController;
@@ -54,16 +52,6 @@ Route::middleware('web')->group(function () {
     Route::get('/svp/otp', [SvpLoginController::class, 'showOtpForm'])->name('svp.otp.form');
     Route::post('/svp/otp/verify', [SvpLoginController::class, 'verifyOtp'])->middleware('throttle:10,1')->name('svp.otp.verify');
     Route::post('/svp/otp/resend', [SvpLoginController::class, 'resendOtp'])->middleware('throttle:3,1')->name('svp.otp.resend');
-
-    Route::get('/availability/cities', [SvpAvailabilityDashboardController::class, 'cities'])
-        ->middleware('auth.multi')
-        ->name('svp.availability.cities');
-    Route::get('/availability', [SvpAvailabilityDashboardController::class, 'index'])
-        ->middleware('auth.multi')
-        ->name('svp.availability');
-    Route::get('/sessionpercenterbot', [SvpAvailabilityDashboardController::class, 'sessionPerCenterBot'])
-        ->middleware('auth.multi')
-        ->name('svp.session-per-center-bot');
 
     // -------------------------------
     // Super Admin panel
@@ -133,15 +121,6 @@ Route::middleware('web')->group(function () {
         Route::get('/occupations', [PortalAvailabilityController::class, 'occupations'])->name('occupations');
         Route::post('/dates', [PortalAvailabilityController::class, 'dates'])->name('dates');
         Route::post('/centers', [PortalAvailabilityController::class, 'centers'])->name('centers');
-    });
-
-    // Backend-managed SVP availability accounts (read-only availability only)
-    Route::prefix('svp-availability-accounts')->name('svp-availability-accounts.')->group(function () {
-        Route::get('/', [SvpAvailabilityAccountController::class, 'index'])->name('index');
-        Route::post('/', [SvpAvailabilityAccountController::class, 'store'])->name('store');
-        Route::post('/{account}/token', [SvpAvailabilityAccountController::class, 'seedToken'])->name('token');
-        Route::post('/{account}/activate', [SvpAvailabilityAccountController::class, 'activate'])->name('activate');
-        Route::post('/{account}/deactivate', [SvpAvailabilityAccountController::class, 'deactivate'])->name('deactivate');
     });
 
     // Settings

@@ -64,30 +64,6 @@ class SvpSessionVerifier
     }
 
     /**
-     * Same authoritative check as verify(), but with the bounded/no-retry
-     * availability client. This is intentionally read-only and is used only
-     * before exposing sessions on the availability dashboard.
-     */
-    public function verifyAvailability(
-        string $token,
-        string $examSessionId,
-        string $expectedCenterId,
-        ?string $expectedCity = null,
-        ?string $expectedDate = null,
-        ?string $expectedCenterName = null,
-    ): array {
-        return $this->evaluate(
-            $this->booking->availabilityExamSession($token, $examSessionId),
-            $examSessionId,
-            $expectedCenterId,
-            $expectedCity,
-            $expectedDate,
-            $expectedCenterName,
-            true,
-        );
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function evaluate(

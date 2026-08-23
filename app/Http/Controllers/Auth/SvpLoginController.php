@@ -72,7 +72,7 @@ class SvpLoginController extends Controller
 
         if ($result['status'] >= 400) {
             throw ValidationException::withMessages([
-                'email' => data_get($result['body'], 'message', 'SVP credentials rejected.'),
+                'email' => $this->authenticationErrorMessage((int) $result['status'], $result['body']),
             ]);
         }
 
@@ -125,7 +125,7 @@ class SvpLoginController extends Controller
 
             if ($result['status'] >= 400) {
                 throw ValidationException::withMessages([
-                    'otp_code' => data_get($result['body'], 'message', 'Unable to resend OTP.'),
+                    'otp_code' => $this->authenticationErrorMessage((int) $result['status'], $result['body'], true),
                 ]);
             }
         } catch (ValidationException $e) {
@@ -183,9 +183,12 @@ class SvpLoginController extends Controller
         $token = $this->findToken($result['body']);
 
         if (! $token) {
-            Log::warning('SVP OTP response missing token', ['body' => $result['body']]);
+            Log::warning('SVP OTP response missing token', [
+                'status' => $result['status'],
+                'response_keys' => is_array($result['body'] ?? null) ? array_keys($result['body']) : [],
+            ]);
             throw ValidationException::withMessages([
-                'otp_code' => 'SVP did not return an access token. Raw: ' . json_encode($result['body']),
+                'otp_code' => 'SVP did not return an access token. Please try the login again.',
             ]);
         }
 
@@ -244,6 +247,28 @@ class SvpLoginController extends Controller
             : route('user.dashboard');
 
         return redirect()->intended($home);
+    }
+
+    private function authenticationErrorMessage(int $status, mixed $body, bool $resend = false): string
+    {
+        if ($status === 404) {
+            return 'The SVP authentication endpoint was not found. Check the SVP base URL and tenant configuration.';
+        }
+
+        if ($status === 429) {
+            return 'Too many SVP authentication attempts. Wait a few minutes before requesting another OTP.';
+        }
+
+        if ($status >= 500) {
+            return 'Takamol SVP is temporarily unavailable. Please try again in a few minutes.';
+        }
+
+        $message = data_get($body, 'message');
+        if (is_string($message) && trim($message) !== '') {
+            return trim($message);
+        }
+
+        return $resend ? 'Unable to resend the SVP OTP.' : 'SVP credentials were rejected. Check the email and password, then request a new OTP.';
     }
 
     /**

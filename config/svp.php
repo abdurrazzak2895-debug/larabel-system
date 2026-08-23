@@ -16,14 +16,6 @@ return [
     'timeout'       => (int) env('SVP_TIMEOUT', 30),
     'retry_times'   => (int) env('SVP_RETRY_TIMES', 3),
     'retry_delay'   => (int) env('SVP_RETRY_DELAY', 1000),
-    // Read-only availability calls must fail fast; booking/reservation calls keep
-    // the general SVP timeout and retry policy.
-    'availability_timeout' => (int) env('SVP_AVAILABILITY_TIMEOUT', 5),
-    'availability_connect_timeout' => (int) env('SVP_AVAILABILITY_CONNECT_TIMEOUT', 2),
-    'availability_account_attempts' => (int) env('SVP_AVAILABILITY_ACCOUNT_ATTEMPTS', 3),
-    'availability_cache_ttl' => (int) env('SVP_AVAILABILITY_CACHE_TTL', 60),
-    'availability_city_cache_ttl' => (int) env('SVP_AVAILABILITY_CITY_CACHE_TTL', 900),
-    'availability_category_cache_ttl' => (int) env('SVP_AVAILABILITY_CATEGORY_CACHE_TTL', 900),
     'tenant_name'   => env('SVP_TENANT_NAME', 'svp-international'),
     'country_id'    => (int) env('SVP_COUNTRY_ID', 78),
     // SVP expects a Prometric language code (for example LOABB), not an ISO code such as en.

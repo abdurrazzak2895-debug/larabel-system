@@ -75,7 +75,7 @@ final class PortalAvailabilityService
 
     /** @return array{credential: array<string, mixed>, data: array<string, mixed>, fetched_at: string} */
     public function searchDates(
-        int $credentialId,
+        ?int $credentialId,
         int|string $categoryId,
         string $startFrom,
     ): array {
@@ -115,7 +115,7 @@ final class PortalAvailabilityService
 
     /** @return array{credential: array<string, mixed>, data: array<string, mixed>, fetched_at: string} */
     public function centers(
-        int $credentialId,
+        ?int $credentialId,
         int|string $categoryId,
         string $city,
         string $date,
@@ -165,6 +165,83 @@ final class PortalAvailabilityService
         }, $credential);
     }
 
+    /** @return array<int, array<string, mixed>> */
+    public function bookingOccupations(?string $search = null): array
+    {
+        $items = $this->occupations()['data'] ?? [];
+        $term = Str::lower(trim((string) $search));
+
+        if ($term === '') {
+            return array_values($items);
+        }
+
+        return array_values(array_filter($items, static fn (array $item): bool => Str::contains(Str::lower((string) ($item['name'] ?? '')), $term)));
+    }
+
+    /** @return array<int, array{id: string, name: string}> */
+    public function bookingCategories(int|string $occupationId): array
+    {
+        $occupationId = trim((string) $occupationId);
+        if ($occupationId === '') {
+            return [];
+        }
+
+        $occupation = collect($this->occupations()['data'] ?? [])
+            ->first(static fn (array $item): bool => (string) ($item['occupation_id'] ?? '') === $occupationId);
+        $categoryId = is_array($occupation) ? trim((string) ($occupation['category_id'] ?? '')) : '';
+
+        return $categoryId === '' ? [] : [[
+            'id' => $categoryId,
+            'name' => trim((string) ($occupation['category_name'] ?? '')) ?: 'Category '.$categoryId,
+        ]];
+    }
+
+    /** @return array<int, array{name: string}> */
+    public function bookingCities(int|string $categoryId): array
+    {
+        $dates = $this->searchDates(null, $categoryId, now()->toDateString())['data']['dates'] ?? [];
+        return collect($dates)
+            ->pluck('city')
+            ->filter(static fn ($city): bool => is_string($city) && trim($city) !== '')
+            ->map(static fn (string $city): array => ['name' => trim($city)])
+            ->unique('name')
+            ->values()
+            ->all();
+    }
+
+    /** @return array{test_centers: array<int, array<string, mixed>>} */
+    public function bookingCenters(
+        int|string $categoryId,
+        string $city,
+        int|string $occupationId,
+        string $languageCode,
+    ): array {
+        $city = trim($city);
+        $dates = $this->searchDates(null, $categoryId, now()->toDateString())['data']['dates'] ?? [];
+        $dates = collect($dates)
+            ->filter(static fn (array $item): bool => strcasecmp(trim((string) ($item['city'] ?? '')), $city) === 0)
+            ->pluck('date')
+            ->filter(static fn ($date): bool => is_string($date) && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date) === 1)
+            ->unique()
+            ->take(max(1, (int) config('portal.booking_center_date_limit', 14)));
+
+        $centers = [];
+        foreach ($dates as $date) {
+            $rows = $this->centers(null, $categoryId, $city, $date, $occupationId, $languageCode)['data']['centers'] ?? [];
+            foreach ($rows as $row) {
+                $key = (string) ($row['test_center_id'] ?? $row['test_center_name'] ?? '');
+                if ($key !== '') {
+                    $centers[$key] ??= array_merge($row, [
+                        'id' => $row['test_center_id'] ?? null,
+                        'name' => $row['test_center_name'] ?? null,
+                    ]);
+                }
+            }
+        }
+
+        return ['test_centers' => array_values($centers)];
+    }
+
     private function remember(string $key, callable $callback, PortalAvailabilityCredential $credential): array
     {
         try {
@@ -191,6 +268,7 @@ final class PortalAvailabilityService
                 'name' => trim((string) ($item['name'] ?? '')),
                 'occupation_id' => $item['occupation_id'] ?? null,
                 'category_id' => $item['category_id'] ?? null,
+                'category_name' => trim((string) ($item['category_name'] ?? $item['category_name_en'] ?? data_get($item, 'category.name', ''))),
                 'languages' => collect($item['languages'] ?? [])
                     ->filter(fn ($language): bool => is_array($language))
                     ->map(fn (array $language): array => [

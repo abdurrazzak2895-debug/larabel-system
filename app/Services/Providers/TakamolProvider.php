@@ -66,21 +66,6 @@ class TakamolProvider implements BookingProviderInterface
     }
 
     /**
-     * Use a bounded, no-retry client for read-only availability lookups.
-     * Reservation and payment calls continue to use the normal client policy.
-     */
-    public function forAvailability(): static
-    {
-        $clone = clone $this;
-        $clone->client = $clone->client
-            ->connectTimeout(max(1, (int) config('svp.availability_connect_timeout', 2)))
-            ->timeout(max(1, (int) config('svp.availability_timeout', 5)))
-            ->retry(0, 0);
-
-        return $clone;
-    }
-
-    /**
      * Attach a Rails-style CSRF token (returned as `csrf` in the OTP response)
      * so authenticated requests pass the SVP API's CSRF protection.
      */
@@ -1306,9 +1291,9 @@ class TakamolProvider implements BookingProviderInterface
             if ($response->failed()) {
                 Log::warning('SVP API request failed', [
                     'method' => $method,
-                    'url' => $this->baseUrl.$url,
+                    'path' => $url,
                     'status' => $response->status(),
-                    'body' => $response->body(),
+                    'response_keys' => is_array($response->json()) ? array_keys($response->json()) : [],
                 ]);
             }
 

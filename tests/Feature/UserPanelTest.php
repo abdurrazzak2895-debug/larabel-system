@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\Booking;
 use App\Models\Candidate;
 use App\Models\Setting;
-use App\Models\SvpAvailabilityAccount;
+use App\Models\PortalAvailabilityCredential;
 use App\Models\User;
 use App\Services\WalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -333,19 +333,20 @@ class UserPanelTest extends TestCase
 
     public function test_booking_wizard_renders_real_occupation_search_and_category_autofill(): void
     {
+        PortalAvailabilityCredential::create([
+            'name' => 'Booking portal session',
+            'portal_account_id' => 'booking-portal-account',
+            'session_cookie' => 'session=booking-authorized',
+            'active' => true,
+        ]);
+
         Http::fake([
-            'svp-international-api.pacc.sa/api/v1/individual_labor_space/occupations*' => Http::response([
-                'data' => [
-                    [
-                        'id' => 2062,
-                        'english_name' => 'Kitchen Worker',
-                        'arabic_name' => 'عامل مطبخ',
-                    ],
-                ],
-            ], 200),
-            'svp-international-api.pacc.sa/api/v1/individual_labor_space/categories*' => Http::response([
-                'data' => [
-                    ['id' => 1, 'name' => 'Offices and Facilities Cleaning Workers'],
+            'https://svp-international.xyz/api/occupations' => Http::response([
+                [
+                    'name' => 'Kitchen Worker',
+                    'occupation_id' => 2062,
+                    'category_id' => 1,
+                    'category_name' => 'Offices and Facilities Cleaning Workers',
                 ],
             ], 200),
         ]);
@@ -363,352 +364,37 @@ class UserPanelTest extends TestCase
             ->assertSee('Bengali', false)
             ->assertSee('value="LOABB"', false)
             ->assertSee('id="available_session_date"', false)
-            ->assertSee('Every date returned by SVP for the selected center is shown automatically.', false)
+            ->assertSee('Pick a test center to load its open exam dates.', false)
             ->assertSee('loadSessionsForDate', false)
             ->assertDontSee('>load<', false)
             ->assertDontSee('>loading<', false);
     }
 
-    public function test_availability_dashboard_returns_ajax_filters_and_available_center_rows(): void
+    public function test_user_occupation_lookup_uses_portal_session_not_candidate_token(): void
     {
-        Http::fake(function ($request) {
-            $path = (string) parse_url($request->url(), PHP_URL_PATH);
-            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
-
-            if (str_ends_with($path, '/individual_labor_space/occupations')) {
-                return Http::response(['data' => [['id' => '159', 'name' => 'Load and Unload Worker']]], 200);
-            }
-
-            if (str_ends_with($path, '/individual_labor_space/test_centers/cities')) {
-                return Http::response(['data' => [['id' => 'Dhaka', 'name' => 'Dhaka']]], 200);
-            }
-
-            if (str_ends_with($path, '/visitor_space/test_centers')) {
-                return Http::response(['data' => [
-                    ['id' => '45', 'name' => 'Bangladesh German TTC', 'city' => 'Dhaka'],
-                ]], 200);
-            }
-
-            if (str_ends_with($path, '/exam_sessions/session-german-2026-08-30')) {
-                return Http::response(['data' => ['exam_session' => [
-                    'id' => 'session-german-2026-08-30',
-                    'exam_date' => '2026-08-30',
-                    'test_center_id' => 45,
-                    'test_center_name' => 'Bangladesh German TTC',
-                    'test_center_city' => 'Dhaka',
-                ]]], 200);
-            }
-
-            if (str_ends_with($path, '/individual_labor_space/exam_sessions')) {
-                if ((string) ($query['test_center_id'] ?? '') !== '45') {
-                    return Http::response(['data' => ['exam_sessions' => []]], 200);
-                }
-
-                return Http::response(['data' => ['exam_sessions' => [[
-                    'id' => 'session-german-2026-08-30',
-                    'exam_date' => '2026-08-30',
-                    'name' => 'First Shift',
-                    'available_seats' => 2,
-                ]]]], 200);
-            }
-
-            return Http::response([], 404);
-        });
-
-        SvpAvailabilityAccount::create([
-            'name' => 'Backend availability account',
-            'email' => 'backend-availability@example.com',
-            'access_token' => 'backend-svp-token',
-            'active' => true,
-        ]);
-
-        $this->loginAgencyUser();
-        $response = $this->withSession(['svp_token' => 'portal-user-token'])
-            ->getJson(route('svp.availability', [
-                'category_id' => '159',
-                'city' => 'Dhaka',
-                'date' => '2026-08-30',
-            ]));
-
-        $response->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.rows.0.center_id', '45')
-            ->assertJsonPath('data.rows.0.center_name', 'Bangladesh German TTC')
-            ->assertJsonPath('data.rows.0.session_count', 1)
-            ->assertJsonPath('data.rows.0.verified', true)
-            ->assertJsonPath('data.verified_only', true);
-
-        Http::assertSent(fn ($request): bool => str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/individual_labor_space/test_centers/cities')
-            && $request->header('Authorization')[0] === 'Bearer backend-svp-token');
-    }
-
-    public function test_session_per_center_bot_returns_verified_rows_from_backend_accounts_only(): void
-    {
-        SvpAvailabilityAccount::create([
-            'name' => 'Per-center bot account',
-            'email' => 'per-center-bot@example.com',
-            'access_token' => 'backend-bot-token',
-            'active' => true,
-        ]);
-
-        Http::fake(function ($request) {
-            $path = (string) parse_url($request->url(), PHP_URL_PATH);
-            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
-
-            if (str_ends_with($path, '/visitor_space/test_centers')) {
-                return Http::response(['data' => [
-                    ['id' => '45', 'name' => 'Bot Exact Centre', 'city' => 'Bot City'],
-                ]], 200);
-            }
-
-            if (str_ends_with($path, '/individual_labor_space/exam_sessions')) {
-                return Http::response(['data' => ['exam_sessions' => [[
-                    'id' => 'bot-session-2030-09-02',
-                    'exam_date' => '2030-09-02',
-                    'name' => 'First Shift',
-                    'available_seats' => 3,
-                ]]]], 200);
-            }
-
-            if (str_ends_with($path, '/exam_sessions/bot-session-2030-09-02')) {
-                return Http::response(['data' => ['exam_session' => [
-                    'id' => 'bot-session-2030-09-02',
-                    'exam_date' => '2030-09-02',
-                    'test_center_id' => 45,
-                    'test_center_name' => 'Bot Exact Centre',
-                    'test_center_city' => 'Bot City',
-                ]]], 200);
-            }
-
-            return Http::response([], 404);
-        });
-
-        $this->loginAgencyUser();
-        $response = $this->withSession(['svp_token' => 'portal-user-token'])
-            ->getJson(route('svp.session-per-center-bot', [
-                'category_id' => '991',
-                'city' => 'Bot City',
-                'date' => '2030-09-02',
-            ]));
-
-        $response->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.category_id', '991')
-            ->assertJsonPath('data.city', 'Bot City')
-            ->assertJsonPath('data.verified_only', true)
-            ->assertJsonPath('data.centers.0.center_id', '45')
-            ->assertJsonPath('data.centers.0.center_name', 'Bot Exact Centre')
-            ->assertJsonPath('data.centers.0.date', '2030-09-02')
-            ->assertJsonPath('data.centers.0.sessions.0.id', 'bot-session-2030-09-02')
-            ->assertJsonPath('data.centers.0.sessions.0.verified', true);
-
-        Http::assertSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer backend-bot-token');
-        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer portal-user-token');
-    }
-
-    public function test_session_per_center_bot_requires_category_and_city(): void
-    {
-        $this->loginAgencyUser();
-
-        $this->getJson(route('svp.session-per-center-bot'))
-            ->assertStatus(422)
-            ->assertJsonPath('errors.category_id.0', 'The category id field is required.')
-            ->assertJsonPath('errors.city.0', 'The city field is required.');
-    }
-
-    public function test_cached_city_endpoint_uses_backend_token_and_avoids_duplicate_upstream_calls(): void
-    {
-        SvpAvailabilityAccount::create([
-            'name' => 'City cache account',
-            'email' => 'city-cache@example.com',
-            'access_token' => 'backend-city-token',
+        PortalAvailabilityCredential::create([
+            'name' => 'User booking portal session',
+            'portal_account_id' => 'user-booking-portal-account',
+            'session_cookie' => 'session=user-booking-authorized',
             'active' => true,
         ]);
 
         Http::fake([
-            '*individual_labor_space/test_centers/cities*' => Http::response([
-                'data' => [['id' => 'Dhaka', 'name' => 'Dhaka'], ['id' => 'Rajshahi', 'name' => 'Rajshahi']],
+            'https://svp-international.xyz/api/occupations' => Http::response([
+                ['name' => 'Kitchen Worker', 'occupation_id' => 2062, 'category_id' => 1],
             ], 200),
         ]);
 
         $this->loginAgencyUser();
-        $first = $this->withSession(['svp_token' => 'portal-user-token'])
-            ->getJson(route('svp.availability.cities', ['category_id' => '159']));
-        $second = $this->withSession(['svp_token' => 'another-portal-token'])
-            ->getJson(route('svp.availability.cities', ['category_id' => '159']));
-
-        $first->assertOk()->assertJsonPath('success', true)->assertJsonPath('data.0.name', 'Dhaka');
-        $second->assertOk()->assertJsonPath('success', true)->assertJsonPath('data.1.name', 'Rajshahi');
-        Http::assertSentCount(1);
-        Http::assertSent(fn ($request): bool => $request->header('Authorization')[0] === 'Bearer backend-city-token');
-    }
-
-    public function test_cached_city_endpoint_caps_backend_account_failover_attempts(): void
-    {
-        config(['svp.availability_account_attempts' => 2]);
-
-        foreach (['city-timeout-primary@example.com', 'city-timeout-secondary@example.com', 'city-timeout-third@example.com'] as $index => $email) {
-            SvpAvailabilityAccount::create([
-                'name' => 'City timeout account '.$index,
-                'email' => $email,
-                'access_token' => 'city-timeout-token-'.$index,
-                'active' => true,
-            ]);
-        }
-
-        Http::fake(function ($request) {
-            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/individual_labor_space/test_centers/cities')) {
-                return Http::response(['message' => 'upstream unavailable'], 503);
-            }
-
-            return Http::response([], 404);
-        });
-
-        $this->loginAgencyUser();
-        $response = $this->withSession(['svp_token' => 'portal-user-token'])
-            ->getJson(route('svp.availability.cities', ['category_id' => '159']));
-
-        $response->assertStatus(504)
-            ->assertJsonPath('success', false);
-        Http::assertSentCount(2);
-        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer portal-user-token');
-    }
-
-    public function test_verified_availability_rotates_backend_accounts_and_filters_unverified_sessions(): void
-    {
-        $primary = SvpAvailabilityAccount::create([
-            'name' => 'Primary verification account',
-            'email' => 'primary-verification@example.com',
-            'access_token' => 'backend-primary-token',
-            'active' => true,
-            'last_used_at' => now()->subMinute(),
-        ]);
-        SvpAvailabilityAccount::create([
-            'name' => 'Secondary verification account',
-            'email' => 'secondary-verification@example.com',
-            'access_token' => 'backend-secondary-token',
-            'active' => true,
-            'last_used_at' => now(),
-        ]);
-
-        Http::fake(function ($request) {
-            $path = (string) parse_url($request->url(), PHP_URL_PATH);
-            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
-            $authorization = $request->header('Authorization')[0] ?? '';
-
-            if ($authorization === 'Bearer backend-primary-token') {
-                return Http::response(['message' => 'expired'], 401);
-            }
-
-            if (str_ends_with($path, '/individual_labor_space/test_centers/cities')) {
-                return Http::response(['data' => [['id' => 'Dhaka', 'name' => 'Dhaka']]], 200);
-            }
-
-            if (str_ends_with($path, '/visitor_space/test_centers')) {
-                return Http::response(['data' => [['id' => '45', 'name' => 'Bangladesh German TTC', 'city' => 'Dhaka']]], 200);
-            }
-
-            if (str_ends_with($path, '/exam_sessions/verified-session-45')) {
-                return Http::response(['data' => ['exam_session' => [
-                    'id' => 'verified-session-45',
-                    'exam_date' => '2026-08-30',
-                    'test_center_id' => 45,
-                    'test_center_name' => 'Bangladesh German TTC',
-                    'test_center_city' => 'Dhaka',
-                ]]], 200);
-            }
-
-            if (str_ends_with($path, '/individual_labor_space/exam_sessions')) {
-                if ((string) ($query['test_center_id'] ?? '') !== '45') {
-                    return Http::response(['data' => ['exam_sessions' => []]], 200);
-                }
-
-                return Http::response(['data' => ['exam_sessions' => [[
-                    'id' => 'verified-session-45',
-                    'exam_date' => '2026-08-30',
-                    'name' => 'First Shift',
-                    'available_seats' => 2,
-                ]]]], 200);
-            }
-
-            return Http::response([], 404);
-        });
-
-        $this->loginAgencyUser();
-        $response = $this->withSession(['svp_token' => 'portal-user-token'])
-            ->getJson(route('svp.availability', [
-                'category_id' => '159',
-                'city' => 'Dhaka',
-                'date' => '2026-08-30',
-            ]));
+        $response = $this->withSession(['svp_token' => 'candidate-svp-token'])
+            ->getJson(route('user.bookings.lookup.occupations'));
 
         $response->assertOk()
-            ->assertJsonPath('data.verified_only', true)
-            ->assertJsonPath('data.rows.0.center_id', '45')
-            ->assertJsonPath('data.rows.0.sessions.0.verified', true);
-
-        Http::assertSent(fn ($request): bool => str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/exam_sessions/verified-session-45')
-            && ($request->header('Authorization')[0] ?? '') === 'Bearer backend-secondary-token');
-        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer portal-user-token');
-    }
-
-    public function test_availability_page_renders_category_options_from_backend_account(): void
-    {
-        SvpAvailabilityAccount::create([
-            'name' => 'Category catalog account',
-            'email' => 'category-catalog@example.com',
-            'access_token' => 'backend-category-token',
-            'active' => true,
-        ]);
-
-        Http::fake([
-            '*individual_labor_space/occupations*' => Http::response([
-                'data' => [
-                    'items' => [[
-                        'id' => 2061,
-                        'attributes' => [
-                            'categories' => [
-                                'data' => [[
-                                    'id' => 159,
-                                    'attributes' => ['english_name' => 'Load and unload workers'],
-                                ]],
-                            ],
-                        ],
-                    ]],
-                ],
-            ], 200),
-        ]);
-
-        $this->loginAgencyUser();
-        $response = $this->withSession(['svp_token' => 'portal-user-token'])
-            ->get(route('svp.availability'));
-
-        $response->assertOk()
-            ->assertSee('Load and unload workers')
-            ->assertSee('value="159"', false);
-        Http::assertSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer backend-category-token');
-        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer portal-user-token');
-    }
-
-    public function test_availability_page_degrades_gracefully_when_backend_category_accounts_fail(): void
-    {
-        SvpAvailabilityAccount::create([
-            'name' => 'Expired category account',
-            'email' => 'expired-category@example.com',
-            'access_token' => 'expired-category-token',
-            'active' => true,
-        ]);
-
-        Http::fake([
-            '*individual_labor_space/occupations*' => Http::response(['message' => 'Signature has expired'], 401),
-        ]);
-
-        $this->loginAgencyUser();
-        $response = $this->get(route('svp.availability'));
-
-        $response->assertOk()
-            ->assertSee('Select category')
-            ->assertDontSee('Server Error');
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.occupations.0.occupation_id', 2062);
+        Http::assertSent(fn ($request): bool => str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/occupations')
+            && ($request->header('Cookie')[0] ?? '') === 'session=user-booking-authorized');
+        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer candidate-svp-token');
     }
 
     public function test_guest_is_redirected_to_login_from_user_panel(): void
@@ -738,14 +424,17 @@ class UserPanelTest extends TestCase
         $this->get(route('user.dashboard'))->assertOk();
     }
 
-    public function test_booking_create_redirects_to_svp_login_without_token(): void
+    public function test_booking_create_renders_read_only_lookups_without_candidate_token(): void
     {
         $this->loginAgencyUser();
 
-        $this->get(route('user.bookings.create'))->assertRedirect(route('svp.login.form'));
+        $this->get(route('user.bookings.create'))
+            ->assertOk()
+            ->assertSee('Connect your candidate SVP account before creating a hold or booking.')
+            ->assertSee('id="occupation-search"', false);
     }
 
-    public function test_agency_booking_create_clears_expired_svp_jwt_and_redirects_to_login(): void
+    public function test_agency_booking_create_clears_expired_svp_jwt_but_keeps_read_only_page_available(): void
     {
         $this->loginAgencyUser();
 
@@ -761,7 +450,8 @@ class UserPanelTest extends TestCase
         $response = $this->withSession(['svp_token' => $expiredToken])
             ->get(route('agency.bookings.create'));
 
-        $response->assertRedirect(route('svp.login.form'));
+        $response->assertOk()
+            ->assertSee('Connect your candidate SVP account before creating a hold or booking.');
         $this->assertNull(session('svp_token'));
     }
 }

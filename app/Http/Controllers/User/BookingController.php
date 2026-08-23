@@ -10,6 +10,7 @@ use App\Services\BookingService;
 use App\Services\SvpReservationCreditService;
 use App\Services\SvpTemporaryHoldService;
 use App\Services\WalletService;
+use App\Services\PortalAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +24,8 @@ class BookingController extends Controller
         private BookingService $booking,
         private SvpReservationCreditService $credits,
         private SvpTemporaryHoldService $holds,
-        private WalletService $wallet
+        private WalletService $wallet,
+        private PortalAvailabilityService $portalAvailability
     ) {
         $this->middleware('auth.multi');
     }
@@ -643,25 +645,23 @@ class BookingController extends Controller
 
         $token = $this->ensureSvpToken($request);
 
-        if (! $token) {
-            return redirect()->route('svp.login.form')
-                ->with('status', 'Please sign in with your SVP account to create a booking.');
-        }
-
         // Wallet + candidates synced from SVP profile after login.
         $wallet = $this->wallet->getWallet($agencyId);
         $candidates = Candidate::where('user_id', Auth::id())->latest()->get();
 
         $occupations = [];
         $categories  = [];
-        $svpError    = null;
+        $svpError    = $token ? null : 'Connect your candidate SVP account before creating a hold or booking.';
 
         try {
-            $occupations = $this->booking->occupationsSearch($token, null, 1, 1000)->getData(true);
-            $categories  = $this->booking->categories($token)->getData(true);
+            // Read-only occupation metadata comes from the encrypted portal
+            // availability session. Candidate SVP credentials remain reserved
+            // for candidate profile, credit, session verification, hold, and
+            // reservation operations.
+            $occupations = ['data' => $this->portalAvailability->bookingOccupations()];
         } catch (\Throwable $e) {
-            Log::warning('SVP booking lookup failed', ['error' => $e->getMessage()]);
-            $svpError = 'Could not load SVP booking data. Please try again.';
+            Log::warning('Portal booking lookup failed', ['error' => $e->getMessage()]);
+            $svpError ??= 'Could not load live occupation data. Please try again.';
         }
 
         return view('user.bookings.create', [
@@ -676,37 +676,31 @@ class BookingController extends Controller
 
     public function lookupCities(Request $request)
     {
-        $request->validate(['category_id' => 'required|string']);
-
-        $token = $this->ensureSvpToken($request);
-        if (! $token) {
-            return response()->json(['error' => 'SVP session expired.'], 401);
-        }
+        $data = $request->validate(['category_id' => 'required|string']);
 
         try {
-            $response = $this->booking->cities($token, $request->query('category_id'));
-            return $this->expiredSvpResponse($request, $response);
+            return response()->json([
+                'success' => true,
+                'data' => $this->portalAvailability->bookingCities($data['category_id']),
+            ]);
         } catch (\Throwable $e) {
-            Log::error('SVP lookup cities failed', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Unable to fetch cities.'], 503);
+            Log::error('Portal lookup cities failed', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Unable to fetch live cities.'], 503);
         }
     }
 
     public function lookupCategories(Request $request)
     {
-        $request->validate(['occupation_id' => 'nullable|string']);
-
-        $token = $this->ensureSvpToken($request);
-        if (! $token) {
-            return response()->json(['error' => 'SVP session expired.'], 401);
-        }
+        $data = $request->validate(['occupation_id' => 'required|string']);
 
         try {
-            $response = $this->booking->categoriesForOccupation($token, $request->query('occupation_id'));
-            return $this->expiredSvpResponse($request, $response);
+            return response()->json([
+                'success' => true,
+                'data' => $this->portalAvailability->bookingCategories($data['occupation_id']),
+            ]);
         } catch (\Throwable $e) {
-            Log::error('SVP lookup categories failed', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Unable to fetch categories.'], 503);
+            Log::error('Portal lookup categories failed', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Unable to fetch live categories.'], 503);
         }
     }
 
@@ -717,43 +711,39 @@ class BookingController extends Controller
             'page'   => 'nullable|integer|min:1',
         ]);
 
-        $token = $this->ensureSvpToken($request);
-        if (! $token) {
-            return response()->json(['error' => 'SVP session expired.'], 401);
-        }
-
         try {
-            $response = $this->booking->occupationsSearch(
-                $token,
-                $request->query('search'),
-                (int) ($request->query('page') ?? 1),
-                1000
-            );
-            return $this->expiredSvpResponse($request, $response);
+            return response()->json([
+                'success' => true,
+                'data' => ['occupations' => $this->portalAvailability->bookingOccupations($request->query('search'))],
+            ]);
         } catch (\Throwable $e) {
-            Log::error('SVP lookup occupations failed', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Unable to fetch occupations.'], 503);
+            Log::error('Portal lookup occupations failed', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Unable to fetch live occupations.'], 503);
         }
     }
 
     public function lookupTestCenters(Request $request)
     {
-        $request->validate([
+        $data = $request->validate([
             'city' => 'required|string',
             'category_id' => 'required|string',
+            'occupation_id' => 'required|string',
+            'language_code' => 'required|string|max:120',
         ]);
 
-        $token = $this->ensureSvpToken($request);
-        if (! $token) {
-            return response()->json(['error' => 'SVP session expired.'], 401);
-        }
-
         try {
-            $response = $this->booking->testCenters($token, $request->query('city'), $request->query('category_id'));
-            return $this->expiredSvpResponse($request, $response);
+            return response()->json([
+                'success' => true,
+                'data' => $this->portalAvailability->bookingCenters(
+                    $data['category_id'],
+                    $data['city'],
+                    $data['occupation_id'],
+                    $data['language_code'],
+                ),
+            ]);
         } catch (\Throwable $e) {
-            Log::error('SVP lookup test-centers failed', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Unable to fetch test centers.'], 503);
+            Log::error('Portal lookup test-centers failed', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Unable to fetch live test centers.'], 503);
         }
     }
 
