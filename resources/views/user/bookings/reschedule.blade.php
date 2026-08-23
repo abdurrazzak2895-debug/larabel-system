@@ -21,7 +21,7 @@
 @endphp
 
 @section('content')
-<div class="max-w-4xl">
+<div class="max-w-3xl">
     <div class="flex items-center gap-3 mb-6">
         <a href="{{ route('user.bookings.index') }}" class="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:text-slate-900 hover:border-slate-300 transition" aria-label="Back to bookings">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
@@ -93,7 +93,7 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">New SVP location</p>
             <div>
                 <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1">City</label>
@@ -104,7 +104,16 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="rounded-xl border border-slate-200 bg-white p-4">
+            <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
+            <select name="language_code" id="language_code" required disabled class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
+                <option value="">Select a live SVP exam language…</option>
+            </select>
+            <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
+            <p class="text-xs text-slate-400 mt-1">Languages are loaded live from Portal Availability for the fixed reservation occupation. No language is preselected.</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC reschedule</p>
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
@@ -151,15 +160,6 @@
                     </div>
                     <button type="button" id="create-temporary-hold" disabled class="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition">Create temporary hold</button>
                 </div>
-            </div>
-
-            <div>
-                <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
-                <select name="language_code" id="language_code" required disabled class="w-full md:w-1/2 rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <option value="">Loading live SVP exam languages…</option>
-                </select>
-                <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
-                <p class="text-xs text-slate-400 mt-1">Languages are loaded live from Portal Availability for the fixed reservation occupation. No language is preselected.</p>
             </div>
 
             <div id="svp-credit-panel" class="rounded-xl border border-sky-200 bg-sky-50 p-4">

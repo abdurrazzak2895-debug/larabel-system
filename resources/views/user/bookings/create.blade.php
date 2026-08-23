@@ -4,7 +4,7 @@
 @section('page-title', 'New Booking')
 
 @section('content')
-<div class="max-w-4xl">
+<div class="max-w-3xl">
     <div class="flex items-center gap-3 mb-6">
         <a href="{{ route('user.bookings.index') }}" class="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:text-slate-900 hover:border-slate-300 transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
@@ -51,7 +51,7 @@
         </div>
 
         {{-- Lookups: Occupation / City / Category --}}
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Exam Lookups</p>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -110,23 +110,17 @@
             </div>
         </div>
 
-        {{-- Test Center --}}
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4" id="test-center-section" style="display:none;">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Test Center</p>
-            <div>
-                <label for="test_center_id" class="block text-sm font-medium text-slate-700 mb-1">Test Center</label>
-                <select name="test_center_id" id="test_center_id"
-                    class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <option value="">Select…</option>
-                </select>
-                <input type="hidden" name="test_center_name" id="test_center_name" value="">
-                                    <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Select a live date to load the Portal Availability center slots for that date.</p>
-
-            </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4">
+            <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
+            <select name="language_code" id="language_code" required disabled class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
+                <option value="">Select a live SVP exam language…</option>
+            </select>
+            <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
+            <p class="text-xs text-slate-400 mt-1">Languages are loaded live from Portal Availability for the selected occupation. No language is preselected.</p>
         </div>
 
         {{-- Session, date, and live SVP payment routing --}}
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC booking</p>
             <div class="grid grid-cols-1 gap-4">
                 <div>
@@ -137,6 +131,17 @@
                         <option value="">Select a live available date first…</option>
                     </select>
                     <p class="text-xs text-slate-400 mt-1">Only dates returned live by Portal Availability for the selected city are clickable. Pick a date, then choose a center slot and one of its verified SVP sessions.</p>
+
+                    <div id="test-center-section" style="display:none;" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <label for="test_center_id" class="block text-xs font-medium uppercase tracking-wide text-slate-500 mb-2">Test Center</label>
+                        <select name="test_center_id" id="test_center_id"
+                            class="w-full rounded-xl border-slate-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500">
+                            <option value="">Select a live date first…</option>
+                        </select>
+                        <input type="hidden" name="test_center_name" id="test_center_name" value="">
+                        <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Select a live date to load the Portal Availability center slots for that date.</p>
+                    </div>
+
                     <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available SVP session</label>
                     <select name="exam_session_id" id="exam_session_id" required
                         class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
@@ -165,17 +170,7 @@
                     </button>
                 </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
-                    <select name="language_code" id="language_code" required disabled class="w-full md:w-1/2 rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select a live SVP exam language…</option>
-                    </select>
-                    <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
-                    <p class="text-xs text-slate-400 mt-1">Languages are loaded live from Portal Availability for the selected occupation. No language is preselected.</p>
-                </div>
-                <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
-            </div>
+            <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
             <div id="svp-credit-panel" class="rounded-xl border border-sky-200 bg-sky-50 p-4">
                 <p class="text-sm font-semibold text-sky-900">SVP reservation credit</p>
                 <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Select a candidate and occupation to check the live SVP credit. If no credit is available, confirmation will open the official SVP card-payment page.</p>

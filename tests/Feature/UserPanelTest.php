@@ -682,15 +682,30 @@ class UserPanelTest extends TestCase
     {
         $this->loginAgencyUser();
 
-        $this->get(route('user.bookings.create'))
-            ->assertOk()
+        $response = $this->get(route('user.bookings.create'));
+        $response->assertOk()
             ->assertSee('Connect your candidate SVP account before creating a hold or booking.')
             ->assertSee('id="occupation-search"', false)
+            ->assertSee('booking-availability-calendar', false)
             ->assertSee('Available Sessions — date-first PACC booking')
             ->assertSee('lookup/dates', false)
             ->assertSee('lookup/test-centers', false)
+            ->assertSee('Test Center')
+            ->assertSee('Available SVP session')
             ->assertDontSee('Notes (optional)')
             ->assertDontSee('Anything the SVP booking should know');
+        $html = $response->getContent();
+        $languagePosition = strpos($html, 'id="language_code"');
+        $availabilityPosition = strpos($html, 'booking-availability-calendar');
+        $centerPosition = strpos($html, 'id="test-center-section"');
+        $sessionPosition = strpos($html, 'id="exam_session_id"');
+        $this->assertNotFalse($languagePosition);
+        $this->assertNotFalse($availabilityPosition);
+        $this->assertNotFalse($centerPosition);
+        $this->assertNotFalse($sessionPosition);
+        $this->assertTrue($languagePosition < $availabilityPosition);
+        $this->assertTrue($availabilityPosition < $centerPosition);
+        $this->assertTrue($centerPosition < $sessionPosition);
     }
 
     public function test_agency_booking_create_clears_expired_svp_jwt_but_keeps_read_only_page_available(): void
@@ -711,11 +726,26 @@ class UserPanelTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Connect your candidate SVP account before creating a hold or booking.')
+            ->assertSee('agency-booking-availability-calendar', false)
             ->assertSee('Available Sessions — date-first PACC booking')
             ->assertSee('lookup/dates', false)
             ->assertSee('lookup/test-centers', false)
+            ->assertSee('Test Center')
+            ->assertSee('Available SVP session')
             ->assertDontSee('Notes (optional)')
             ->assertDontSee('Anything the SVP booking should know');
+        $html = $response->getContent();
+        $languagePosition = strpos($html, 'id="language_code"');
+        $availabilityPosition = strpos($html, 'agency-booking-availability-calendar');
+        $centerPosition = strpos($html, 'id="test-center-section"');
+        $sessionPosition = strpos($html, 'id="exam_session_id"');
+        $this->assertNotFalse($languagePosition);
+        $this->assertNotFalse($availabilityPosition);
+        $this->assertNotFalse($centerPosition);
+        $this->assertNotFalse($sessionPosition);
+        $this->assertTrue($languagePosition < $availabilityPosition);
+        $this->assertTrue($availabilityPosition < $centerPosition);
+        $this->assertTrue($centerPosition < $sessionPosition);
         $this->assertNull(session('svp_token'));
     }
 }
