@@ -1,5 +1,7 @@
 <?php
 
+$svpTenant = trim((string) env('SVP_TENANT_NAME', 'svp-international'));
+
 return [
 
     /*
@@ -16,7 +18,10 @@ return [
     'timeout'       => (int) env('SVP_TIMEOUT', 30),
     'retry_times'   => (int) env('SVP_RETRY_TIMES', 3),
     'retry_delay'   => (int) env('SVP_RETRY_DELAY', 1000),
-    'tenant_name'   => env('SVP_TENANT_NAME', 'svp-international'),
+    // This deployment targets the SVP International tenant. Fail closed when
+    // a stale or malformed Railway value is present instead of sending an
+    // arbitrary tenant header that produces misleading upstream 404 errors.
+    'tenant_name'   => $svpTenant === 'svp-international' ? $svpTenant : 'svp-international',
     'country_id'    => (int) env('SVP_COUNTRY_ID', 78),
     // SVP expects a Prometric language code (for example LOABB), not an ISO code such as en.
     'default_language_code' => env('SVP_DEFAULT_LANGUAGE_CODE', 'LOABB'),
