@@ -162,7 +162,6 @@
                         'centerSelectId' => 'test_center_id',
                         'sessionSelectId' => 'exam_session_id',
                     ])
-                    <div id="session-availability-summary" class="hidden"></div>
                     <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
                     @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
@@ -408,7 +407,6 @@
         } else {
             sessionResponse?.clear();
         }
-        renderSessionAvailabilitySummary(filtered, selectedDate);
         populateSelect(sessionSelect, filtered, 'id', 'name');
         if (sessionSelect) {
             sessionSelect.disabled = filtered.length === 0;
@@ -471,40 +469,7 @@
         details.push(seats === null ? 'Live seats unavailable' : 'Seats: ' + seats);
         return details.join(' · ');
     }
-
-    function renderSessionAvailabilitySummary(sessions, selectedDate) {
-        if (!sessionAvailabilitySummary) return;
-        if (!selectedDate) {
-            sessionAvailabilitySummary.innerHTML = '<div class="font-medium text-slate-700">Select an available date to view only that date\'s SVP sessions and seat counts.</div>';
-            sessionAvailabilitySummary.classList.remove('hidden');
-            return;
-        }
-        const selectedCenterId = String(testCenterSelect?.value || '');
-        const grouped = {};
-        (sessions || []).forEach(function (session) {
-            const date = sessionDate(session) || 'Unknown date';
-            if (!grouped[date]) grouped[date] = [];
-            grouped[date].push(session);
-        });
-        const html = Object.keys(grouped).sort().map(function (date) {
-            const rows = grouped[date].map(function (session, index) {
-                const centerId = sessionCenterId(session);
-                // A centerless session (this SVP deployment omits test_center
-                // id/name from the list response) is trusted as belonging to
-                // the requested center, matching resolveCenterSession's and
-                // verifyForHold's scoped-fallback logic on the backend. Only
-                // an EXPLICIT different center id is a real mismatch.
-                const matches = centerId === '' || centerId === selectedCenterId;
-                const sessionId = session.id || session.exam_session_id || '';
-                return '<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + escapeHtml(sessionDisplayName(session, index)) + '</span> · ' + escapeHtml(sessionTime(session) ? 'Time: ' + sessionTime(session) : 'Time unavailable') + ' · ' + escapeHtml(sessionSeatCount(session) === null ? 'Live seats unavailable' : 'Seats: ' + sessionSeatCount(session)) + ' · Session ' + escapeHtml(String(sessionId).slice(0, 18)) + ' · ' + escapeHtml(sessionCenterName(session)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>';
-            }).join('');
-            return '<div class="mb-2 last:mb-0"><div class="font-semibold text-slate-700">' + escapeHtml(date) + '</div>' + rows + '</div>';
-        }).join('');
-        sessionAvailabilitySummary.innerHTML = '<div class="mb-1 font-medium text-slate-700">Live sessions and seat counts</div>' + (html || '<div>No verified sessions returned.</div>');
-        sessionAvailabilitySummary.classList.remove('hidden');
-    }
-
-    function clearSessionCenterError() {
+        function clearSessionCenterError() {
         if (!sessionCenterError) return;
         sessionCenterError.textContent = '';
         sessionCenterError.classList.add('hidden');

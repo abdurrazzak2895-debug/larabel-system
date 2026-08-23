@@ -156,7 +156,6 @@
                     'centerSelectId' => 'test_center_id',
                     'sessionSelectId' => 'exam_session_id',
                 ])
-                <div id="session-shift-summary" class="hidden"></div>
                 <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
                 <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
                 @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
@@ -203,7 +202,6 @@
     const session = document.getElementById('exam_session_id');
     const sessionName = document.getElementById('exam_session_name');
     const date = document.getElementById('exam_date');
-    const sessionSummary = document.getElementById('session-shift-summary');
     const centerResponse = window.PaccAvailabilityInstances?.['reschedule-center-response'];
     const sessionResponse = window.PaccAvailabilityInstances?.['reschedule-session-response'];
     const centerError = document.getElementById('session-center-error');
@@ -354,14 +352,6 @@
             option.disabled = !!(itemCenterId && itemCenterId !== String(center.value));
             session.appendChild(option);
         });
-        if (sessionSummary) {
-            const html = visible.map((item, index) => {
-                const mismatch = sessionCenterId(item) && sessionCenterId(item) !== String(center.value);
-                return '<div class="ml-2 ' + (mismatch ? 'text-red-700' : 'text-slate-600') + '"><span class="font-medium">' + esc(shiftLabel(item, index)) + '</span> · ' + esc(sessionOptionLabel(item, index)) + ' · ' + esc(sessionCenterName(item)) + (mismatch ? ' · <strong>BLOCKED: center mismatch</strong>' : '') + '</div>';
-            }).join('');
-            sessionSummary.innerHTML = '<div class="mb-1 font-medium text-slate-700">Sessions for ' + esc(selectedDate || 'the selected date') + '</div>' + (html || '<div>No exact SVP sessions returned for this center and date.</div>');
-            sessionSummary.classList.remove('hidden');
-        }
     }
 
     async function loadLiveLanguages() {

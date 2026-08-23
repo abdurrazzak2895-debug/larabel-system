@@ -14,18 +14,18 @@
         user-select: none;
     }
     .svp-cal-day[data-state="available"] {
-        background: #eef2ff;
-        color: #4338ca;
-        font-weight: 600;
+        background: #fee2e2;
+        color: #b91c1c;
+        font-weight: 700;
         cursor: pointer;
-        box-shadow: inset 0 0 0 1px #e0e7ff;
+        box-shadow: inset 0 0 0 1px #fecaca;
     }
     .svp-cal-day[data-state="available"]:hover {
-        background: #e0e7ff;
+        background: #fecaca;
         transform: translateY(-1px);
     }
     .svp-cal-day[data-state="selected"] {
-        background: linear-gradient(135deg, #6366f1, #d946ef);
+        background: linear-gradient(135deg, #dc2626, #f97316);
         color: #fff;
         font-weight: 700;
         cursor: pointer;
@@ -75,7 +75,7 @@
 
     <div class="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span class="inline-flex items-center gap-1.5 text-[11px] text-slate-400"><span class="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500"></span>Selected</span>
-        <span class="inline-flex items-center gap-1.5 text-[11px] text-slate-400"><span class="w-2.5 h-2.5 rounded-full bg-brand-100 ring-1 ring-brand-200"></span>Available</span>
+        <span class="inline-flex items-center gap-1.5 text-[11px] text-slate-400"><span class="w-2.5 h-2.5 rounded-full bg-red-100 ring-1 ring-red-200"></span>Available</span>
         <span data-calendar-count class="ml-auto text-[11px] font-medium text-slate-400"></span>
     </div>
 </div>
