@@ -31,9 +31,12 @@
             '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
         })[character]);
         const normalizeDate = value => String(value ?? '').substring(0, 10);
-        const centerId = row => String(row?.id ?? row?.test_center_id ?? row?.site_id ?? row?.center_id ?? '');
-        const centerName = row => String(row?.name || row?.test_center_name || row?.site_name || row?.center_name || 'Live test center').trim();
-        const centerTime = row => String(row?.test_time || row?.start_time || row?.time || '').trim();
+        const formatTime = value => String(value ?? '').replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').replace(/(?:Z|[+-]\d{2}:?\d{2})$/, '').trim();
+        const centerId = row => String(row?.test_center_id ?? row?.site_id ?? row?.center_id ?? row?.id ?? '');
+        const centerName = row => String(row?.test_center_name || row?.name || row?.site_name || row?.center_name || 'Live test center').trim();
+        const centerSessionId = row => String(row?.exam_session_id ?? row?.session_id ?? row?.sessionId ?? '');
+        const centerDate = (row, fallback = '') => normalizeDate(row?.exam_date || row?.test_date || row?.date || row?.start_date_in_tc_time_zone || row?.start_date_in_browser_time_zone || fallback);
+        const centerTime = row => formatTime(row?.test_time || row?.start_time || row?.time || row?.start_at_in_tc_time_zone || row?.start_at_in_browser_time_zone || row?.start_at || row?.start_date_in_tc_time_zone || row?.start_date_in_browser_time_zone);
         const centerSeats = row => {
             const value = row?.available_seats ?? row?.availableSeats ?? row?.remaining_seats ?? row?.seats ?? null;
             return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
@@ -45,7 +48,7 @@
         const sessionId = row => String(row?.id ?? row?.exam_session_id ?? row?.session_id ?? '');
         const sessionName = (row, index) => String(row?.session_name || row?.name || row?.label || row?.title || '').trim() || `Session ${index + 1}`;
         const sessionDate = row => normalizeDate(row?.exam_date || row?.test_date || row?.date || row?.start_date_in_browser_time_zone || row?.start_date_in_tc_time_zone);
-        const sessionTime = row => String(row?.test_time || row?.start_time || row?.time || row?.start_at_in_tc_time_zone || row?.start_at_in_browser_time_zone || row?.start_at || row?.start_date_in_tc_time_zone || row?.start_date_in_browser_time_zone || '').replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
+        const sessionTime = row => formatTime(row?.test_time || row?.start_time || row?.time || row?.start_at_in_tc_time_zone || row?.start_at_in_browser_time_zone || row?.start_at || row?.start_date_in_tc_time_zone || row?.start_date_in_browser_time_zone);
         const sessionSeats = row => {
             const value = row?.available_seats ?? row?.availableSeats ?? row?.remaining_seats ?? row?.remainingSeats ?? row?.seats ?? null;
             return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
@@ -121,22 +124,42 @@
                         const sessionCount = centerSessionCount(row);
                         const time = centerTime(row);
                         const id = centerId(row);
-                        return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}" data-pacc-index="${index}">
+                        const exactSessionId = centerSessionId(row);
+                        const date = centerDate(row, meta.date);
+                        return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}" data-pacc-index="${index}" data-pacc-session-id="${esc(exactSessionId)}">
                             <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block break-words whitespace-normal text-sm text-slate-900">${esc(centerName(row))}</strong><span class="mt-1 block text-[11px] text-slate-500">Center ID: ${esc(id || 'Not provided')}</span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
-                            <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>Time: <b class="text-slate-700">${esc(time || 'Not provided')}</b></span><span>Sessions: <b class="text-slate-700">${esc(sessionCount === null ? 'Live lookup' : sessionCount)}</b></span><span>Available slot ${index + 1}</span></span>
+                            <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>Date: <b class="text-slate-700">${esc(date || 'Not provided')}</b></span><span>Time: <b class="text-slate-700">${esc(time || 'Not provided')}</b></span><span>Sessions: <b class="text-slate-700">${esc(sessionCount === null ? 'Live lookup' : sessionCount)}</b></span><span>Available slot ${index + 1}</span></span>
+                            <span class="mt-1 block break-all text-[10px] text-slate-500">Session ID: <b class="font-mono text-slate-700">${esc(exactSessionId || 'Select to load exact SVP sessions')}</b></span>
                         </button>`;
                     }).join('');
                     list.querySelectorAll('[data-pacc-index]').forEach(card => card.addEventListener('click', () => {
                         if (!centerSelect) return;
                         selectedCardKey = String(card.dataset.paccIndex || '');
-                        const selectedRow = items[Number(card.dataset.paccIndex)];
-                        centerSelect.value = String(centerId(selectedRow));
-                        centerSelect.dataset.name = centerName(selectedRow);
+                        const selectedRow = items[Number(card.dataset.paccIndex)] || {};
+                        const selectedCenterId = String(centerId(selectedRow));
+                        const selectedCenterName = centerName(selectedRow);
+                        const selectedDate = centerDate(selectedRow, meta.date);
+                        const selectedSessionId = centerSessionId(selectedRow);
+                        centerSelect.value = selectedCenterId;
+                        centerSelect.dataset.name = selectedCenterName;
+                        centerSelect.dataset.sessionId = selectedSessionId;
+                        centerSelect.dataset.sessionDate = selectedDate;
                         if (centerNameInput) {
-                            centerNameInput.value = centerName(selectedRow);
-                            centerNameInput.dataset.centerId = String(centerId(selectedRow));
+                            centerNameInput.value = selectedCenterName;
+                            centerNameInput.dataset.centerId = selectedCenterId;
                         }
-                        centerSelect.dispatchEvent(new Event('change', {bubbles: true}));
+                        if (selectedSessionId && sessionSelect) {
+                            sessionSelect.value = selectedSessionId;
+                            sessionSelect.dataset.centerId = selectedCenterId;
+                            sessionSelect.dataset.centerName = selectedCenterName;
+                            sessionSelect.dataset.name = selectedRow.session_name || selectedRow.name || selectedCenterName;
+                            sessionSelect.dataset.date = selectedDate;
+                            if (sessionNameInput) sessionNameInput.value = sessionSelect.dataset.name;
+                            if (dateInput) dateInput.value = selectedDate;
+                            sessionSelect.dispatchEvent(new Event('change', {bubbles: true}));
+                        } else {
+                            centerSelect.dispatchEvent(new Event('change', {bubbles: true}));
+                        }
                         syncSelection();
                     }));
                 }

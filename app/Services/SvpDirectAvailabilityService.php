@@ -87,21 +87,19 @@ final class SvpDirectAvailabilityService
                 continue;
             }
 
-            $seatValues = collect($sessions)
-                ->map(fn (array $session): mixed => $this->sessionSeats($session))
-                ->filter(fn (mixed $seats): bool => $seats !== null)
-                ->unique()
-                ->values()
-                ->all();
-
-            $rows[] = [
-                'test_center_name' => (string) ($center['name'] ?? 'Live test center'),
-                'test_center_id' => $centerId,
-                'test_time' => null,
-                'available_seats' => count($seatValues) === 1 ? $seatValues[0] : null,
-                'session_count' => count($sessions),
-                'availability_source' => 'candidate_authenticated_sessions',
-            ];
+            $sessionCount = count($sessions);
+            foreach ($sessions as $session) {
+                $rows[] = [
+                    'test_center_name' => (string) ($center['name'] ?? 'Live test center'),
+                    'test_center_id' => $centerId,
+                    'test_time' => $this->sessionTime($session),
+                    'available_seats' => $this->sessionSeats($session),
+                    'session_count' => $sessionCount,
+                    'exam_session_id' => (string) ($session['id'] ?? ''),
+                    'exam_date' => (string) ($session['exam_date'] ?? $date),
+                    'availability_source' => 'candidate_authenticated_sessions',
+                ];
+            }
         }
 
         return [
@@ -244,6 +242,27 @@ final class SvpDirectAvailabilityService
             $value = $session[$key] ?? null;
             if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}/', $value) === 1) {
                 return substr($value, 0, 10);
+            }
+        }
+
+        return null;
+    }
+
+    private function sessionTime(array $session): ?string
+    {
+        foreach ([
+            'test_time',
+            'start_time',
+            'time',
+            'start_at_in_tc_time_zone',
+            'start_at_in_browser_time_zone',
+            'start_at',
+            'start_date_in_tc_time_zone',
+            'start_date_in_browser_time_zone',
+        ] as $key) {
+            $value = $session[$key] ?? null;
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return trim((string) $value);
             }
         }
 

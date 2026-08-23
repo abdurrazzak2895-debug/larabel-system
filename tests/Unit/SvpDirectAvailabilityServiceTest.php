@@ -88,6 +88,13 @@ class SvpDirectAvailabilityServiceTest extends TestCase
             'session-171-2',
             'session-171-3',
             'session-171-4',
+        ], collect($result['centers'])->where('test_center_id', '171')->pluck('exam_session_id')->values()->all());
+        $this->assertSame(1, collect($result['centers'])->where('test_center_id', '171')->pluck('available_seats')->unique()->first());
+        $this->assertSame([
+            'session-171-1',
+            'session-171-2',
+            'session-171-3',
+            'session-171-4',
         ], $requestedSessions['171']);
     }
 }

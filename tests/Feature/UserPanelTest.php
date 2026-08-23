@@ -262,6 +262,9 @@ class UserPanelTest extends TestCase
             ->assertSee('Session ID:', false)
             ->assertSee('let selectedCardKey', false)
             ->assertSee('card.dataset.paccIndex === selectedCardKey', false)
+            ->assertSee('centerSessionId', false)
+            ->assertSee('data-pacc-session-id', false)
+            ->assertSee('selectedSessionId', false)
             ->assertSee('sessionPriority', false)
             ->assertSee('start_at_in_tc_time_zone', false)
             ->assertDontSee('Click a card to select.', false)
@@ -414,6 +417,9 @@ class UserPanelTest extends TestCase
             ->assertSee('Session ID:', false)
             ->assertSee('let selectedCardKey', false)
             ->assertSee('card.dataset.paccIndex === selectedCardKey', false)
+            ->assertSee('centerSessionId', false)
+            ->assertSee('data-pacc-session-id', false)
+            ->assertSee('selectedSessionId', false)
             ->assertSee('sessionPriority', false)
             ->assertSee('start_at_in_tc_time_zone', false)
             ->assertDontSee('Click a card to select.', false)
@@ -434,6 +440,9 @@ class UserPanelTest extends TestCase
             ->assertSee('Session ID:', false)
             ->assertSee('let selectedCardKey', false)
             ->assertSee('card.dataset.paccIndex === selectedCardKey', false)
+            ->assertSee('centerSessionId', false)
+            ->assertSee('data-pacc-session-id', false)
+            ->assertSee('selectedSessionId', false)
             ->assertSee('sessionPriority', false)
             ->assertSee('start_at_in_tc_time_zone', false)
             ->assertDontSee('Click a card to select.', false)
@@ -772,11 +781,15 @@ class UserPanelTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('fallback', true)
-            ->assertJsonPath('availability_source', 'candidate_authenticated_sessions')
-            ->assertJsonPath('data.test_centers.0.test_center_id', '171')
-            ->assertJsonPath('data.test_centers.0.session_count', 4)
-            ->assertJsonPath('data.test_centers.1.test_center_id', '181')
-            ->assertJsonPath('data.test_centers.1.session_count', 1);
+            ->assertJsonPath('availability_source', 'candidate_authenticated_sessions');
+        $rows = $response->json('data.test_centers');
+        $this->assertCount(5, $rows);
+        $this->assertSame(['171', '171', '171', '171'], array_column(array_slice($rows, 0, 4), 'test_center_id'));
+        $this->assertSame(['fallback-171-1', 'fallback-171-2', 'fallback-171-3', 'fallback-171-4'], array_column(array_slice($rows, 0, 4), 'exam_session_id'));
+        $this->assertSame([4, 4, 4, 4], array_column(array_slice($rows, 0, 4), 'session_count'));
+        $this->assertSame('181', $rows[4]['test_center_id']);
+        $this->assertSame('fallback-181-1', $rows[4]['exam_session_id']);
+        $this->assertSame(1, $rows[4]['session_count']);
 
         $agencyResponse = $this->withSession(['svp_token' => 'candidate-token'])
             ->getJson(route('agency.bookings.lookup.test-centers', [
@@ -790,11 +803,15 @@ class UserPanelTest extends TestCase
         $agencyResponse->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('fallback', true)
-            ->assertJsonPath('availability_source', 'candidate_authenticated_sessions')
-            ->assertJsonPath('data.test_centers.0.test_center_id', '171')
-            ->assertJsonPath('data.test_centers.0.session_count', 4)
-            ->assertJsonPath('data.test_centers.1.test_center_id', '181')
-            ->assertJsonPath('data.test_centers.1.session_count', 1);
+            ->assertJsonPath('availability_source', 'candidate_authenticated_sessions');
+        $agencyRows = $agencyResponse->json('data.test_centers');
+        $this->assertCount(5, $agencyRows);
+        $this->assertSame(['171', '171', '171', '171'], array_column(array_slice($agencyRows, 0, 4), 'test_center_id'));
+        $this->assertSame(['fallback-171-1', 'fallback-171-2', 'fallback-171-3', 'fallback-171-4'], array_column(array_slice($agencyRows, 0, 4), 'exam_session_id'));
+        $this->assertSame([4, 4, 4, 4], array_column(array_slice($agencyRows, 0, 4), 'session_count'));
+        $this->assertSame('181', $agencyRows[4]['test_center_id']);
+        $this->assertSame('fallback-181-1', $agencyRows[4]['exam_session_id']);
+        $this->assertSame(1, $agencyRows[4]['session_count']);
 
         Http::assertSentCount(5);
     }
@@ -822,6 +839,9 @@ class UserPanelTest extends TestCase
             ->assertSee('Session ID:', false)
             ->assertSee('let selectedCardKey', false)
             ->assertSee('card.dataset.paccIndex === selectedCardKey', false)
+            ->assertSee('centerSessionId', false)
+            ->assertSee('data-pacc-session-id', false)
+            ->assertSee('selectedSessionId', false)
             ->assertSee('sessionPriority', false)
             ->assertSee('start_at_in_tc_time_zone', false)
             ->assertDontSee('Click a card to select.', false)
@@ -878,6 +898,9 @@ class UserPanelTest extends TestCase
             ->assertSee('Session ID:', false)
             ->assertSee('let selectedCardKey', false)
             ->assertSee('card.dataset.paccIndex === selectedCardKey', false)
+            ->assertSee('centerSessionId', false)
+            ->assertSee('data-pacc-session-id', false)
+            ->assertSee('selectedSessionId', false)
             ->assertSee('sessionPriority', false)
             ->assertSee('start_at_in_tc_time_zone', false)
             ->assertDontSee('Click a card to select.', false)
