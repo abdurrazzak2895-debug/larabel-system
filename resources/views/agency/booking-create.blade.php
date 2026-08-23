@@ -439,10 +439,22 @@
 
     function renderSessionsForDate(date) {
         const selectedDate = String(date || '').substring(0, 10);
-        const filtered = selectedDate
-            ? (sessionCatalog || []).filter(session => sessionDate(session) === selectedDate)
+        const selectedCenterId = String(testCenterSelect?.value || '');
+        // Sessions are only ever shown for the center the user has actually
+        // clicked. Before that, keep the panel empty rather than merging
+        // every prefetched center's sessions together.
+        const filtered = selectedDate && selectedCenterId
+            ? (sessionCatalog || []).filter(function (session) {
+                if (sessionDate(session) !== selectedDate) return false;
+                const centerId = sessionCenterId(session);
+                // A session with no center id embedded belongs to whichever
+                // center this lookup was scoped to — keep it. A session with
+                // an explicit, different center id must never leak into the
+                // currently selected center's list.
+                return !centerId || centerId === selectedCenterId;
+            })
             : [];
-        if (selectedDate) {
+        if (selectedDate && selectedCenterId) {
             sessionResponse?.renderSessions(filtered, {
                 date: selectedDate,
                 emptyText: 'No exact SVP sessions returned for the selected center and date.'
