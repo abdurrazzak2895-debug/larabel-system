@@ -178,6 +178,33 @@ final class PortalAvailabilityService
         return array_values(array_filter($items, static fn (array $item): bool => Str::contains(Str::lower((string) ($item['name'] ?? '')), $term)));
     }
 
+    /** @return array<int, array{code: string, name: string}> */
+    public function bookingLanguages(int|string $occupationId): array
+    {
+        $occupationId = trim((string) $occupationId);
+        if ($occupationId === '') {
+            return [];
+        }
+
+        $occupation = collect($this->occupations()['data'] ?? [])
+            ->first(static fn (array $item): bool => (string) ($item['occupation_id'] ?? '') === $occupationId);
+
+        if (! is_array($occupation)) {
+            return [];
+        }
+
+        return collect($occupation['languages'] ?? [])
+            ->filter(static fn ($language): bool => is_array($language))
+            ->map(static fn (array $language): array => [
+                'code' => trim((string) ($language['code'] ?? '')),
+                'name' => trim((string) ($language['name'] ?? $language['english_name'] ?? $language['title'] ?? $language['code'] ?? '')),
+            ])
+            ->filter(static fn (array $language): bool => $language['code'] !== '' && $language['name'] !== '')
+            ->unique('code')
+            ->values()
+            ->all();
+    }
+
     /** @return array<int, array{id: string, name: string}> */
     public function bookingCategories(int|string $occupationId): array
     {
@@ -273,7 +300,7 @@ final class PortalAvailabilityService
                     ->filter(fn ($language): bool => is_array($language))
                     ->map(fn (array $language): array => [
                         'code' => trim((string) ($language['code'] ?? '')),
-                        'name' => trim((string) ($language['name'] ?? '')),
+                        'name' => trim((string) ($language['english_name'] ?? $language['name'] ?? $language['title'] ?? $language['code'] ?? '')),
                     ])
                     ->filter(fn (array $language): bool => $language['code'] !== '')
                     ->values()

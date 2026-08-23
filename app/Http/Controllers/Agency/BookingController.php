@@ -13,7 +13,6 @@ use App\Services\PortalAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -303,6 +302,25 @@ class BookingController extends Controller
     }
 
     /**
+     * GET /agency/bookings/lookup/languages?occupation_id=…
+     * AJAX: return live exam languages for the selected occupation.
+     */
+    public function lookupLanguages(Request $request)
+    {
+        $data = $request->validate(['occupation_id' => 'required|string']);
+
+        try {
+            return response()->json([
+                'success' => true,
+                'data' => ['languages' => $this->portalAvailability->bookingLanguages($data['occupation_id'])],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Portal lookup languages failed', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Unable to fetch live exam languages.'], 503);
+        }
+    }
+
+    /**
      * GET /agency/bookings/lookup/categories?occupation_id=…
      * AJAX: return categories for the given occupation.
      */
@@ -410,10 +428,15 @@ class BookingController extends Controller
             'exam_session_name'=> ['nullable', 'string', 'max:255'],
             'exam_date'        => ['required', 'date'],
             'temporary_hold_id' => ['required', 'string', 'max:100'],
-            'language_code'    => ['required', 'string', 'max:20', Rule::in(array_column(config('svp.languages', []), 'code'))],
+            'language_code'    => ['required', 'string', 'max:120'],
             'methodology'      => ['nullable', 'string', 'max:40'],
             'notes'           => ['nullable', 'string', 'max:500'],
         ]);
+
+        $data['language_code'] = $this->validatedLiveLanguageCode(
+            (string) $data['occupation_id'],
+            $data['language_code']
+        );
 
         $token = $this->ensureSvpToken($request);
         if (! $token) {
@@ -424,6 +447,7 @@ class BookingController extends Controller
 
         $agencyId = (int) Auth::user()->agency_id;
         $candidate = Candidate::where('agency_id', $agencyId)
+
             ->findOrFail($data['candidate_id']);
 
         $hold = $this->holds->consumeMatching($request, $data);
@@ -468,6 +492,41 @@ class BookingController extends Controller
         return redirect()
             ->route('agency.bookings.show', $result['booking']->id)
             ->with('success', 'Booking confirmed with the available SVP reservation credit.');
+    }
+
+    /**
+     * Accept only a language currently advertised by Portal Availability for the
+     * selected occupation. This read-only lookup never uses the candidate token.
+     */
+    private function validatedLiveLanguageCode(string $occupationId, string $languageCode): string
+    {
+        $normalized = strtoupper(trim($languageCode));
+
+        try {
+            $languages = $this->portalAvailability->bookingLanguages($occupationId);
+        } catch (\Throwable $e) {
+            Log::warning('Live SVP booking language validation failed', [
+                'occupation_id' => $occupationId,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw ValidationException::withMessages([
+                'language_code' => 'Live SVP exam languages are temporarily unavailable. Please refresh and select a live language again.',
+            ]);
+        }
+
+        $validCodes = array_values(array_filter(array_map(
+            static fn (array $language): string => strtoupper(trim((string) ($language['code'] ?? ''))),
+            $languages
+        )));
+
+        if (! in_array($normalized, $validCodes, true)) {
+            throw ValidationException::withMessages([
+                'language_code' => 'Select a live SVP exam language for the selected occupation.',
+            ]);
+        }
+
+        return $normalized;
     }
 
     /**

@@ -347,6 +347,10 @@ class UserPanelTest extends TestCase
                     'occupation_id' => 2062,
                     'category_id' => 1,
                     'category_name' => 'Offices and Facilities Cleaning Workers',
+                    'languages' => [
+                        ['code' => 'LOABB', 'name' => 'Bengali'],
+                        ['code' => 'LOAEN', 'name' => 'English'],
+                    ],
                 ],
             ], 200),
         ]);
@@ -361,13 +365,160 @@ class UserPanelTest extends TestCase
             ->assertSee('Kitchen Worker')
             ->assertSee('id="category_id"', false)
             ->assertSee('if (categories.length === 1)', false)
-            ->assertSee('Bengali', false)
-            ->assertSee('value="LOABB"', false)
+            ->assertSee('Select a live SVP exam language…', false)
+            ->assertSee('/user/bookings/lookup/languages', false)
+            ->assertDontSee('value="LOABB"', false)
+            ->assertDontSee('Selected exam date', false)
             ->assertSee('id="available_session_date"', false)
             ->assertSee('Pick a test center to load its open exam dates.', false)
             ->assertSee('loadSessionsForDate', false)
             ->assertDontSee('>load<', false)
             ->assertDontSee('>loading<', false);
+    }
+
+    public function test_user_live_language_lookup_uses_portal_session_and_returns_all_languages(): void
+    {
+        PortalAvailabilityCredential::create([
+            'name' => 'User language portal session',
+            'portal_account_id' => 'user-language-portal-account',
+            'session_cookie' => 'session=user-language-authorized',
+            'active' => true,
+        ]);
+
+        Http::fake([
+            'https://svp-international.xyz/api/occupations' => Http::response([
+                [
+                    'name' => 'Kitchen Worker',
+                    'occupation_id' => 2062,
+                    'category_id' => 1,
+                    'languages' => [
+                        ['code' => 'LOABB', 'name' => 'Bengali'],
+                        ['code' => 'LOAEN', 'name' => 'English'],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $this->loginAgencyUser();
+        $response = $this->withSession(['svp_token' => 'candidate-svp-token'])
+            ->getJson(route('user.bookings.lookup.languages', ['occupation_id' => 2062]));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.languages.0.code', 'LOABB')
+            ->assertJsonPath('data.languages.1.code', 'LOAEN');
+
+        Http::assertSent(fn ($request): bool => str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/occupations')
+            && ($request->header('Cookie')[0] ?? '') === 'session=user-language-authorized');
+        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer candidate-svp-token');
+    }
+
+    public function test_user_booking_rejects_language_not_advertised_by_live_portal(): void
+    {
+        PortalAvailabilityCredential::create([
+            'name' => 'User booking validation portal session',
+            'portal_account_id' => 'user-booking-validation-portal-account',
+            'session_cookie' => 'session=user-booking-validation-authorized',
+            'active' => true,
+        ]);
+
+        Http::fake([
+            'https://svp-international.xyz/api/occupations' => Http::response([
+                [
+                    'name' => 'Kitchen Worker',
+                    'occupation_id' => 2062,
+                    'languages' => [
+                        ['code' => 'LOAEN', 'name' => 'English'],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $user = $this->loginAgencyUser();
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $user->agency_id,
+            'full_name' => 'Validation Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-VALIDATION-USER',
+        ]);
+
+        $csrfToken = 'live-language-validation-csrf';
+        $response = $this->from(route('user.bookings.create'))
+            ->withSession(['_token' => $csrfToken, 'svp_token' => 'candidate-svp-token'])
+            ->post(route('user.bookings.store'), [
+                '_token' => $csrfToken,
+                'candidate_id' => $candidate->id,
+                'occupation_id' => '2062',
+                'category_id' => '1',
+                'city' => 'Dhaka',
+                'test_center_id' => '17',
+                'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+                'exam_session_id' => 'session-1',
+                'exam_date' => '2026-09-01',
+                'temporary_hold_id' => 'hold-1',
+                'language_code' => 'LOABB',
+                'methodology' => 'in_person',
+            ]);
+
+        $response->assertRedirect(route('user.bookings.create'))
+            ->assertSessionHasErrors(['language_code']);
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/exam_reservations'));
+    }
+
+    public function test_user_booking_accepts_a_live_language_before_existing_hold_completion(): void
+    {
+        PortalAvailabilityCredential::create([
+            'name' => 'User booking completion portal session',
+            'portal_account_id' => 'user-booking-completion-portal-account',
+            'session_cookie' => 'session=user-booking-completion-authorized',
+            'active' => true,
+        ]);
+
+        Http::fake([
+            'https://svp-international.xyz/api/occupations' => Http::response([
+                [
+                    'name' => 'Kitchen Worker',
+                    'occupation_id' => 2062,
+                    'category_id' => 1,
+                    'languages' => [
+                        ['code' => 'LOAEN', 'name' => 'English'],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $user = $this->loginAgencyUser();
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $user->agency_id,
+            'full_name' => 'Live Language Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-LIVE-LANGUAGE-USER',
+        ]);
+        $csrfToken = 'live-language-completion-csrf';
+
+        $response = $this->from(route('user.bookings.create'))
+            ->withSession(['_token' => $csrfToken, 'svp_token' => 'candidate-svp-token'])
+            ->post(route('user.bookings.store'), [
+                '_token' => $csrfToken,
+                'candidate_id' => $candidate->id,
+                'occupation_id' => '2062',
+                'category_id' => '1',
+                'city' => 'Dhaka',
+                'test_center_id' => '17',
+                'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+                'exam_session_id' => 'session-live-language',
+                'exam_date' => '2026-09-01',
+                'temporary_hold_id' => 'hold-live-language',
+                'language_code' => 'loaen',
+                'methodology' => 'in_person',
+            ]);
+
+        $response->assertRedirect(route('user.bookings.create'))
+            ->assertSessionHasErrors(['temporary_hold_id'])
+            ->assertSessionDoesntHaveErrors(['language_code']);
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/exam_reservations'));
     }
 
     public function test_user_occupation_lookup_uses_portal_session_not_candidate_token(): void

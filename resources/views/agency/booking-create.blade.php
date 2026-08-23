@@ -138,7 +138,7 @@
         {{-- Session, date, and live SVP payment routing --}}
         <div class="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC booking</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 gap-4">
                 <div>
                     <label for="available_session_date" class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
                     <select id="available_session_date" required
@@ -160,14 +160,8 @@
                     <p id="session-error" class="hidden text-red-600 text-xs mt-1"></p>
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
-                <div>
-                    <label for="exam_date" class="block text-sm font-medium text-slate-700 mb-1">Selected exam date</label>
-                    <input type="date" name="exam_date" id="exam_date" required readonly
-                        class="w-full rounded-lg border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
-                    <p class="text-xs text-slate-400 mt-1">No date is preselected. The date is filled only after you choose a live available day and verified session from the selected center.</p>
-                    @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                </div>
+                <input type="hidden" name="exam_date" id="exam_date" value="">
+                <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
             </div>
             <div id="temporary-hold-panel" class="hidden rounded-lg border border-amber-200 bg-amber-50 p-4">
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -184,14 +178,11 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
-                    <select name="language_code" id="language_code" required class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        @foreach (config('svp.languages', []) as $language)
-                            <option value="{{ $language['code'] }}" {{ old('language_code', config('svp.default_language_code', 'LOABB')) === $language['code'] ? 'selected' : '' }}>
-                                {{ $language['english_name'] }} ({{ $language['code'] }}) · {{ ucfirst($language['exam_engine_name']) }} · {{ $language['question_count'] }} questions
-                            </option>
-                        @endforeach
+                    <select name="language_code" id="language_code" required disabled class="w-full rounded-lg border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
+                        <option value="">Select a live SVP exam language…</option>
                     </select>
-                    <p class="text-xs text-slate-400 mt-1">Selected language: Bengali · Prometric · code <code>LOABB</code>. This code is sent to SVP; <code>bn</code> is the ISO language identifier.</p>
+                    <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
+                    <p class="text-xs text-slate-400 mt-1">Languages are loaded live from Portal Availability for the selected occupation. No language is preselected.</p>
                 </div>
                 <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
             </div>
@@ -237,6 +228,8 @@
         const cityError = document.getElementById('city-error');
         const categorySelect = document.getElementById('category_id');
         const categoryError = document.getElementById('category-error');
+        const languageSelect = document.getElementById('language_code');
+        const languageError = document.getElementById('language-error');
         const testCenterSelect = document.getElementById('test_center_id');
         const testCenterNameInput = document.getElementById('test_center_name');
         const testCenterError = document.getElementById('test-center-error');
@@ -267,6 +260,37 @@
         let creditStatusRequest = null;
         let sessionCatalog = [];
         let availableDateCatalog = [];
+
+        async function loadLiveLanguages(occupationId) {
+            if (!languageSelect) return;
+            languageSelect.innerHTML = '<option value="">Select a live SVP exam language…</option>';
+            languageSelect.value = '';
+            languageSelect.disabled = true;
+            clearError(languageError);
+            if (!occupationId) return;
+
+            try {
+                setLoading(languageSelect, true);
+                const data = await fetchJSON("{{ route('agency.bookings.lookup.languages') }}?occupation_id=" + encodeURIComponent(occupationId));
+                const languages = data?.data?.languages || data?.languages || [];
+                languages.forEach(function (language) {
+                    const code = String(language?.code || '').trim();
+                    const name = String(language?.name || language?.english_name || code).trim();
+                    if (!code || !name) return;
+                    const option = document.createElement('option');
+                    option.value = code;
+                    option.textContent = name + ' (' + code + ')';
+                    languageSelect.appendChild(option);
+                });
+                languageSelect.disabled = languages.length === 0;
+                if (languages.length === 0) showError(languageError, 'No live exam languages returned for this occupation.');
+            } catch (error) {
+                showError(languageError, 'Could not load live exam languages. Please try again.');
+                console.error(error);
+            } finally {
+                setLoading(languageSelect, false);
+            }
+        }
 
         async function loadCreditStatus() {
             const candidateId = candidateSelect?.value;
@@ -866,6 +890,12 @@
                 clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
                 clearError(cityError);
                 clearError(categoryError);
+                clearError(languageError);
+                if (languageSelect) {
+                    languageSelect.innerHTML = '<option value="">Select a live SVP exam language…</option>';
+                    languageSelect.value = '';
+                    languageSelect.disabled = true;
+                }
                 clearError(testCenterError);
                 clearError(sessionError);
                 clearError(dateError);
@@ -875,6 +905,7 @@
                 }
 
                 void loadCreditStatus();
+                void loadLiveLanguages(occupationId);
 
                 try {
                     setLoading(categorySelect, true);
@@ -939,6 +970,19 @@
             });
         }
 
+        languageSelect?.addEventListener('change', function () {
+            if (languageSelect.value && citySelect.value && categorySelect.value) {
+                citySelect.dispatchEvent(new Event('change'));
+            } else {
+                testCenterSection.style.display = 'none';
+                populateSelect(testCenterSelect, []);
+                populateSelect(sessionSelect, []);
+                renderAvailableDates([], []);
+                dateInput.value = '';
+                clearTemporaryHold('Select a live exam language and city to load verified test centers.');
+            }
+        });
+
         if (citySelect) {
             citySelect.addEventListener('change', async function () {
                 const city = citySelect.value;
@@ -957,13 +1001,14 @@
                 clearError(sessionError);
                 clearError(dateError);
 
-                if (!city || !categoryId) {
+                const languageCode = languageSelect?.value || '';
+                if (!city || !categoryId || !languageCode) {
                     return;
                 }
 
                 try {
                     setLoading(testCenterSelect, true);
-                    const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId) + "&occupation_id=" + encodeURIComponent(occupationSelect.value) + "&language_code=" + encodeURIComponent(document.getElementById('language_code')?.value || 'LOABB');
+                    const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId) + "&occupation_id=" + encodeURIComponent(occupationSelect.value) + "&language_code=" + encodeURIComponent(languageCode);
                     const data = await fetchJSON(url);
                     const centers = data?.data?.test_centers || (data && Array.isArray(data.data) ? data.data : []);
                     populateSelect(testCenterSelect, centers, 'id', 'name');

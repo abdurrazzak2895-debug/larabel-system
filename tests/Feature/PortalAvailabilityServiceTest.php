@@ -108,7 +108,7 @@ class PortalAvailabilityServiceTest extends TestCase
                     'occupation_id' => 2061,
                     'category_id' => 159,
                     'category_name' => 'Load and unload workers',
-                    'languages' => [['code' => 'LOABB', 'name' => 'Bengali']],
+                    'languages' => [['code' => 'LOABB', 'english_name' => 'Bengali']],
                 ]];
             }
 
@@ -133,6 +133,10 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertSame([
             ['id' => '159', 'name' => 'Load and unload workers'],
         ], $service->bookingCategories('2061'));
+        $this->assertSame([
+            ['code' => 'LOABB', 'name' => 'Bengali'],
+        ], $service->bookingLanguages('2061'));
+        $this->assertSame([], $service->bookingLanguages('999999'));
         $this->assertSame([
             ['name' => 'Khulna'],
         ], $service->bookingCities('159'));
