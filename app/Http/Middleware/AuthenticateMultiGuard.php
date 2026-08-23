@@ -12,7 +12,12 @@ class AuthenticateMultiGuard
     {
         // Admin guard first: a signed-in admin must always win over any
         // residual web-guard (agency/user) identity in the same session.
-        $user = $request->user('admin') ?? $request->user('web');
+        $admin = $request->user('admin');
+        if ($admin && ($request->routeIs('user.*') || $request->routeIs('agency.*'))) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        $user = $admin ?? $request->user('web');
 
         if ($user) {
             $request->setUserResolver(fn ($guard = null) => $user);

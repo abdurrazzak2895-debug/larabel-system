@@ -110,6 +110,15 @@ class AdminAuthTest extends TestCase
         $this->get(route('admin.agencies.index'))->assertOk();
     }
 
+    public function test_admin_session_is_redirected_from_user_panel_instead_of_triggering_a_server_error(): void
+    {
+        $admin = Admin::where('email', env('ADMIN_EMAIL', 'admin@takamol.example.com'))->firstOrFail();
+        Auth::guard('admin')->login($admin);
+
+        $this->get(route('user.dashboard'))
+            ->assertRedirect(route('admin.dashboard'));
+    }
+
     public function test_agency_user_is_redirected_to_login_flow_for_admin_pages(): void
     {
         $agencyUser = \App\Models\User::whereNotNull('agency_id')->first();
