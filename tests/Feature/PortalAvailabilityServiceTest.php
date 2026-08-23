@@ -96,6 +96,48 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertArrayNotHasKey('user_id', $center);
     }
 
+    public function test_service_unwraps_nested_center_payload_and_counts_all_session_rows(): void
+    {
+        $credential = PortalAvailabilityCredential::query()->create([
+            'name' => 'Nested center payload',
+            'portal_account_id' => 'portal-account-nested',
+            'session_cookie' => 'session=nested-authorized',
+            'active' => true,
+        ]);
+
+        $provider = new class implements PortalAvailabilityProviderInterface
+        {
+            public function occupations(string $sessionCookie): array
+            {
+                return [];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => []];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                return ['data' => ['centers' => [
+                    ['test_center_name' => 'Narail Technical Training Centre', 'test_center_id' => 181, 'test_time' => '02:30 PM', 'available_seats' => 16, 'exam_session_id' => 'nested-session-1'],
+                    ['test_center_name' => 'Narail Technical Training Centre', 'test_center_id' => 181, 'test_time' => '09:30 AM', 'available_seats' => 16, 'exam_session_id' => 'nested-session-2'],
+                    ['test_center_name' => 'Narail Technical Training Centre', 'test_center_id' => 181, 'test_time' => '11:30 AM', 'available_seats' => 16, 'exam_session_id' => 'nested-session-3'],
+                    ['test_center_name' => 'Narail Technical Training Centre', 'test_center_id' => 181, 'test_time' => '01:30 PM', 'available_seats' => 16, 'exam_session_id' => 'nested-session-4'],
+                ]]];
+            }
+        };
+
+        $service = new PortalAvailabilityService($provider);
+        $result = $service->centers($credential->id, 159, 'Khulna', '2026-08-31', 2061, 'LOABB');
+        $rows = $result['data']['centers'];
+
+        $this->assertCount(4, $rows);
+        $this->assertSame(1, $result['data']['center_count']);
+        $this->assertSame(['nested-session-1', 'nested-session-2', 'nested-session-3', 'nested-session-4'], array_column($rows, 'exam_session_id'));
+        $this->assertSame([4, 4, 4, 4], array_column($rows, 'session_count'));
+    }
+
     public function test_portal_booking_lookup_methods_return_verified_filter_data(): void
     {
         PortalAvailabilityCredential::query()->create([

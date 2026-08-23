@@ -372,7 +372,14 @@ final class PortalAvailabilityService
     /** @return array{centers: array<int, array<string, mixed>>, center_count: int} */
     private function normalizeCenters(array $payload): array
     {
-        $centers = collect($payload['centers'] ?? [])
+        $rows = $payload['centers']
+            ?? $payload['test_centers']
+            ?? data_get($payload, 'data.centers')
+            ?? data_get($payload, 'data.test_centers')
+            ?? data_get($payload, 'data.data.centers')
+            ?? [];
+
+        $centers = collect(is_array($rows) ? $rows : [])
             ->filter(fn ($item): bool => is_array($item))
             ->map(fn (array $item): array => [
                 'test_center_name' => trim((string) ($item['test_center_name'] ?? '')),
