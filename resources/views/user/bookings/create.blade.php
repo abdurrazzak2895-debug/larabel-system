@@ -240,6 +240,8 @@
     let sessionCatalog = [];
     let availableDateCatalog = [];
     let availabilityCalendar = null;
+    const sessionLookupCache = new Map();
+    const sessionLookupRequests = new Map();
 
     function selectedTestCenterLabel() {
         return String(testCenterNameInput?.value || testCenterSelect?.dataset?.name || '').trim();
@@ -444,16 +446,47 @@
         return filtered;
     }
 
+    function sessionLookupKey(centerId, dateValue) {
+        return [citySelect.value, categorySelect.value, centerId, dateValue].join('|');
+    }
+
+    function sessionRowsFromResponse(body) {
+        return body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || [];
+    }
+
+    function requestSessionsForCenter(centerId, dateValue) {
+        const key = sessionLookupKey(centerId, dateValue);
+        if (sessionLookupCache.has(key)) return Promise.resolve(sessionLookupCache.get(key));
+        if (sessionLookupRequests.has(key)) return sessionLookupRequests.get(key);
+        const params = new URLSearchParams({city: citySelect.value, category_id: categorySelect.value, test_center_id: centerId, exam_date: dateValue});
+        const request = fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString())
+            .then(body => {
+                const sessions = Array.isArray(sessionRowsFromResponse(body)) ? sessionRowsFromResponse(body) : [];
+                sessionLookupCache.set(key, sessions);
+                return sessions;
+            })
+            .finally(() => sessionLookupRequests.delete(key));
+        sessionLookupRequests.set(key, request);
+        return request;
+    }
+
+    function prefetchSessionsForCenters(centers, dateValue) {
+        const centerIds = [...new Set((Array.isArray(centers) ? centers : []).map(item => String(item.id || item.test_center_id || item.site_id || item.center_id || '')).filter(Boolean))];
+        centerIds.forEach(centerId => {
+            requestSessionsForCenter(centerId, dateValue).catch(error => console.debug('Automatic session prefetch failed', {centerId, dateValue, error}));
+        });
+    }
+
     async function loadSessionsForDate(date) {
         if (!date || !citySelect.value || !categorySelect.value || !testCenterSelect.value) {
             renderSessionsForDate(date);
             return;
         }
+        const requestedCenterId = String(testCenterSelect.value);
         try {
             setLoading(sessionSelect, true);
-            const params = new URLSearchParams({city: citySelect.value, category_id: categorySelect.value, test_center_id: testCenterSelect.value, exam_date: date});
-            const data = await fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString());
-            const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
+            const sessions = await requestSessionsForCenter(requestedCenterId, date);
+            if (requestedCenterId !== String(testCenterSelect.value) || date !== availableDateSelect?.value) return;
             sessionCatalog = Array.isArray(sessions) ? sessions.slice() : [];
             renderAvailableDates(sessionCatalog, availableDateCatalog);
             availableDateSelect.value = date;
@@ -464,11 +497,10 @@
                 temporaryHoldStatus.textContent = 'SVP returned no available session for this date at the selected center.';
             }
         } catch (error) {
+            if (requestedCenterId !== String(testCenterSelect.value) || date !== availableDateSelect?.value) return;
             sessionResponse?.renderSessions([], {date: date, emptyText: error.message});
-            sessionSelect.value = '';
-            sessionSelect.dataset.name = '';
-            sessionSelect.dataset.date = '';
-            sessionSelect.dataset.centerId = '';
+            clearSessionValue();
+            showDateError(error.message);
             console.error(error);
         } finally {
             setLoading(sessionSelect, false);
@@ -1003,6 +1035,7 @@
                     : 'No center slots returned for ' + city + ' on ' + date + '.';
             }
             testCenterSection.style.display = centers.length ? '' : 'none';
+            prefetchSessionsForCenters(centers, date);
         } catch (e) {
             testCenterSection.style.display = 'none';
             console.error(e);

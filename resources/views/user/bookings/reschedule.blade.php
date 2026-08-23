@@ -224,6 +224,8 @@
     let sessionSnapshot = [];
     let availableDateCatalog = [];
     let availabilityCalendar = null;
+    const sessionLookupCache = new Map();
+    const sessionLookupRequests = new Map();
 
     function mountAvailabilityCalendar() {
         if (!window.SvpCalendar || availabilityCalendar) return;
@@ -418,6 +420,7 @@
                 emptyText: 'No live test-center slots returned for the selected date.'
             });
             centerSection.style.display = items.length ? '' : 'none';
+            prefetchSessionsForCenters(items, dateValue);
             centerSummary.textContent = items.length
                 ? 'Portal Availability returned ' + items.length + ' center slot' + (items.length === 1 ? '' : 's') + ' for ' + city.value + ' on ' + dateValue + '. Click one card to load exact SVP sessions.'
                 : 'No center slots returned for ' + city.value + ' on ' + dateValue + '.';
@@ -443,14 +446,47 @@
         }
     }
 
+    function sessionLookupKey(centerId, dateValue) {
+        return [city.value, category.value, centerId, dateValue].join('|');
+    }
+
+    function sessionRowsFromResponse(body) {
+        return body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || [];
+    }
+
+    function requestSessionsForCenter(centerId, dateValue) {
+        const key = sessionLookupKey(centerId, dateValue);
+        if (sessionLookupCache.has(key)) return Promise.resolve(sessionLookupCache.get(key));
+        if (sessionLookupRequests.has(key)) return sessionLookupRequests.get(key);
+        const params = new URLSearchParams({city: city.value, category_id: category.value, test_center_id: centerId, exam_date: dateValue});
+        const request = getJson('{{ route('user.bookings.lookup.sessions') }}?' + params.toString())
+            .then(body => {
+                const sessions = Array.isArray(sessionRowsFromResponse(body)) ? sessionRowsFromResponse(body) : [];
+                sessionLookupCache.set(key, sessions);
+                return sessions;
+            })
+            .finally(() => sessionLookupRequests.delete(key));
+        sessionLookupRequests.set(key, request);
+        return request;
+    }
+
+    function prefetchSessionsForCenters(centers, dateValue) {
+        const centerIds = [...new Set((Array.isArray(centers) ? centers : []).map(item => String(item.id || item.test_center_id || item.site_id || item.center_id || '')).filter(Boolean))];
+        centerIds.forEach(centerId => {
+            requestSessionsForCenter(centerId, dateValue).catch(error => console.debug('Automatic session prefetch failed', {centerId, dateValue, error}));
+        });
+    }
+
     async function loadSessionsForDate(dateValue) {
         if (!city.value || !center.value || !dateValue) return;
+        const requestedCenterId = String(center.value);
         try {
             setLoading(session, true);
-            const params = new URLSearchParams({city: city.value, category_id: category.value, test_center_id: center.value, exam_date: dateValue});
-            const body = await getJson('{{ route('user.bookings.lookup.sessions') }}?' + params.toString());
-            renderSessions(body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || [], dateValue);
+            const sessions = await requestSessionsForCenter(requestedCenterId, dateValue);
+            if (requestedCenterId !== String(center.value) || dateValue !== availableDate.value) return;
+            renderSessions(sessions, dateValue);
         } catch (error) {
+            if (requestedCenterId !== String(center.value) || dateValue !== availableDate.value) return;
             sessionResponse?.renderSessions([], {date: dateValue, emptyText: error.message});
             clearSessionValue();
             showError(dateError, error.message);
