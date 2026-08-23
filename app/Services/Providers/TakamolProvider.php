@@ -21,7 +21,8 @@ class TakamolProvider implements BookingProviderInterface
 
     public function __construct()
     {
-        $this->baseUrl = rtrim((string) config('svp.base_url'), '/');
+        $configuredBaseUrl = rtrim((string) config('svp.base_url'), '/');
+        $this->baseUrl = preg_replace('#/api/v1$#i', '', $configuredBaseUrl) ?: $configuredBaseUrl;
 
         $this->client = Http::baseUrl($this->baseUrl)
             ->timeout((int) config('svp.timeout', 30))

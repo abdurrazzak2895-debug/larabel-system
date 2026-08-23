@@ -21,7 +21,8 @@ class SvpApiService
         protected ?string $tenantName = null,
         protected ?int $timeout = null,
     ) {
-        $this->baseUrl   = $baseUrl   ?? (string) config('svp.base_url');
+        $configuredBaseUrl = rtrim($baseUrl ?? (string) config('svp.base_url'), '/');
+        $this->baseUrl = preg_replace('#/api/v1$#i', '', $configuredBaseUrl) ?: $configuredBaseUrl;
         $this->tenantName = $tenantName ?? (string) config('svp.tenant_name');
         $this->timeout   = $timeout   ?? (int) config('svp.timeout', 30);
     }
