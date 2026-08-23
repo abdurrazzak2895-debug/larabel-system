@@ -348,7 +348,7 @@
             option.dataset.centerId = itemCenterId;
             option.dataset.centerName = itemCenterName;
             option.dataset.date = itemDate;
-            option.textContent = (itemDate || selectedDate || 'Unknown date') + ' — ' + shiftLabel(item, index) + ' · ' + sessionOptionLabel(item, index) + ' · ' + itemCenterName;
+            option.textContent = (itemDate || selectedDate || 'Unknown date') + ' — ' + shiftLabel(item, index) + ' · ' + sessionOptionLabel(item, index);
             option.disabled = !!(itemCenterId && itemCenterId !== String(center.value));
             session.appendChild(option);
         });
