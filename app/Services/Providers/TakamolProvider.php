@@ -151,6 +151,7 @@ class TakamolProvider implements BookingProviderInterface
         // available_seats, then narrows by city and the exact test_center_id.
         // Omitting the center mixes sessions from every center in a city.
         $params['available_seats'] ??= 'greater_than::0';
+        $params['per_page'] ??= max(1, min(1000, (int) config('svp.session_per_page', 1000)));
         $response = $this->dispatch('GET', '/individual_labor_space/exam_sessions', $params);
 
         // SVP session nodes do not always carry a `name`; the frontend needs a
@@ -160,7 +161,7 @@ class TakamolProvider implements BookingProviderInterface
             return $response;
         }
 
-        $sessions = $this->extractList($payload, ['exam_sessions', 'sessions', 'available_sessions', 'items', 'results', 'records']);
+        $sessions = $this->extractList($payload, ['exam_sessions', 'sessions', 'available_sessions', 'centers', 'items', 'results', 'records']);
         if ($sessions === null) {
             return $response;
         }
@@ -347,7 +348,7 @@ class TakamolProvider implements BookingProviderInterface
             }
 
                 $dateSessions = array_values(array_filter(
-                $this->extractList($datePayload, ['exam_sessions', 'sessions', 'available_sessions', 'items', 'results', 'records']) ?? [],
+                $this->extractList($datePayload, ['exam_sessions', 'sessions', 'available_sessions', 'centers', 'items', 'results', 'records']) ?? [],
                 static fn ($session): bool => is_array($session),
             ));
             if ($dateSessions === []) {

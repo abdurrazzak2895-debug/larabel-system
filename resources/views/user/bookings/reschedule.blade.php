@@ -451,7 +451,15 @@
     }
 
     function sessionRowsFromResponse(body) {
-        return body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || [];
+        const candidates = [
+            body?.data?.sessions,
+            body?.data?.exam_sessions,
+            body?.sessions,
+            body?.exam_sessions,
+            body?.data?.centers,
+            body?.centers,
+        ];
+        return candidates.find(items => Array.isArray(items) && items.length > 0) || [];
     }
 
     function requestSessionsForCenter(centerId, dateValue) {

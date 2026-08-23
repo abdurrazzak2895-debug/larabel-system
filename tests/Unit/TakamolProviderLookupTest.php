@@ -102,6 +102,55 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_sessions_preserve_all_four_exact_ids_from_a_center_rows_payload(): void
+    {
+        $sessionIds = [
+            'session-first-shift',
+            'session-second-shift',
+            'session-third-shift',
+            'session-fourth-shift',
+        ];
+
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'centers' => array_map(
+                    static fn (string $id, int $index): array => [
+                        'available_seats' => 1,
+                        'category_id' => 159,
+                        'exam_session_id' => $id,
+                        'test_center_id' => 181,
+                        'test_center_name' => 'Narail Technical Training Centre',
+                        'test_time' => sprintf('%02d:30 PM', $index + 1),
+                    ],
+                    $sessionIds,
+                    array_keys($sessionIds),
+                ),
+            ], 200),
+        ]);
+
+        $payload = (new TakamolProvider())->withToken('test-token')->examSessions([
+            'city' => 'Khulna',
+            'category_id' => '159',
+            'test_center_id' => '181',
+            'exam_date' => '2026-08-30',
+        ])->getData(true);
+
+        $this->assertSame($sessionIds, array_column($payload['data']['sessions'], 'id'));
+        $this->assertSame($sessionIds, array_column($payload['data']['sessions'], 'exam_session_id'));
+        $this->assertSame(['181', '181', '181', '181'], array_column($payload['data']['sessions'], 'test_center_id'));
+        $this->assertSame(['2026-08-30', '2026-08-30', '2026-08-30', '2026-08-30'], array_column($payload['data']['sessions'], 'exam_date'));
+        $this->assertCount(4, $payload['data']['exam_sessions']);
+
+        Http::assertSent(function ($request): bool {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return ($query['per_page'] ?? null) === '1000'
+                && ($query['test_center_id'] ?? null) === '181'
+                && ($query['exam_date'] ?? null) === '2026-08-30'
+                && ($query['available_seats'] ?? null) === 'greater_than::0';
+        });
+    }
+
     public function test_date_specific_sessions_only_return_the_requested_date(): void
     {
         Http::fake([
