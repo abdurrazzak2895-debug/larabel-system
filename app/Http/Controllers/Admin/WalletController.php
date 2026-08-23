@@ -8,6 +8,7 @@ use App\Models\AgencyWallet;
 use App\Models\WalletTransaction;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class WalletController extends Controller
 {

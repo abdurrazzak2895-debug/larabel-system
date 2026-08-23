@@ -97,6 +97,34 @@ class AdminAuthTest extends TestCase
         }
     }
 
+    public function test_admin_can_credit_an_agency_wallet_through_manual_adjustment(): void
+    {
+        $admin = Admin::where('email', env('ADMIN_EMAIL', 'admin@takamol.example.com'))->firstOrFail();
+        $agency = \App\Models\Agency::firstOrFail();
+        $wallet = \App\Models\AgencyWallet::where('agency_id', $agency->id)->firstOrFail();
+        $startingBalance = (float) $wallet->available_balance;
+
+        Auth::guard('admin')->login($admin);
+        $csrfToken = 'admin-credit-csrf-token';
+
+        $this->withSession(['_token' => $csrfToken])
+            ->from(route('admin.wallets.show', ['agency' => $agency->id]))
+            ->post(route('admin.wallets.credit', ['agency' => $agency->id]), [
+                '_token' => $csrfToken,
+                'amount' => '123.45',
+                'reference' => 'test-admin-credit',
+            ])
+            ->assertRedirect(route('admin.wallets.show', ['agency' => $agency->id]));
+
+        $this->assertDatabaseHas('wallet_transactions', [
+            'wallet_id' => $wallet->id,
+            'type' => 'manual_adjustment',
+            'amount' => 123.45,
+            'reference' => 'test-admin-credit',
+        ]);
+        $this->assertSame($startingBalance + 123.45, (float) $wallet->fresh()->available_balance);
+    }
+
     public function test_admin_never_blocked_by_residual_agency_web_session(): void
     {
         $admin = Admin::where('email', env('ADMIN_EMAIL', 'admin@takamol.example.com'))->first();
