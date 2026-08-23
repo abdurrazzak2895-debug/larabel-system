@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Contracts\PortalAvailabilityProviderInterface;
 use App\Models\Admin;
 use App\Models\Permission;
+use App\Models\PortalAvailabilityApiKey;
 use App\Models\PortalAvailabilityCredential;
 use App\Services\PortalAvailabilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -192,6 +193,40 @@ class PortalAvailabilityServiceTest extends TestCase
             ->assertJsonMissing(['session_cookie' => 'session=authorized'])
             ->assertDontSee('session=authorized');
         Http::assertSentCount(1);
+    }
+
+    public function test_admin_dashboard_renders_with_credential_and_api_key_data(): void
+    {
+        $permission = Permission::query()->create(['name' => 'manage agencies', 'slug' => 'manage-agencies']);
+        $role = Role::query()->create(['name' => 'Portal Availability Dashboard Admin', 'slug' => 'portal-availability-dashboard-admin']);
+        $role->permissions()->attach($permission->id);
+        $admin = Admin::factory()->create();
+        $admin->assignRole($role->name);
+
+        $credential = PortalAvailabilityCredential::query()->create([
+            'name' => 'Authorized Portal Session',
+            'portal_account_id' => 'portal-account-1',
+            'session_cookie' => 'session=authorized',
+            'active' => true,
+        ]);
+        $plaintext = PortalAvailabilityApiKey::generatePlaintext();
+        PortalAvailabilityApiKey::query()->create([
+            'portal_availability_credential_id' => $credential->id,
+            'name' => 'Partner website',
+            'key_prefix' => PortalAvailabilityApiKey::prefix($plaintext),
+            'key_hash' => PortalAvailabilityApiKey::hashPlaintext($plaintext),
+            'rate_limit_per_minute' => 60,
+        ]);
+
+        Auth::guard('admin')->login($admin);
+
+        $this->get(route('admin.portal-availability.index'))
+            ->assertOk()
+            ->assertSee('Live occupations, dates and centers')
+            ->assertSee('External website API access')
+            ->assertSee('Partner website')
+            ->assertSee('Active')
+            ->assertDontSee('session=authorized');
     }
 
     public function test_guest_cannot_access_the_portal_dashboard_or_json_lookup_routes(): void

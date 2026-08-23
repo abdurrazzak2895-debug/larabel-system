@@ -76,9 +76,15 @@
                             <div>
                                 <div class="flex flex-wrap items-center gap-2"><h4 class="font-bold text-slate-900">{{ $credential['name'] }}</h4><span class="rounded-full px-2 py-0.5 text-[11px] font-bold {{ $credential['usable'] ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600' }}">{{ $credential['usable'] ? 'Ready' : 'Unavailable' }}</span></div>
                                 <p class="mt-1 text-xs text-slate-500">Account ID: {{ $credential['portal_account_id'] }}</p>
-                                @if ($credential['expires_at'])<p class="mt-1 text-xs text-slate-500">Expires: {{ $credential['expires_at'] }}</p>@endif
-                                @if ($credential['last_checked_at'])<p class="mt-1 text-xs text-slate-500">Last checked: {{ $credential['last_checked_at'] }}</p>@endif
-                                @if ($credential['last_error'])<p class="mt-2 text-xs text-red-700">{{ $credential['last_error'] }}</p>@endif
+                                @if ($credential['expires_at'])
+                                    <p class="mt-1 text-xs text-slate-500">Expires: {{ $credential['expires_at'] }}</p>
+                                @endif
+                                @if ($credential['last_checked_at'])
+                                    <p class="mt-1 text-xs text-slate-500">Last checked: {{ $credential['last_checked_at'] }}</p>
+                                @endif
+                                @if ($credential['last_error'])
+                                    <p class="mt-2 text-xs text-red-700">{{ $credential['last_error'] }}</p>
+                                @endif
                             </div>
                             <div class="flex shrink-0 gap-2">
                                 @if ($credential['active'])
@@ -133,7 +139,9 @@
                 <select name="portal_availability_credential_id" required class="mt-1.5 w-full rounded-xl border-slate-300 text-sm">
                     <option value="">Select a ready session</option>
                     @foreach ($credentials as $credential)
-                        @if ($credential['usable'])<option value="{{ $credential['id'] }}">{{ $credential['name'] }} · {{ $credential['portal_account_id'] }}</option>@endif
+                        @if ($credential['usable'])
+                            <option value="{{ $credential['id'] }}">{{ $credential['name'] }} · {{ $credential['portal_account_id'] }}</option>
+                        @endif
                     @endforeach
                 </select>
             </label>
@@ -152,10 +160,30 @@
                 @forelse ($apiKeys as $apiKey)
                     <article class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <div class="flex flex-wrap items-center gap-2"><span class="font-semibold text-slate-900">{{ $apiKey->name }}</span><span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-600">{{ $apiKey->key_prefix }}…</span>@if ($apiKey->revoked_at)<span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">Revoked</span>@elseif ($apiKey->expires_at && $apiKey->expires_at->isPast())<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">Expired</span>@else<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Active</span>@endif</div>
-                            <p class="mt-1 text-xs text-slate-500">Session: {{ $apiKey->credential?->name ?? 'Deleted session' }} · Limit: {{ $apiKey->rate_limit_per_minute }}/minute@if ($apiKey->expires_at) · Expires: {{ $apiKey->expires_at->toIso8601String() }}@endif</p>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-semibold text-slate-900">{{ $apiKey->name }}</span>
+                                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-600">{{ $apiKey->key_prefix }}…</span>
+                                @if ($apiKey->revoked_at)
+                                    <span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">Revoked</span>
+                                @elseif ($apiKey->expires_at && $apiKey->expires_at->isPast())
+                                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">Expired</span>
+                                @else
+                                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Active</span>
+                                @endif
+                            </div>
+                            <p class="mt-1 text-xs text-slate-500">
+                                Session: {{ $apiKey->credential?->name ?? 'Deleted session' }} · Limit: {{ $apiKey->rate_limit_per_minute }}/minute
+                                @if ($apiKey->expires_at)
+                                    · Expires: {{ $apiKey->expires_at->toIso8601String() }}
+                                @endif
+                            </p>
                         </div>
-                        @if (! $apiKey->revoked_at)<form method="POST" action="{{ route('admin.portal-availability.api-keys.revoke', $apiKey->id) }}">@csrf<button class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Revoke</button></form>@endif
+                        @if (! $apiKey->revoked_at)
+                            <form method="POST" action="{{ route('admin.portal-availability.api-keys.revoke', $apiKey->id) }}">
+                                @csrf
+                                <button class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Revoke</button>
+                            </form>
+                        @endif
                     </article>
                 @empty
                     <p class="rounded-xl border border-dashed border-slate-300 px-4 py-5 text-center text-xs text-slate-500">No external API keys issued yet.</p>
@@ -170,7 +198,9 @@
                 <select id="portal-credential" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm" {{ count($credentials) ? '' : 'disabled' }}>
                     <option value="">Select a ready session</option>
                     @foreach ($credentials as $credential)
-                        @if ($credential['usable'])<option value="{{ $credential['id'] }}">{{ $credential['name'] }} · {{ $credential['portal_account_id'] }}</option>@endif
+                        @if ($credential['usable'])
+                            <option value="{{ $credential['id'] }}">{{ $credential['name'] }} · {{ $credential['portal_account_id'] }}</option>
+                        @endif
                     @endforeach
                 </select>
             </label>
