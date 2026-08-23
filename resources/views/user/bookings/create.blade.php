@@ -1069,6 +1069,7 @@
                     const selectedCenterName = testCenterSelect.options[testCenterSelect.selectedIndex]?.dataset?.centerName || testCenterSelect.options[testCenterSelect.selectedIndex]?.textContent || 'the selected test center';
                     sessionCenterError.textContent = 'Blocked: selected session center "' + selectedSessionCenterName + '" does not match selected center "' + selectedCenterName + '".';
                     sessionCenterError.classList.remove('hidden');
+                }
                 return;
             }
             if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || selectedSessionOption?.textContent || '';
