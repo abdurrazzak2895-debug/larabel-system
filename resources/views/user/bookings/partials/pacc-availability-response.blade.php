@@ -4,6 +4,8 @@
     $centerSelectId = $centerSelectId ?? 'test_center_id';
     $centerNameInputId = $centerNameInputId ?? 'test_center_name';
     $sessionSelectId = $sessionSelectId ?? 'exam_session_id';
+    $sessionNameInputId = $sessionNameInputId ?? 'exam_session_name';
+    $dateInputId = $dateInputId ?? 'exam_date';
 @endphp
 
 @once
@@ -56,6 +58,8 @@
             const centerSelect = document.getElementById(options.centerSelectId || 'test_center_id');
             const centerNameInput = document.getElementById(options.centerNameInputId || 'test_center_name');
             const sessionSelect = document.getElementById(options.sessionSelectId || 'exam_session_id');
+            const sessionNameInput = document.getElementById(options.sessionNameInputId || 'exam_session_name');
+            const dateInput = document.getElementById(options.dateInputId || 'exam_date');
 
             function setVisible(visible) {
                 panel?.classList.toggle('hidden', !visible);
@@ -123,14 +127,21 @@
                         const time = sessionTime(row);
                         const seats = sessionSeats(row);
                         const date = sessionDate(row) || meta.date || 'Date unavailable';
-                        return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}">
+                        return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}" data-pacc-index="${index}">
                             <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block truncate text-sm text-slate-900">${esc(sessionName(row, index))}</strong><span class="mt-1 block text-[11px] text-slate-500">${esc(date)} · Session ${esc(shortId(id))}</span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
                             <span class="mt-2 block text-[11px] text-slate-500">Time: <b class="text-slate-700">${esc(time || 'Not provided')}</b></span>
                         </button>`;
                     }).join('');
                     list.querySelectorAll('[data-pacc-value]').forEach(card => card.addEventListener('click', () => {
                         if (!sessionSelect) return;
-                        sessionSelect.value = card.dataset.paccValue || '';
+                        const index = Number(card.dataset.paccIndex || 0);
+                        const selectedRow = items[index] || {};
+                        const selectedId = card.dataset.paccValue || '';
+                        sessionSelect.value = selectedId;
+                        sessionSelect.dataset.name = sessionName(selectedRow, index);
+                        sessionSelect.dataset.date = sessionDate(selectedRow) || meta.date || '';
+                        if (sessionNameInput) sessionNameInput.value = sessionSelect.dataset.name;
+                        if (dateInput) dateInput.value = sessionSelect.dataset.date;
                         sessionSelect.dispatchEvent(new Event('change', {bubbles: true}));
                         syncSelection();
                     }));
@@ -171,7 +182,7 @@
     window.PaccAvailabilityInstances = window.PaccAvailabilityInstances || {};
     window.PaccAvailabilityInstances['{{ $componentId }}'] = window.PaccAvailabilityComponent.create(
         document.getElementById('{{ $componentId }}'),
-        {mode: '{{ $mode }}', centerSelectId: '{{ $centerSelectId }}', centerNameInputId: '{{ $centerNameInputId }}', sessionSelectId: '{{ $sessionSelectId }}'}
+        {mode: '{{ $mode }}', centerSelectId: '{{ $centerSelectId }}', centerNameInputId: '{{ $centerNameInputId }}', sessionSelectId: '{{ $sessionSelectId }}', sessionNameInputId: '{{ $sessionNameInputId }}', dateInputId: '{{ $dateInputId }}'}
     );
 })();
 </script>

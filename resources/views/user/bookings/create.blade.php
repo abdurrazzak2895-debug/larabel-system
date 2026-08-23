@@ -148,11 +148,7 @@
                         ])
                     </div>
 
-                    <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available SVP session</label>
-                    <select name="exam_session_id" id="exam_session_id" required
-                        class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select…</option>
-                    </select>
+                    <input type="hidden" name="exam_session_id" id="exam_session_id" value="">
                     <input type="hidden" name="exam_session_name" id="exam_session_name" value="">
                     <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="">
                     <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
@@ -161,6 +157,8 @@
                         'mode' => 'sessions',
                         'centerSelectId' => 'test_center_id',
                         'sessionSelectId' => 'exam_session_id',
+                        'sessionNameInputId' => 'exam_session_name',
+                        'dateInputId' => 'exam_date',
                     ])
                     <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
                     @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
@@ -257,6 +255,21 @@
             delete testCenterNameInput.dataset.centerId;
         }
         centerResponse?.clear();
+    }
+
+    function clearSessionValue() {
+        if (sessionSelect) {
+            sessionSelect.value = '';
+            sessionSelect.dataset.name = '';
+            sessionSelect.dataset.date = '';
+            sessionSelect.dataset.centerId = '';
+        }
+        if (sessionNameInput) sessionNameInput.value = '';
+    }
+
+    function resetSessionSelection() {
+        clearSessionValue();
+        sessionResponse?.clear();
     }
 
     function mountAvailabilityCalendar() {
@@ -422,12 +435,11 @@
         } else {
             sessionResponse?.clear();
         }
-        populateSelect(sessionSelect, filtered, 'id', 'name');
         if (sessionSelect) {
-            sessionSelect.disabled = filtered.length === 0;
-            if (!selectedDate) {
-                sessionSelect.innerHTML = '<option value="">Select an available date first</option>';
-            }
+            sessionSelect.value = '';
+            sessionSelect.dataset.name = '';
+            sessionSelect.dataset.date = '';
+            sessionSelect.dataset.centerId = '';
         }
         return filtered;
     }
@@ -449,11 +461,14 @@
             dateInput.value = date;
             renderSessionsForDate(date);
             if (!sessions.length) {
-                sessionSelect.innerHTML = '<option value="">No sessions returned for this date</option>';
                 temporaryHoldStatus.textContent = 'SVP returned no available session for this date at the selected center.';
             }
         } catch (error) {
-            sessionSelect.innerHTML = '<option value="">Could not load sessions for this date</option>';
+            sessionResponse?.renderSessions([], {date: date, emptyText: error.message});
+            sessionSelect.value = '';
+            sessionSelect.dataset.name = '';
+            sessionSelect.dataset.date = '';
+            sessionSelect.dataset.centerId = '';
             console.error(error);
         } finally {
             setLoading(sessionSelect, false);
@@ -501,7 +516,7 @@
 
     async function createTemporaryHold() {
         if (temporaryHoldRequest) return;
-        const selectedSessionOption = sessionSelect.options[sessionSelect.selectedIndex];
+        const selectedSessionOption = {value: sessionSelect.value, dataset: sessionSelect.dataset};
         if (selectedSessionOption?.dataset?.centerId && selectedSessionOption.dataset.centerId !== String(testCenterSelect.value)) {
             clearTemporaryHold('The selected session belongs to another test center and is blocked.');
             if (sessionCenterError) {
@@ -854,7 +869,7 @@
             sessionCatalog = [];
             availableDateCatalog = [];
             renderAvailableDates([], []);
-            populateSelect(sessionSelect, []);
+            resetSessionSelection();
             renderSessionsForDate('');
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
@@ -896,7 +911,7 @@
             sessionCatalog = [];
             availableDateCatalog = [];
             renderAvailableDates([], []);
-            populateSelect(sessionSelect, []);
+            resetSessionSelection();
             renderSessionsForDate('');
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
@@ -926,7 +941,7 @@
         } else {
             testCenterSection.style.display = 'none';
             resetTestCenterSelection();
-            populateSelect(sessionSelect, []);
+            resetSessionSelection();
             renderSessionsForDate('');
             renderAvailableDates([], []);
             dateInput.value = '';
@@ -1004,7 +1019,7 @@
             sessionCatalog = [];
             availableDateCatalog = [];
             renderAvailableDates([], []);
-            populateSelect(sessionSelect, []);
+            resetSessionSelection();
             renderSessionsForDate('');
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
@@ -1024,7 +1039,7 @@
             const date = availableDateSelect?.value || '';
             if (sessionNameInput) sessionNameInput.value = '';
             sessionCatalog = [];
-            populateSelect(sessionSelect, []);
+            resetSessionSelection();
             renderSessionsForDate('');
             dateInput.value = date || '';
             clearTemporaryHold('Select a session for this date, then create a temporary hold before confirming the booking.');
@@ -1054,10 +1069,11 @@
     if (sessionSelect) {
         sessionSelect.addEventListener('change', function () {
             const sessionId = sessionSelect.value;
-            const selectedSessionOption = sessionSelect.options[sessionSelect.selectedIndex];
+            const selectedSessionOption = {value: sessionSelect.value, dataset: sessionSelect.dataset};
             clearSessionCenterError();
             if (selectedSessionOption?.dataset?.centerId && selectedSessionOption.dataset.centerId !== String(testCenterSelect.value)) {
-                sessionSelect.value = '';
+                clearSessionValue();
+                sessionResponse?.syncSelection();
                 clearTemporaryHold('The selected session belongs to another center and has been blocked.');
                 if (sessionCenterError) {
                     const selectedSessionCenterName = selectedSessionOption.dataset.centerName || selectedSessionOption.dataset.name || 'another test center';
@@ -1067,12 +1083,14 @@
                 }
                 return;
             }
-            if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || selectedSessionOption?.textContent || '';
+            if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || '';
+            sessionSelect.dataset.name = selectedSessionOption?.dataset?.name || sessionSelect.dataset.name || '';
 
             const selectedDate = availableDateSelect?.value || '';
             const sessionDateValue = (selectedSessionOption?.dataset?.date || '').substring(0, 10);
             if (selectedDate && sessionDateValue && selectedDate !== sessionDateValue) {
-                sessionSelect.value = '';
+                clearSessionValue();
+                sessionResponse?.syncSelection();
                 clearTemporaryHold('The selected session date does not match the selected available date.');
                 showDateError('This session belongs to ' + sessionDateValue + '. Please select a session for ' + selectedDate + '.');
                 return;

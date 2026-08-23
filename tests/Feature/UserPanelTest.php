@@ -252,6 +252,9 @@ class UserPanelTest extends TestCase
             ->assertSee('reschedule-center-response', false)
             ->assertSee('reschedule-session-response', false)
             ->assertSee('PaccAvailabilityComponent', false)
+            ->assertSee('Live verified sessions')
+            ->assertSee('type="hidden" name="exam_session_id"', false)
+            ->assertDontSee('<select name="exam_session_id"', false)
             ->assertDontSee('Live sessions and seat counts')
             ->assertDontSee('Bengali', false)
             ->assertDontSee('value="LOABB"', false)
@@ -267,7 +270,7 @@ class UserPanelTest extends TestCase
         $rescheduleHtml = $reschedule->getContent();
         $datePosition = strpos($rescheduleHtml, '<select id="available_session_date"');
         $centerPosition = strpos($rescheduleHtml, '<div id="test-center-section"');
-        $sessionPosition = strpos($rescheduleHtml, '<select name="exam_session_id" id="exam_session_id"');
+        $sessionPosition = strpos($rescheduleHtml, '<div id="reschedule-session-response"');
         $this->assertNotFalse($datePosition);
         $this->assertNotFalse($centerPosition);
         $this->assertNotFalse($sessionPosition);
@@ -393,7 +396,10 @@ class UserPanelTest extends TestCase
             ->assertDontSee('Selected exam date', false)
             ->assertSee('id="available_session_date"', false)
             ->assertSee('Pick a test center to load its open exam dates.', false)
-            ->assertSee('Select an available date first', false)
+            ->assertSee('Click one card to select', false)
+            ->assertSee('Live verified sessions')
+            ->assertSee('type="hidden" name="exam_session_id"', false)
+            ->assertDontSee('<select name="exam_session_id"', false)
             ->assertSee('loadSessionsForDate', false)
             ->assertDontSee('>load<', false)
             ->assertDontSee('>loading<', false);
@@ -403,7 +409,10 @@ class UserPanelTest extends TestCase
         $agencyPage->assertOk()
             ->assertSee('Select a live SVP exam language…', false)
             ->assertSee('/agency/bookings/lookup/languages', false)
-            ->assertSee('Select an available date first', false)
+            ->assertSee('Click one card to select', false)
+            ->assertSee('Live verified sessions')
+            ->assertSee('type="hidden" name="exam_session_id"', false)
+            ->assertDontSee('<select name="exam_session_id"', false)
             ->assertSee('loadSessionsForDate', false)
             ->assertDontSee('Selected exam date', false);
     }
@@ -696,9 +705,11 @@ class UserPanelTest extends TestCase
             ->assertSee('lookup/test-centers', false)
             ->assertSee('user-center-response', false)
             ->assertSee('user-session-response', false)
+            ->assertSee('Live verified sessions')
+            ->assertSee('type="hidden" name="exam_session_id"', false)
+            ->assertDontSee('<select name="exam_session_id"', false)
             ->assertDontSee('Live sessions and seat counts')
             ->assertSee('Test Center')
-            ->assertSee('Available SVP session')
             ->assertDontSee('Notes (optional)')
             ->assertDontSee('Anything the SVP booking should know');
         $html = $response->getContent();
@@ -739,9 +750,11 @@ class UserPanelTest extends TestCase
             ->assertSee('lookup/test-centers', false)
             ->assertSee('agency-center-response', false)
             ->assertSee('agency-session-response', false)
+            ->assertSee('Live verified sessions')
+            ->assertSee('type="hidden" name="exam_session_id"', false)
+            ->assertDontSee('<select name="exam_session_id"', false)
             ->assertDontSee('Live sessions and seat counts')
             ->assertSee('Test Center')
-            ->assertSee('Available SVP session')
             ->assertDontSee('Notes (optional)')
             ->assertDontSee('Anything the SVP booking should know');
         $html = $response->getContent();

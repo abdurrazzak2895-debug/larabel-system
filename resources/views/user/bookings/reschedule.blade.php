@@ -143,10 +143,7 @@
             </div>
 
             <div>
-                <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1">Available SVP session</label>
-                <select name="exam_session_id" id="exam_session_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <option value="">Select a date and test center first…</option>
-                </select>
+                <input type="hidden" name="exam_session_id" id="exam_session_id" value="{{ old('exam_session_id') }}">
                 <input type="hidden" name="exam_session_name" id="exam_session_name" value="{{ old('exam_session_name') }}">
                 <input type="hidden" name="exam_date" id="exam_date" value="{{ old('exam_date') }}">
                 <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="{{ old('temporary_hold_id') }}">
@@ -156,6 +153,8 @@
                     'mode' => 'sessions',
                     'centerSelectId' => 'test_center_id',
                     'sessionSelectId' => 'exam_session_id',
+                    'sessionNameInputId' => 'exam_session_name',
+                    'dateInputId' => 'exam_date',
                 ])
                 <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
                 <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
@@ -280,7 +279,6 @@
         if (!select) return;
         select.disabled = loading;
         select.dataset.loading = loading ? '1' : '0';
-        if (loading) select.innerHTML = '<option value="">Loading live SVP data…</option>';
     }
 
     function showError(element, message) {
@@ -322,9 +320,23 @@
         return dates;
     }
 
+    function clearSessionValue() {
+        session.value = '';
+        session.dataset.name = '';
+        session.dataset.date = '';
+        session.dataset.centerId = '';
+        sessionName.value = '';
+    }
+
+    function resetSessionSelection() {
+        clearSessionValue();
+        sessionResponse?.clear();
+    }
+
     function renderSessions(items, selectedDate) {
         sessionSnapshot = Array.isArray(items) ? items : [];
         const visible = sessionSnapshot.filter(item => !selectedDate || sessionDate(item) === selectedDate);
+        clearSessionValue();
         if (selectedDate) {
             sessionResponse?.renderSessions(visible, {
                 date: selectedDate,
@@ -333,26 +345,7 @@
         } else {
             sessionResponse?.clear();
         }
-        session.innerHTML = '<option value="">Select an exact session for this date…</option>';
-        const counts = {};
-        visible.forEach(function (item) {
-            const id = item.id || item.exam_session_id || '';
-            if (!id) return;
-            const itemDate = sessionDate(item);
-            const index = counts[itemDate] || 0;
-            counts[itemDate] = index + 1;
-            const itemCenterId = sessionCenterId(item);
-            const itemCenterName = sessionCenterName(item);
-            const option = document.createElement('option');
-            option.value = id;
-            option.dataset.name = item.name || item.session_name || shiftLabel(item, index);
-            option.dataset.centerId = itemCenterId;
-            option.dataset.centerName = itemCenterName;
-            option.dataset.date = itemDate;
-            option.textContent = (itemDate || selectedDate || 'Unknown date') + ' — ' + shiftLabel(item, index) + ' · ' + sessionOptionLabel(item, index);
-            option.disabled = !!(itemCenterId && itemCenterId !== String(center.value));
-            session.appendChild(option);
-        });
+        if (!selectedDate) return;
     }
 
     async function loadLiveLanguages() {
@@ -459,7 +452,7 @@
             renderSessions(body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || [], dateValue);
         } catch (error) {
             sessionResponse?.renderSessions([], {date: dateValue, emptyText: error.message});
-            session.innerHTML = '<option value="">Could not load sessions for this date</option>';
+            clearSessionValue();
             showError(dateError, error.message);
             console.error(error);
         } finally {
@@ -514,7 +507,7 @@
 
     async function createHold() {
         if (holdRequest) return;
-        const selected = session.options[session.selectedIndex];
+        const selected = {value: session.value, dataset: session.dataset};
         if (!selected || !selected.value || (selected.dataset.centerId && selected.dataset.centerId !== String(center.value))) {
             holdStatus.textContent = 'The selected session does not belong to the selected test center.';
             return;
@@ -530,9 +523,16 @@
             const body = await response.json().catch(() => ({}));
             if (!response.ok || body.success === false) throw new Error(body.error || 'SVP could not create the temporary hold.');
             const selection = body.selection || {};
-            if (selection.exam_session_id) session.value = selection.exam_session_id;
+            if (selection.exam_session_id) {
+                session.value = selection.exam_session_id;
+                session.dataset.name = selection.exam_session_name || session.dataset.name || '';
+                session.dataset.date = selection.exam_date || session.dataset.date || '';
+            }
             if (selection.exam_date) date.value = selection.exam_date;
-            if (selection.exam_session_name) sessionName.value = selection.exam_session_name;
+            if (selection.exam_session_name) {
+                sessionName.value = selection.exam_session_name;
+                session.dataset.name = selection.exam_session_name;
+            }
             const hold = body.data || body;
             const id = hold.id ?? hold.hold_id ?? hold.temporary_hold_id;
             if (!id) throw new Error('SVP returned no temporary hold ID.');
@@ -555,7 +555,7 @@
         centerSection.style.display = 'none';
         center.value = '';
         center.dataset.name = '';
-        session.innerHTML = '<option value="">Select a date and test center first…</option>';
+        resetSessionSelection();
         availableDateCatalog = [];
         sessionSnapshot = [];
         renderAvailableDates();
@@ -576,7 +576,7 @@
         centerSection.style.display = 'none';
         center.value = '';
         center.dataset.name = '';
-        session.innerHTML = '<option value="">Select a date and test center first…</option>';
+        resetSessionSelection();
         centerName.value = '';
         sessionName.value = '';
         sessionSnapshot = [];
@@ -594,7 +594,7 @@
         centerSection.style.display = 'none';
         center.value = '';
         center.dataset.name = '';
-        session.innerHTML = '<option value="">Select a center slot first…</option>';
+        resetSessionSelection();
         centerName.value = '';
         sessionName.value = '';
         sessionSnapshot = [];
@@ -612,7 +612,7 @@
         const selectedCenterName = String(centerName.value || center.dataset.name || '').trim();
         center.dataset.name = selectedCenterName;
         centerName.value = selectedCenterName;
-        session.innerHTML = '<option value="">Loading exact SVP sessions…</option>';
+        clearSessionValue();
         sessionName.value = '';
         sessionSnapshot = [];
         sessionSummary?.classList.add('hidden');
@@ -623,11 +623,12 @@
     });
 
     session.addEventListener('change', function () {
-        const option = session.options[session.selectedIndex];
+        const option = {value: session.value, dataset: session.dataset};
         showError(centerError, '');
         showError(dateError, '');
         if (option?.dataset?.centerId && option.dataset.centerId !== String(center.value)) {
-            session.value = '';
+            clearSessionValue();
+            sessionResponse?.syncSelection();
             resetHold('The selected session belongs to another test center and is blocked.');
             const selectedName = option.dataset.centerName || option.dataset.name || 'another test center';
             const centerLabel = centerName.value || center.dataset.name || 'the selected test center';
@@ -637,12 +638,14 @@
         const selectedDate = normalizeDate(availableDate.value);
         const sessionDateValue = normalizeDate(option?.dataset?.date);
         if (selectedDate && sessionDateValue && selectedDate !== sessionDateValue) {
-            session.value = '';
+            clearSessionValue();
+            sessionResponse?.syncSelection();
             resetHold('The selected session date does not match the selected available date.');
             showError(dateError, 'This session belongs to ' + sessionDateValue + '. Please select a session for ' + selectedDate + '.');
             return;
         }
-        sessionName.value = option?.dataset?.name || option?.textContent || '';
+        sessionName.value = option?.dataset?.name || '';
+        session.dataset.name = option?.dataset?.name || session.dataset.name || '';
         date.value = selectedDate || sessionDateValue || '';
         if (session.value) holdPanel.classList.remove('hidden');
         resetHold('Create a temporary hold for this exact session and date before confirming.');
