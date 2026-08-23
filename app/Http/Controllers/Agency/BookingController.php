@@ -340,14 +340,37 @@ class BookingController extends Controller
     }
 
     /**
-     * GET /agency/bookings/lookup/test-centers?city=&category_id=
-     * AJAX: return live SVP test centers for the selected category and city.
+     * GET /agency/bookings/lookup/dates?city=&category_id=
+     * AJAX: return Portal Availability dates for the selected category and city.
+     */
+    public function lookupDates(Request $request)
+    {
+        $data = $request->validate([
+            'city' => 'required|string|max:120',
+            'category_id' => 'required|string',
+        ]);
+
+        try {
+            return response()->json([
+                'success' => true,
+                'data' => ['dates' => $this->portalAvailability->bookingDates($data['category_id'], $data['city'])],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Portal lookup dates failed', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Unable to fetch live available dates.'], 503);
+        }
+    }
+
+    /**
+     * GET /agency/bookings/lookup/test-centers?city=&category_id=&date=
+     * AJAX: return date-specific Portal Availability center slots.
      */
     public function lookupTestCenters(Request $request)
     {
         $data = $request->validate([
             'city' => 'required|string',
             'category_id' => 'required|string',
+            'date' => 'nullable|date_format:Y-m-d',
             'occupation_id' => 'required|string',
             'language_code' => 'required|string|max:120',
         ]);
@@ -355,12 +378,20 @@ class BookingController extends Controller
         try {
             return response()->json([
                 'success' => true,
-                'data' => $this->portalAvailability->bookingCenters(
-                    $data['category_id'],
-                    $data['city'],
-                    $data['occupation_id'],
-                    $data['language_code'],
-                ),
+                'data' => ['test_centers' => filled($data['date'] ?? null)
+                    ? $this->portalAvailability->bookingCentersForDate(
+                        $data['category_id'],
+                        $data['city'],
+                        $data['date'],
+                        $data['occupation_id'],
+                        $data['language_code'],
+                    )
+                    : $this->portalAvailability->bookingCenters(
+                        $data['category_id'],
+                        $data['city'],
+                        $data['occupation_id'],
+                        $data['language_code'],
+                    )['test_centers']],
             ]);
         } catch (\Throwable $e) {
             Log::error('Portal lookup test-centers failed', ['error' => $e->getMessage()]);

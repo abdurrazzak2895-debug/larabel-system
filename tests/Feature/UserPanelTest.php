@@ -558,6 +558,81 @@ class UserPanelTest extends TestCase
         Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer candidate-svp-token');
     }
 
+    public function test_user_and_agency_date_center_lookups_use_portal_availability_without_candidate_token(): void
+    {
+        PortalAvailabilityCredential::create([
+            'name' => 'Date-first portal session',
+            'portal_account_id' => 'date-first-portal-account',
+            'session_cookie' => 'session=date-first-authorized',
+            'active' => true,
+        ]);
+
+        Http::fake([
+            'https://svp-international.xyz/api/search_dates' => Http::response([
+                'dates' => [
+                    ['city' => 'Dhaka', 'date' => '2030-09-01'],
+                    ['city' => 'Khulna', 'date' => '2030-09-02'],
+                ],
+            ], 200),
+            'https://svp-international.xyz/api/centers' => Http::response([
+                'centers' => [
+                    [
+                        'test_center_name' => 'Bangladesh German TTC',
+                        'test_center_id' => 45,
+                        'test_time' => '12:30 PM',
+                        'available_seats' => 3,
+                    ],
+                    [
+                        'test_center_name' => 'Bangladesh German TTC',
+                        'test_center_id' => 45,
+                        'test_time' => '09:30 AM',
+                        'available_seats' => 8,
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $this->loginAgencyUser();
+        $session = ['svp_token' => 'candidate-svp-token'];
+
+        foreach ([
+            ['dates' => 'user.bookings.lookup.dates', 'centers' => 'user.bookings.lookup.test-centers'],
+            ['dates' => 'agency.bookings.lookup.dates', 'centers' => 'agency.bookings.lookup.test-centers'],
+        ] as $routes) {
+            $dates = $this->withSession($session)->getJson(route($routes['dates'], [
+                'city' => 'Dhaka',
+                'category_id' => '160',
+            ]));
+            $dates->assertOk()
+                ->assertJsonPath('success', true)
+                ->assertJsonPath('data.dates.0.city', 'Dhaka')
+                ->assertJsonPath('data.dates.0.date', '2030-09-01');
+
+            $centers = $this->withSession($session)->getJson(route($routes['centers'], [
+                'city' => 'Dhaka',
+                'category_id' => '160',
+                'date' => '2030-09-01',
+                'occupation_id' => '2063',
+                'language_code' => 'OFFUU',
+            ]));
+            $centers->assertOk()
+                ->assertJsonPath('success', true)
+                ->assertJsonPath('data.test_centers.0.test_center_id', 45)
+                ->assertJsonPath('data.test_centers.0.test_time', '12:30 PM')
+                ->assertJsonPath('data.test_centers.1.test_time', '09:30 AM')
+                ->assertJsonPath('data.test_centers.1.available_seats', 8);
+        }
+
+        Http::assertSent(fn ($request): bool => str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/search_dates')
+            && ($request->header('Cookie')[0] ?? '') === 'session=date-first-authorized'
+            && ($request->data()['city'] ?? null) === null);
+        Http::assertSent(fn ($request): bool => str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/centers')
+            && ($request->header('Cookie')[0] ?? '') === 'session=date-first-authorized'
+            && ($request->data()['city'] ?? null) === 'Dhaka'
+            && ($request->data()['date'] ?? null) === '2030-09-01');
+        Http::assertNotSent(fn ($request): bool => ($request->header('Authorization')[0] ?? '') === 'Bearer candidate-svp-token');
+    }
+
     public function test_guest_is_redirected_to_login_from_user_panel(): void
     {
         $this->get(route('user.dashboard'))->assertRedirect(route('login'));

@@ -152,6 +152,7 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::get('/bookings/credit-status', [\App\Http\Controllers\Agency\BookingController::class, 'creditStatus'])->name('bookings.credit-status');
     Route::post('/bookings/temporary-hold', [\App\Http\Controllers\SvpHoldController::class, 'store'])->name('bookings.temporary-hold');
     Route::get('/bookings/lookup/cities', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCities'])->name('bookings.lookup.cities');
+    Route::get('/bookings/lookup/dates', [\App\Http\Controllers\Agency\BookingController::class, 'lookupDates'])->name('bookings.lookup.dates');
     Route::get('/bookings/lookup/categories', [\App\Http\Controllers\Agency\BookingController::class, 'lookupCategories'])->name('bookings.lookup.categories');
     Route::get('/bookings/lookup/languages', [\App\Http\Controllers\Agency\BookingController::class, 'lookupLanguages'])->name('bookings.lookup.languages');
     Route::get('/bookings/lookup/occupations', [\App\Http\Controllers\Agency\BookingController::class, 'lookupOccupations'])->name('bookings.lookup.occupations');
@@ -227,6 +228,7 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/credit-status', [UserBookingController::class, 'creditStatus'])->name('credit-status');
         Route::post('/temporary-hold', [\App\Http\Controllers\SvpHoldController::class, 'store'])->name('temporary-hold');
         Route::get('/lookup/cities', [UserBookingController::class, 'lookupCities'])->name('lookup.cities');
+        Route::get('/lookup/dates', [UserBookingController::class, 'lookupDates'])->name('lookup.dates');
         Route::get('/lookup/categories', [UserBookingController::class, 'lookupCategories'])->name('lookup.categories');
         Route::get('/lookup/languages', [UserBookingController::class, 'lookupLanguages'])->name('lookup.languages');
         Route::get('/lookup/occupations', [UserBookingController::class, 'lookupOccupations'])->name('lookup.occupations');

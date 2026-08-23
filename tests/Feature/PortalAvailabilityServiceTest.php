@@ -119,12 +119,20 @@ class PortalAvailabilityServiceTest extends TestCase
 
             public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
             {
-                return ['centers' => [[
-                    'test_center_name' => 'Jashore TTC',
-                    'test_center_id' => 171,
-                    'test_time' => '09:30 AM',
-                    'available_seats' => 3,
-                ]]];
+                return ['centers' => [
+                    [
+                        'test_center_name' => 'Jashore TTC',
+                        'test_center_id' => 171,
+                        'test_time' => '09:30 AM',
+                        'available_seats' => 3,
+                    ],
+                    [
+                        'test_center_name' => 'Jashore TTC',
+                        'test_center_id' => 171,
+                        'test_time' => '11:00 AM',
+                        'available_seats' => 7,
+                    ],
+                ]];
             }
         };
 
@@ -140,7 +148,15 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertSame([
             ['name' => 'Khulna'],
         ], $service->bookingCities('159'));
+        $this->assertSame([
+            ['city' => 'Khulna', 'date' => '2030-09-01'],
+        ], $service->bookingDates('159', 'Khulna'));
+        $slots = $service->bookingCentersForDate('159', 'Khulna', '2030-09-01', '2061', 'LOABB');
+        $this->assertCount(2, $slots);
+        $this->assertSame('09:30 AM', $slots[0]['test_time']);
+        $this->assertSame(7, $slots[1]['available_seats']);
         $centers = $service->bookingCenters('159', 'Khulna', '2061', 'LOABB')['test_centers'];
+        $this->assertCount(1, $centers);
         $this->assertSame('171', (string) $centers[0]['id']);
         $this->assertSame('Jashore TTC', $centers[0]['name']);
         $this->assertSame(3, $centers[0]['available_seats']);

@@ -120,7 +120,8 @@
                     <option value="">Select…</option>
                 </select>
                 <input type="hidden" name="test_center_name" id="test_center_name" value="">
-                <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Select a city to load the live SVP test centers.</p>
+                                    <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Select a live date to load the Portal Availability center slots for that date.</p>
+
             </div>
         </div>
 
@@ -133,9 +134,9 @@
                     @include('user.bookings.partials.svp-calendar', ['calendarId' => 'booking-availability-calendar'])
                     <select id="available_session_date" aria-hidden="true" tabindex="-1"
                         class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select a test center first…</option>
+                        <option value="">Select a live available date first…</option>
                     </select>
-                    <p class="text-xs text-slate-400 mt-1">Only days returned live by SVP for the selected center are clickable. Pick a day, then choose one of its verified sessions.</p>
+                    <p class="text-xs text-slate-400 mt-1">Only dates returned live by Portal Availability for the selected city are clickable. Pick a date, then choose a center slot and one of its verified SVP sessions.</p>
                     <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available SVP session</label>
                     <select name="exam_session_id" id="exam_session_id" required
                         class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
@@ -951,10 +952,65 @@
         }
     });
 
+    async function loadPortalDatesForCity(city) {
+        if (!city || !categorySelect.value) return;
+        try {
+            setLoading(availableDateSelect, true);
+            const url = "{{ route('user.bookings.lookup.dates') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categorySelect.value);
+            const data = await fetchJSON(url);
+            const availableDates = data?.data?.dates || data?.dates || [];
+            sessionCatalog = [];
+            availableDateCatalog = Array.isArray(availableDates) ? availableDates : [];
+            const dates = renderAvailableDates([], availableDateCatalog);
+            availableDateSelect.value = '';
+            availabilityCalendar?.setSelected('', true);
+            dateInput.value = '';
+            renderSessionsForDate('');
+            if (dates.length) {
+                if (temporaryHoldStatus) temporaryHoldStatus.textContent = dates.length + ' live exam date' + (dates.length === 1 ? '' : 's') + ' available for ' + city + '. Select a date to load its center slots.';
+            } else if (temporaryHoldStatus) {
+                temporaryHoldStatus.textContent = 'No live Portal Availability dates returned for ' + city + '.';
+            }
+        } catch (e) {
+            availableDateCatalog = [];
+            renderAvailableDates([], []);
+            renderSessionsForDate('');
+            console.error(e);
+        } finally {
+            setLoading(availableDateSelect, false);
+        }
+    }
+
+    async function loadTestCentersForDate(date) {
+        const city = citySelect.value;
+        const categoryId = categorySelect.value;
+        const occupationId = occupationSelect.value;
+        const languageCode = languageSelect?.value || '';
+        if (!date || !city || !categoryId || !occupationId || !languageCode) return;
+
+        try {
+            setLoading(testCenterSelect, true);
+            const url = "{{ route('user.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId) + "&date=" + encodeURIComponent(date) + "&occupation_id=" + encodeURIComponent(occupationId) + "&language_code=" + encodeURIComponent(languageCode);
+            const data = await fetchJSON(url);
+            const centers = data?.data?.test_centers || (data && Array.isArray(data.data) ? data.data : []);
+            populateSelect(testCenterSelect, centers, 'id', 'name');
+            if (dhakaCenterSummary) {
+                dhakaCenterSummary.textContent = centers.length
+                    ? 'Portal Availability returned ' + centers.length + ' center slot' + (centers.length === 1 ? '' : 's') + ' for ' + city + ' on ' + date + '. Select one to load exact SVP sessions.'
+                    : 'No center slots returned for ' + city + ' on ' + date + '.';
+            }
+            testCenterSection.style.display = centers.length ? '' : 'none';
+        } catch (e) {
+            testCenterSection.style.display = 'none';
+            console.error(e);
+        } finally {
+            setLoading(testCenterSelect, false);
+        }
+    }
+
     if (citySelect) {
         citySelect.addEventListener('change', async function () {
             const city = citySelect.value;
-            const categoryId = categorySelect.value;
             testCenterSection.style.display = 'none';
             populateSelect(testCenterSelect, []);
             sessionCatalog = [];
@@ -965,31 +1021,10 @@
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
             dateInput.value = '';
-            clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
+            clearTemporaryHold('Select a live date, center, and session before creating a temporary hold.');
 
-            const languageCode = languageSelect?.value || '';
-            if (!city || !categoryId || !languageCode) {
-                return;
-            }
-
-            try {
-                setLoading(testCenterSelect, true);
-                const url = "{{ route('user.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId) + "&occupation_id=" + encodeURIComponent(occupationSelect.value) + "&language_code=" + encodeURIComponent(languageCode);
-                const data = await fetchJSON(url);
-                const centers = data?.data?.test_centers || (data && Array.isArray(data.data) ? data.data : []);
-                populateSelect(testCenterSelect, centers, 'id', 'name');
-                if (dhakaCenterSummary) {
-                    dhakaCenterSummary.textContent = city.toLowerCase() === 'dhaka'
-                        ? 'SVP returned ' + centers.length + ' Dhaka test centers. Booking is locked to the selected center.'
-                        : 'SVP returned ' + centers.length + ' live test centers for ' + city + '.';
-                }
-                if (centers.length > 0) {
-                    testCenterSection.style.display = '';
-                }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(testCenterSelect, false);
+            if (city && categorySelect.value) {
+                await loadPortalDatesForCity(city);
             }
         });
     }
@@ -999,46 +1034,17 @@
             const testCenterId = testCenterSelect.value;
             const selectedCenterOption = testCenterSelect.options[testCenterSelect.selectedIndex];
             const selectedCenterName = selectedCenterOption?.dataset?.centerName || selectedCenterOption?.textContent?.replace(/\s+—\s+SVP ID:.*$/, '') || '';
-            const city = citySelect.value;
-            const categoryId = categorySelect.value;
+            const date = availableDateSelect?.value || '';
             if (testCenterNameInput) testCenterNameInput.value = selectedCenterName.trim();
             if (sessionNameInput) sessionNameInput.value = '';
             sessionCatalog = [];
-            availableDateCatalog = [];
-            renderAvailableDates([], []);
             populateSelect(sessionSelect, []);
             renderSessionsForDate('');
-            dateInput.value = '';
-            clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
+            dateInput.value = date || '';
+            clearTemporaryHold('Select a session for this date, then create a temporary hold before confirming the booking.');
 
-            if (!testCenterId || !city || !categoryId) {
-                return;
-            }
-
-            try {
-                setLoading(sessionSelect, true);
-                const params = new URLSearchParams({city: city, category_id: categoryId, test_center_id: testCenterId});
-                const data = await fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString());
-                const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
-                const availableDates = data?.data?.available_dates || data?.available_dates || data?.meta?.available_dates || [];
-            sessionCatalog = [];
-            availableDateCatalog = availableDates;
-            const dates = renderAvailableDates(sessions, availableDateCatalog);
-                if (dates.length) {
-                    availableDateSelect.value = '';
-                    availabilityCalendar?.setSelected('', true);
-                    dateInput.value = '';
-                    renderSessionsForDate('');
-                    if (temporaryHoldStatus) temporaryHoldStatus.textContent = dates.length + ' live exam date' + (dates.length === 1 ? '' : 's') + ' available. Select a date to view its verified sessions and seat counts.';
-                } else {
-                    renderSessionsForDate('');
-                    if (temporaryHoldStatus) temporaryHoldStatus.textContent = 'No exam sessions or available dates returned for the selected test center.';
-                }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(sessionSelect, false);
-            }
+            if (!testCenterId || !date || !citySelect.value || !categorySelect.value) return;
+            await loadSessionsForDate(date);
         });
     }
 
@@ -1046,13 +1052,16 @@
         availableDateSelect.addEventListener('change', async function () {
             const date = availableDateSelect.value;
             dateInput.value = date || '';
-            clearTemporaryHold('Select a session for this date, then create a temporary hold before confirming the booking.');
             clearDateError();
-            if (!date) {
-                renderSessionsForDate('');
-                return;
-            }
-            await loadSessionsForDate(date);
+            clearTemporaryHold('Select a center slot and session for this date, then create a temporary hold before confirming the booking.');
+            populateSelect(testCenterSelect, []);
+            if (testCenterNameInput) testCenterNameInput.value = '';
+            if (sessionNameInput) sessionNameInput.value = '';
+            sessionCatalog = [];
+            renderSessionsForDate('');
+            testCenterSection.style.display = 'none';
+            if (!date) return;
+            await loadTestCentersForDate(date);
         });
     }
 

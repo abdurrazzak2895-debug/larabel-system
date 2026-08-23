@@ -236,6 +236,46 @@ final class PortalAvailabilityService
             ->all();
     }
 
+    /** @return array<int, array{city: string, date: string}> */
+    public function bookingDates(int|string $categoryId, string $city): array
+    {
+        $city = trim($city);
+        if ($city === '') {
+            return [];
+        }
+
+        $dates = $this->searchDates(null, $categoryId, now()->toDateString())['data']['dates'] ?? [];
+
+        return collect($dates)
+            ->filter(static fn (array $item): bool => strcasecmp(trim((string) ($item['city'] ?? '')), $city) === 0)
+            ->filter(static fn (array $item): bool => preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', (string) ($item['date'] ?? '')) === 1)
+            ->map(static fn (array $item): array => ['city' => $city, 'date' => trim((string) $item['date'])])
+            ->unique('date')
+            ->sortBy('date')
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function bookingCentersForDate(
+        int|string $categoryId,
+        string $city,
+        string $date,
+        int|string $occupationId,
+        string $languageCode,
+    ): array {
+        $rows = $this->centers(null, $categoryId, trim($city), trim($date), $occupationId, trim($languageCode))['data']['centers'] ?? [];
+
+        return collect($rows)
+            ->map(static fn (array $row): array => array_merge($row, [
+                'id' => $row['test_center_id'] ?? null,
+                'name' => $row['test_center_name'] ?? null,
+                'date' => trim($date),
+            ]))
+            ->values()
+            ->all();
+    }
+
     /** @return array{test_centers: array<int, array<string, mixed>>} */
     public function bookingCenters(
         int|string $categoryId,
