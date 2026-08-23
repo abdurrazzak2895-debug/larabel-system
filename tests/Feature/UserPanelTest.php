@@ -244,13 +244,31 @@ class UserPanelTest extends TestCase
             ->assertSee('Reschedule SVP Reservation')
             ->assertSee('Choose a new city, test center, date, and session')
             ->assertSee('Occupation and category stay fixed')
-            ->assertSee('Bengali', false)
-            ->assertSee('value="LOABB"', false)
+            ->assertSee('Available Sessions — date-first PACC reschedule')
+            ->assertSee('Only live Portal Availability dates')
+            ->assertSee('lookup/dates', false)
+            ->assertSee('lookup/test-centers', false)
+            ->assertSee('lookup/sessions', false)
+            ->assertDontSee('Bengali', false)
+            ->assertDontSee('value="LOABB"', false)
+            ->assertDontSee('Notes (optional)')
+            ->assertDontSee('Anything the SVP booking should know')
+            ->assertDontSee('type="date"', false)
             ->assertDontSee('Locked center')
             ->assertDontSee('svp-international.pacc.sa/home')
             ->assertSee('function canCreateHold()')
-            ->assertSee('return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && session.value && date.value);', false)
+            ->assertSee('return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && session.value && date.value && language.value);', false)
             ->assertDontSee("holdButton.disabled = !(candidate.value && session.value && date.value)");
+
+        $rescheduleHtml = $reschedule->getContent();
+        $datePosition = strpos($rescheduleHtml, '<select id="available_session_date"');
+        $centerPosition = strpos($rescheduleHtml, '<div id="test-center-section"');
+        $sessionPosition = strpos($rescheduleHtml, '<select name="exam_session_id" id="exam_session_id"');
+        $this->assertNotFalse($datePosition);
+        $this->assertNotFalse($centerPosition);
+        $this->assertNotFalse($sessionPosition);
+        $this->assertTrue($datePosition < $centerPosition, 'The reschedule date control must be rendered before the test-center selector.');
+        $this->assertTrue($centerPosition < $sessionPosition, 'The reschedule test-center selector must be rendered before the session selector.');
 
         $lookup = $this->get(route('user.bookings.lookup.sessions', [
             'city' => 'Dhaka',

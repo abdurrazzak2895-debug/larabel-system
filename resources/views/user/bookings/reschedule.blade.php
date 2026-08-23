@@ -95,56 +95,52 @@
 
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">New SVP location</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1">City</label>
-                    <select name="city" id="city_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Loading live cities…</option>
-                    </select>
-                    @error('city')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                </div>
-                <div id="test-center-section" style="display:none;">
-                    <label for="test_center_id" class="block text-sm font-medium text-slate-700 mb-1">Test center</label>
-                    <select name="test_center_id" id="test_center_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select a city first…</option>
-                    </select>
-                    <input type="hidden" name="test_center_name" id="test_center_name" value="{{ old('test_center_name') }}">
-                    <p id="center-summary" class="text-xs text-slate-400 mt-1">Select a city to load every live SVP test center for this category.</p>
-                    @error('test_center_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                </div>
+            <div>
+                <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1">City</label>
+                <select name="city" id="city_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <option value="">Loading live cities…</option>
+                </select>
+                @error('city')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
         </div>
 
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">New session and date</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Available exam date</label>
-                    @include('user.bookings.partials.svp-calendar', ['calendarId' => 'reschedule-availability-calendar'])
-                    {{-- Hidden mirror of the calendar selection so existing lookup logic keeps working --}}
-                    <select id="available_session_date" aria-hidden="true" tabindex="-1"
-                        class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select a test center first…</option>
-                    </select>
-                    <p class="text-xs text-slate-400 mt-1">Every date returned by SVP for the selected center is shown automatically.</p>
-                    <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available session / shift</label>
-                    <select name="exam_session_id" id="exam_session_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select a test center first…</option>
-                    </select>
-                    <input type="hidden" name="exam_session_name" id="exam_session_name" value="{{ old('exam_session_name') }}">
-                    <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="{{ old('temporary_hold_id') }}">
-                    <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
-                    <div id="session-shift-summary" class="hidden mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"></div>
-                    <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
-                    @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                    @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                </div>
-                <div>
-                    <label for="exam_date" class="block text-sm font-medium text-slate-700 mb-1">Exam date <span class="text-slate-400 font-normal">(from selected session)</span></label>
-                    <input type="date" name="exam_date" id="exam_date" value="{{ old('exam_date') }}" required readonly class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
-                    @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                </div>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC reschedule</p>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
+                @include('user.bookings.partials.svp-calendar', ['calendarId' => 'reschedule-availability-calendar'])
+                <select id="available_session_date" aria-hidden="true" tabindex="-1"
+                    class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <option value="">Select a live available date first…</option>
+                </select>
+                <p id="date-hint" class="text-xs text-slate-400 mt-1">Only live Portal Availability dates for the selected city are clickable. Pick a date to load that date’s available center slots.</p>
+            </div>
+
+            <div id="test-center-section" style="display:none;" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <label for="test_center_id" class="block text-sm font-medium text-slate-700 mb-1">Test center slot</label>
+                <select name="test_center_id" id="test_center_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <option value="">Select a live date first…</option>
+                </select>
+                <input type="hidden" name="test_center_name" id="test_center_name" value="{{ old('test_center_name') }}">
+                <p id="center-summary" class="text-xs text-slate-500 mt-1">Select a live date to load every Portal Availability center slot for that date.</p>
+                @error('test_center_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            </div>
+
+            <div>
+                <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1">Available SVP session</label>
+                <select name="exam_session_id" id="exam_session_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <option value="">Select a date and test center first…</option>
+                </select>
+                <input type="hidden" name="exam_session_name" id="exam_session_name" value="{{ old('exam_session_name') }}">
+                <input type="hidden" name="exam_date" id="exam_date" value="{{ old('exam_date') }}">
+                <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="{{ old('temporary_hold_id') }}">
+                <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
+                <div id="session-shift-summary" class="hidden mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"></div>
+                <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
+                <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
+                @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
 
             <div id="temporary-hold-panel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -159,14 +155,11 @@
 
             <div>
                 <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
-                <select name="language_code" id="language_code" required class="w-full md:w-1/2 rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    @foreach (config('svp.languages', []) as $language)
-                        <option value="{{ $language['code'] }}" {{ old('language_code', config('svp.default_language_code', 'LOABB')) === $language['code'] ? 'selected' : '' }}>
-                            {{ $language['english_name'] }} ({{ $language['code'] }}) · {{ ucfirst($language['exam_engine_name']) }} · {{ $language['question_count'] }} questions
-                        </option>
-                    @endforeach
+                <select name="language_code" id="language_code" required disabled class="w-full md:w-1/2 rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <option value="">Loading live SVP exam languages…</option>
                 </select>
-                <p class="text-xs text-slate-400 mt-1">Selected language: Bengali · Prometric · code <code>LOABB</code>. This code is sent to SVP; <code>bn</code> is the ISO language identifier.</p>
+                <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
+                <p class="text-xs text-slate-400 mt-1">Languages are loaded live from Portal Availability for the fixed reservation occupation. No language is preselected.</p>
             </div>
 
             <div id="svp-credit-panel" class="rounded-xl border border-sky-200 bg-sky-50 p-4">
@@ -174,11 +167,6 @@
                 <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Select a candidate to check the live SVP credit. If no credit is available, confirmation opens the official SVP card-payment page.</p>
                 <p class="text-xs text-sky-700 mt-2">SVP credit/card payment is separate from the portal wallet fee.</p>
             </div>
-        </div>
-
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-            <label for="notes" class="block text-sm font-medium text-slate-700 mb-1">Notes <span class="text-slate-400 font-normal">(optional)</span></label>
-            <textarea name="notes" id="notes" rows="3" maxlength="500" class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">{{ old('notes') }}</textarea>
         </div>
 
         <div class="flex items-center gap-3">
@@ -206,6 +194,8 @@
     const sessionSummary = document.getElementById('session-shift-summary');
     const centerError = document.getElementById('session-center-error');
     const dateError = document.getElementById('date-error');
+    const language = document.getElementById('language_code');
+    const languageError = document.getElementById('language-error');
     const holdPanel = document.getElementById('temporary-hold-panel');
     const holdButton = document.getElementById('create-temporary-hold');
     const holdStatus = document.getElementById('temporary-hold-status');
@@ -213,6 +203,10 @@
     const holdExpiry = document.getElementById('temporary_hold_expires_at');
     const confirmButton = document.getElementById('confirm-reschedule-button');
     const creditStatus = document.getElementById('svp-credit-status');
+    const oldCity = @json(old('city', ''));
+    const oldDate = @json(old('exam_date', ''));
+    const oldCenter = @json(old('test_center_id', ''));
+    const oldLanguage = @json(old('language_code', ''));
     let holdRequest = null;
     let creditRequest = null;
     let sessionSnapshot = [];
@@ -222,10 +216,10 @@
     function mountAvailabilityCalendar() {
         if (!window.SvpCalendar || availabilityCalendar) return;
         availabilityCalendar = window.SvpCalendar.create('reschedule-availability-calendar', {
-            emptyText: 'Pick a test center to load its open exam dates.',
-            onSelect: function (date) {
-                if (!date || date === availableDate.value) return;
-                availableDate.value = date;
+            emptyText: 'Pick a city to load live open exam dates.',
+            onSelect: function (value) {
+                if (!value || value === availableDate.value) return;
+                availableDate.value = value;
                 availableDate.dispatchEvent(new Event('change'));
             }
         });
@@ -233,65 +227,39 @@
     mountAvailabilityCalendar();
 
     const esc = value => String(value ?? '').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[ch]));
-    const sessionDate = item => String(item?.exam_date || item?.test_date || item?.date || item?.start_date_in_browser_time_zone || item?.start_date_in_tc_time_zone || '').substring(0, 10);
+    const normalizeDate = value => String(value || '').substring(0, 10);
+    const sessionDate = item => normalizeDate(item?.exam_date || item?.test_date || item?.date || item?.start_date_in_browser_time_zone || item?.start_date_in_tc_time_zone);
     const sessionCenterId = item => String(item?.test_center_id ?? item?.site_id ?? item?.center_id ?? item?.test_center?.id ?? item?.site?.id ?? item?.center?.id ?? '');
-    const sessionCenterName = item => item?.test_center_name || item?.site_name || item?.center_name || item?.test_center?.name || item?.site?.name || item?.center?.name || 'Unknown center';
+    const sessionCenterName = item => item?.test_center_name || item?.site_name || item?.center_name || item?.test_center?.name || item?.site?.name || item?.center?.name || centerName.value || 'Selected test center';
+    const sessionTime = item => String(item?.test_time || item?.start_time || item?.time || item?.start_at || '').replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
+    const sessionSeatCount = item => {
+        const value = item?.available_seats ?? item?.availableSeats ?? item?.remaining_seats ?? item?.remainingSeats ?? item?.seats ?? null;
+        return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
+    };
+    const sessionDisplayName = (item, index) => String(item?.session_name || item?.name || item?.label || item?.title || '').trim() || 'Session ' + (index + 1);
     const shiftLabel = (item, index) => {
         const text = String(item?.shift || item?.session_name || item?.name || '').toLowerCase();
         const match = text.match(/(?:shift|session)\s*([1-9][0-9]*)/);
         const number = match ? Number(match[1]) : index + 1;
         return number === 1 ? 'First Shift' : number === 2 ? 'Second Shift' : number === 3 ? 'Third Shift' : number === 4 ? 'Fourth Shift' : 'Shift ' + number;
     };
-
-    function normalizeAvailableDate(item) {
-        const value = typeof item === 'string' ? item : item?.exam_date || item?.date || item?.test_date || '';
-        return String(value).substring(0, 10);
-    }
-
-    function renderAvailableDates() {
-        if (!availableDate) return [];
-        const selectedCenterId = String(center.value || '');
-        const dates = new Set();
-        (availableDateCatalog || []).forEach(item => {
-            const itemCenterId = typeof item === 'object' ? String(item?.test_center_id ?? item?.test_center?.id ?? item?.site_id ?? '') : '';
-            const value = normalizeAvailableDate(item);
-            if (value && (!itemCenterId || itemCenterId === selectedCenterId)) dates.add(value);
-        });
-        (sessionSnapshot || []).forEach(item => {
-            const centerId = sessionCenterId(item);
-            const value = sessionDate(item);
-            if (value && (!centerId || centerId === selectedCenterId)) dates.add(value);
-        });
-        const sorted = Array.from(dates).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)).sort();
-        availableDate.innerHTML = '<option value="">Select an available date…</option>';
-        sorted.forEach(value => {
-            const option = document.createElement('option');
-            option.value = value;
-            option.textContent = value;
-            availableDate.appendChild(option);
-        });
-        availableDate.disabled = sorted.length === 0;
-        if (availabilityCalendar) {
-            availabilityCalendar.setDates(sorted);
-            availabilityCalendar.setSelected(availableDate.value, true);
-        }
-        return sorted;
-    }
-
-    function mergeSessionSnapshot(items) {
-        const merged = new Map((sessionSnapshot || []).map(item => [String(item?.id || item?.exam_session_id || sessionDate(item) + '|' + item?.name), item]));
-        (items || []).forEach(item => {
-            const key = String(item?.id || item?.exam_session_id || sessionDate(item) + '|' + item?.name);
-            if (key) merged.set(key, item);
-        });
-        sessionSnapshot = Array.from(merged.values());
-    }
-    const formatExpiry = value => { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? String(value || '') : parsed.toLocaleString(); };
+    const sessionOptionLabel = (item, index) => {
+        const details = [sessionDisplayName(item, index)];
+        const time = sessionTime(item);
+        const seats = sessionSeatCount(item);
+        if (time) details.push('Time: ' + time);
+        details.push(seats === null ? 'Live seats unavailable' : 'Seats: ' + seats);
+        return details.join(' · ');
+    };
 
     async function getJson(url) {
         const response = await fetch(url, {headers: {'Accept': 'application/json'}});
         const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(body.error || 'SVP lookup failed.');
+        if (response.status === 401) {
+            window.location.assign(body.login_url || '{{ route('svp.login.form', ['force' => 1]) }}');
+            throw new Error(body.error || 'Your SVP session has expired. Please sign in again.');
+        }
+        if (!response.ok) throw new Error(body.error || body.message || 'Live SVP lookup failed.');
         return body;
     }
 
@@ -300,6 +268,12 @@
         select.disabled = loading;
         select.dataset.loading = loading ? '1' : '0';
         if (loading) select.innerHTML = '<option value="">Loading live SVP data…</option>';
+    }
+
+    function showError(element, message) {
+        if (!element) return;
+        element.textContent = message || '';
+        element.classList.toggle('hidden', !message);
     }
 
     function resetHold(message) {
@@ -312,7 +286,7 @@
     }
 
     function canCreateHold() {
-        return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && session.value && date.value);
+        return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && session.value && date.value && language.value);
     }
 
     function syncActionButtons() {
@@ -320,44 +294,149 @@
         confirmButton.disabled = !(holdId.value && candidate.value);
     }
 
-    function renderSessions(items, dateFilter = '') {
-        if (Array.isArray(items)) mergeSessionSnapshot(items);
-        const visibleSessions = (sessionSnapshot || []).filter(item => !dateFilter || sessionDate(item) === dateFilter);
-        session.innerHTML = '<option value="">Select…</option>';
+    function renderAvailableDates() {
+        const dates = Array.from(new Set((availableDateCatalog || []).map(item => normalizeDate(typeof item === 'string' ? item : item?.exam_date || item?.date || item?.test_date || '')).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)))).sort();
+        availableDate.innerHTML = '<option value="">Select an available date…</option>';
+        dates.forEach(value => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            availableDate.appendChild(option);
+        });
+        availableDate.disabled = dates.length === 0;
+        availabilityCalendar?.setDates(dates);
+        availabilityCalendar?.setSelected(availableDate.value, true);
+        return dates;
+    }
+
+    function renderSessions(items, selectedDate) {
+        sessionSnapshot = Array.isArray(items) ? items : [];
+        const visible = sessionSnapshot.filter(item => !selectedDate || sessionDate(item) === selectedDate);
+        session.innerHTML = '<option value="">Select an exact session for this date…</option>';
         const counts = {};
-        visibleSessions.forEach(item => {
+        visible.forEach(function (item) {
             const id = item.id || item.exam_session_id || '';
-            const dateValue = sessionDate(item);
-            const index = counts[dateValue] || 0;
-            counts[dateValue] = index + 1;
+            if (!id) return;
+            const itemDate = sessionDate(item);
+            const index = counts[itemDate] || 0;
+            counts[itemDate] = index + 1;
+            const itemCenterId = sessionCenterId(item);
+            const itemCenterName = sessionCenterName(item);
             const option = document.createElement('option');
             option.value = id;
             option.dataset.name = item.name || item.session_name || shiftLabel(item, index);
-            option.dataset.centerId = sessionCenterId(item);
-            option.dataset.centerName = sessionCenterName(item);
-            option.dataset.date = dateValue;
-            option.textContent = (dateValue || 'Unknown date') + ' — ' + shiftLabel(item, index) + ' · ' + (option.dataset.centerName || option.dataset.name || 'Unknown test center');
-            // This SVP deployment's session list can omit test_center id/name
-            // entirely (city-only). A centerless session is trusted as
-            // belonging to the requested center — the list itself was fetched
-            // filtered by test_center_id — matching resolveCenterSession's/
-            // verifyForHold's fallback on the backend. Only an EXPLICIT,
-            // different center id is a real mismatch.
-            option.disabled = !!(option.dataset.centerId && option.dataset.centerId !== String(center.value));
+            option.dataset.centerId = itemCenterId;
+            option.dataset.centerName = itemCenterName;
+            option.dataset.date = itemDate;
+            option.textContent = (itemDate || selectedDate || 'Unknown date') + ' — ' + shiftLabel(item, index) + ' · ' + sessionOptionLabel(item, index) + ' · ' + itemCenterName;
+            option.disabled = !!(itemCenterId && itemCenterId !== String(center.value));
             session.appendChild(option);
         });
-        const grouped = {};
-        sessionSnapshot.forEach((item, index) => {
-            const d = sessionDate(item) || 'Unknown date';
-            grouped[d] = grouped[d] || [];
-            const id = item.id || item.exam_session_id || '';
-            const itemCenterId = sessionCenterId(item);
-            const matches = itemCenterId === '' || itemCenterId === String(center.value);
-            grouped[d].push('<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + esc(shiftLabel(item, index)) + '</span> · Session ' + esc(id) + ' · ' + esc(sessionCenterName(item)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>');
-        });
-        const html = Object.keys(grouped).sort().map(d => '<div class="mb-2 last:mb-0"><div class="font-semibold text-slate-700">' + esc(d) + '</div>' + grouped[d].join('') + '</div>').join('');
-        sessionSummary.innerHTML = '<div class="mb-1 font-medium text-slate-700">Sessions grouped by date and shift</div>' + (html || '<div>No sessions returned for this center.</div>');
-        sessionSummary.classList.remove('hidden');
+        if (sessionSummary) {
+            const html = visible.map((item, index) => {
+                const mismatch = sessionCenterId(item) && sessionCenterId(item) !== String(center.value);
+                return '<div class="ml-2 ' + (mismatch ? 'text-red-700' : 'text-slate-600') + '"><span class="font-medium">' + esc(shiftLabel(item, index)) + '</span> · ' + esc(sessionOptionLabel(item, index)) + ' · ' + esc(sessionCenterName(item)) + (mismatch ? ' · <strong>BLOCKED: center mismatch</strong>' : '') + '</div>';
+            }).join('');
+            sessionSummary.innerHTML = '<div class="mb-1 font-medium text-slate-700">Sessions for ' + esc(selectedDate || 'the selected date') + '</div>' + (html || '<div>No exact SVP sessions returned for this center and date.</div>');
+            sessionSummary.classList.remove('hidden');
+        }
+    }
+
+    async function loadLiveLanguages() {
+        if (!occupation.value || !language) return;
+        try {
+            setLoading(language, true);
+            const body = await getJson('{{ route('user.bookings.lookup.languages') }}?occupation_id=' + encodeURIComponent(occupation.value));
+            const items = Array.isArray(body?.data?.languages) ? body.data.languages : (Array.isArray(body?.data) ? body.data : []);
+            language.innerHTML = '<option value="">Select a live SVP exam language…</option>';
+            items.forEach(function (item) {
+                const code = item.code || item.language_code || item.id || '';
+                if (!code) return;
+                const name = item.english_name || item.name || item.arabic_name || code;
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = name + ' (' + code + ')' + (item.exam_engine_name ? ' · ' + item.exam_engine_name : '') + (item.question_count ? ' · ' + item.question_count + ' questions' : '');
+                language.appendChild(option);
+            });
+            language.disabled = items.length === 0;
+            if (oldLanguage && items.some(item => String(item.code || item.language_code || item.id || '') === String(oldLanguage))) language.value = oldLanguage;
+            showError(languageError, items.length ? '' : 'No live exam languages were returned for this occupation.');
+        } catch (error) {
+            language.innerHTML = '<option value="">Could not load live languages</option>';
+            language.disabled = true;
+            showError(languageError, error.message);
+            console.error(error);
+        } finally {
+            language.disabled = !language.options.length || language.options.length === 1;
+        }
+    }
+
+    async function loadPortalDatesForCity(cityValue, restoreOldDate = false) {
+        if (!cityValue || !category.value) return;
+        try {
+            setLoading(availableDate, true);
+            const body = await getJson('{{ route('user.bookings.lookup.dates') }}?city=' + encodeURIComponent(cityValue) + '&category_id=' + encodeURIComponent(category.value));
+            availableDateCatalog = Array.isArray(body?.data?.dates) ? body.data.dates : (Array.isArray(body?.data) ? body.data : []);
+            const dates = renderAvailableDates();
+            if (restoreOldDate && oldDate && dates.includes(String(oldDate).substring(0, 10))) {
+                availableDate.value = String(oldDate).substring(0, 10);
+                availabilityCalendar?.setSelected(availableDate.value, true);
+                availableDate.dispatchEvent(new Event('change'));
+            }
+        } catch (error) {
+            availableDateCatalog = [];
+            renderAvailableDates();
+            showError(dateError, error.message);
+            console.error(error);
+        } finally {
+            setLoading(availableDate, false);
+        }
+    }
+
+    async function loadTestCentersForDate(dateValue, restoreOldCenter = false) {
+        if (!dateValue || !city.value || !category.value || !occupation.value || !language.value) {
+            if (dateValue && !language.value) centerSummary.textContent = 'Select a live SVP exam language to load center slots for this date.';
+            return;
+        }
+        try {
+            setLoading(center, true);
+            const url = '{{ route('user.bookings.lookup.test-centers') }}?city=' + encodeURIComponent(city.value) + '&category_id=' + encodeURIComponent(category.value) + '&date=' + encodeURIComponent(dateValue) + '&occupation_id=' + encodeURIComponent(occupation.value) + '&language_code=' + encodeURIComponent(language.value);
+            const body = await getJson(url);
+            const items = body?.data?.test_centers || (Array.isArray(body?.data) ? body.data : []);
+            center.innerHTML = '<option value="">Select a live center slot…</option>';
+            items.forEach(function (item) {
+                const id = item.id || item.test_center_id || item.site_id || item.center_id || '';
+                if (!id) return;
+                const name = item.name || item.english_name || item.test_center_name || item.site_name || item.center_name || 'SVP test center';
+                const time = String(item.test_time || item.start_time || item.time || item.start_at || '').replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
+                const seats = sessionSeatCount(item);
+                const option = document.createElement('option');
+                option.value = id;
+                option.dataset.name = name;
+                option.dataset.centerName = name;
+                option.dataset.time = time;
+                option.dataset.seats = seats === null ? '' : String(seats);
+                const details = [name];
+                if (time) details.push('Time: ' + time);
+                if (seats !== null) details.push('Seats: ' + seats);
+                option.textContent = details.join(' · ');
+                center.appendChild(option);
+            });
+            centerSection.style.display = items.length ? '' : 'none';
+            centerSummary.textContent = items.length
+                ? 'Portal Availability returned ' + items.length + ' center slot' + (items.length === 1 ? '' : 's') + ' for ' + city.value + ' on ' + dateValue + '. Duplicate center rows with different time or seats remain selectable.'
+                : 'No center slots returned for ' + city.value + ' on ' + dateValue + '.';
+            if (restoreOldCenter && oldCenter) {
+                center.value = oldCenter;
+                if (center.value) center.dispatchEvent(new Event('change'));
+            }
+        } catch (error) {
+            centerSection.style.display = 'none';
+            centerSummary.textContent = error.message;
+            console.error(error);
+        } finally {
+            setLoading(center, false);
+        }
     }
 
     async function loadSessionsForDate(dateValue) {
@@ -366,131 +445,75 @@
             setLoading(session, true);
             const params = new URLSearchParams({city: city.value, category_id: category.value, test_center_id: center.value, exam_date: dateValue});
             const body = await getJson('{{ route('user.bookings.lookup.sessions') }}?' + params.toString());
-            mergeSessionSnapshot(body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || []);
-            renderAvailableDates();
-            availableDate.value = dateValue;
-            availabilityCalendar?.setSelected(dateValue, true);
-            renderSessions([], dateValue);
+            renderSessions(body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || [], dateValue);
         } catch (error) {
             session.innerHTML = '<option value="">Could not load sessions for this date</option>';
+            showError(dateError, error.message);
             console.error(error);
-        } finally { session.disabled = false; }
-    }
-
-    if (availableDate) {
-        availableDate.addEventListener('change', async function () {
-            const value = availableDate.value;
-            date.value = value || '';
-            sessionName.value = '';
-            resetHold('Select a session for this date, then create a temporary hold before confirming the reschedule.');
-            clearError(dateError);
-            if (!value) {
-                renderSessions([], '');
-                syncActionButtons();
-                return;
-            }
-            renderSessions([], value);
-            await loadSessionsForDate(value);
+        } finally {
+            setLoading(session, false);
             syncActionButtons();
-        });
+        }
     }
 
     async function loadCities() {
         try {
             setLoading(city, true);
             const body = await getJson('{{ route('user.bookings.lookup.cities') }}?category_id=' + encodeURIComponent(category.value));
-            const items = Array.isArray(body.data) ? body.data : [];
+            const items = Array.isArray(body?.data) ? body.data : [];
             city.innerHTML = '<option value="">Select city…</option>';
-            items.forEach(item => {
-                const name = item.name || item.city || item.city_name || item;
-                if (!name) return;
-                const option = document.createElement('option'); option.value = name; option.textContent = name; city.appendChild(option);
+            items.forEach(function (item) {
+                const value = item.name || item.city || item.city_name || item;
+                if (!value) return;
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                city.appendChild(option);
             });
-            @if(old('city')) city.value = @json(old('city')); @endif
-            if (city.value) city.dispatchEvent(new Event('change'));
-        } catch (error) {
-            city.innerHTML = '<option value="">Could not load cities</option>';
-            console.error(error);
-        } finally { city.disabled = false; }
-    }
-
-    async function loadCenters() {
-        resetHold('Select a session and date, then create a temporary hold before confirming the reschedule.');
-        centerSection.style.display = 'none';
-        center.innerHTML = '<option value="">Loading live test centers…</option>';
-        session.innerHTML = '<option value="">Select a test center first…</option>';
-        if (availableDate) { availableDate.innerHTML = '<option value="">Select a test center first…</option>'; availableDate.disabled = true; }
-        sessionSummary.classList.add('hidden'); date.value = ''; centerName.value = '';
-        sessionSnapshot = []; availableDateCatalog = [];
-        if (!city.value) return;
-        try {
-            setLoading(center, true);
-            const body = await getJson('{{ route('user.bookings.lookup.test-centers') }}?city=' + encodeURIComponent(city.value) + '&category_id=' + encodeURIComponent(category.value));
-            const items = body?.data?.test_centers || (Array.isArray(body.data) ? body.data : []);
-            center.innerHTML = '<option value="">Select test center…</option>';
-            items.forEach(item => {
-                const id = item.id || item.test_center_id || item.site_id || '';
-                if (!id) return;
-                const name = item.name || item.english_name || item.site_name || 'SVP test center';
-                const option = document.createElement('option'); option.value = id; option.dataset.name = name; option.textContent = name; center.appendChild(option);
-            });
-            centerSummary.textContent = 'SVP returned ' + items.length + ' live test center(s) for ' + city.value + '.';
-            centerSection.style.display = '';
-            @if(old('test_center_id')) center.value = @json(old('test_center_id')); if (center.value) center.dispatchEvent(new Event('change')); @endif
-        } catch (error) { center.innerHTML = '<option value="">Could not load test centers</option>'; console.error(error); }
-        finally { center.disabled = false; }
-    }
-
-    async function loadSessions() {
-        resetHold('Select a live SVP session and date, then create a temporary hold before confirming the reschedule.');
-        session.innerHTML = '<option value="">Loading live sessions…</option>'; date.value = ''; sessionName.value = '';
-        if (availableDate) { availableDate.innerHTML = '<option value="">Loading available dates…</option>'; availableDate.disabled = true; }
-        sessionSnapshot = []; availableDateCatalog = [];
-        if (!city.value || !center.value) return;
-        try {
-            setLoading(session, true);
-            const params = new URLSearchParams({city: city.value, category_id: category.value, test_center_id: center.value});
-            const body = await getJson('{{ route('user.bookings.lookup.sessions') }}?' + params.toString());
-            mergeSessionSnapshot(body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || []);
-            availableDateCatalog = body?.data?.available_dates || body?.available_dates || body?.meta?.available_dates || [];
-            const dates = renderAvailableDates();
-            if (dates.length) {
-                availableDate.value = dates[0];
-                availabilityCalendar?.setSelected(dates[0], true);
-                date.value = dates[0];
-                renderSessions([], dates[0]);
-                await loadSessionsForDate(dates[0]);
-            } else {
-                renderSessions([], '');
-                showError(dateError, 'No available exam dates returned for the selected test center.');
+            if (oldCity && items.some(item => String(item.name || item.city || item.city_name || item) === String(oldCity))) {
+                city.value = oldCity;
+                await loadPortalDatesForCity(city.value, true);
             }
-        } catch (error) { session.innerHTML = '<option value="">Could not load sessions</option>'; console.error(error); }
-        finally { session.disabled = false; if (availableDate) availableDate.disabled = !availableDate.options.length || availableDate.options.length === 1; }
+        } catch (error) {
+            city.innerHTML = '<option value="">Could not load live cities</option>';
+            console.error(error);
+        } finally {
+            setLoading(city, false);
+        }
     }
 
     async function loadCredit() {
-        if (!candidate.value || !occupation.value) { creditStatus.textContent = 'Select a candidate to check the live SVP credit.'; return; }
+        if (!candidate.value || !occupation.value) {
+            creditStatus.textContent = 'Select a candidate to check the live SVP credit.';
+            return;
+        }
         if (creditRequest) return;
         creditStatus.textContent = 'Checking the live SVP reservation credit…';
         const params = new URLSearchParams({candidate_id: candidate.value, occupation_id: occupation.value, methodology: document.getElementById('methodology').value});
         creditRequest = getJson('{{ route('user.bookings.credit-status') }}?' + params.toString()).then(body => {
             const credits = Number(body?.data?.credits ?? 0);
             creditStatus.textContent = credits > 0 ? 'SVP reports ' + credits + ' reservation credit. One credit will be used; no SVP card page will open.' : 'No SVP reservation credit is available. After the hold, the official SVP card-payment page will open.';
-        }).catch(error => { creditStatus.textContent = 'SVP credit status could not be loaded. Refresh the SVP login before confirming.'; console.error(error); }).finally(() => { creditRequest = null; });
+        }).catch(error => {
+            creditStatus.textContent = 'SVP credit status could not be loaded. Refresh the SVP login before confirming.';
+            console.error(error);
+        }).finally(() => { creditRequest = null; });
         await creditRequest;
     }
 
     async function createHold() {
         if (holdRequest) return;
         const selected = session.options[session.selectedIndex];
-        // Centerless (empty dataset.centerId) is trusted for this SVP tenant —
-        // only an explicit, different center id is a real mismatch.
         if (!selected || !selected.value || (selected.dataset.centerId && selected.dataset.centerId !== String(center.value))) {
-            holdStatus.textContent = 'The selected session does not belong to the selected test center.'; return;
+            holdStatus.textContent = 'The selected session does not belong to the selected test center.';
+            return;
         }
-        const payload = {occupation_id: occupation.value, category_id: category.value, city: city.value, test_center_id: center.value, test_center_name: centerName.value, exam_session_id: session.value, exam_date: date.value};
-        if (Object.values(payload).some(value => !value)) { holdStatus.textContent = 'Select city, center, session, and date first.'; return; }
-        holdButton.disabled = true; holdStatus.textContent = 'Creating the live SVP temporary hold…';
+        const payload = {occupation_id: occupation.value, category_id: category.value, city: city.value, test_center_id: center.value, test_center_name: centerName.value, exam_session_id: session.value, exam_date: date.value, language_code: language.value};
+        if (Object.values(payload).some(value => !value)) {
+            holdStatus.textContent = 'Select language, city, date, center slot, session, and date first.';
+            return;
+        }
+        holdButton.disabled = true;
+        holdStatus.textContent = 'Creating the live SVP temporary hold…';
         holdRequest = fetch('{{ route('user.bookings.temporary-hold') }}', {method: 'POST', headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content || ''}, body: JSON.stringify(payload)}).then(async response => {
             const body = await response.json().catch(() => ({}));
             if (!response.ok || body.success === false) throw new Error(body.error || 'SVP could not create the temporary hold.');
@@ -498,31 +521,113 @@
             if (selection.exam_session_id) session.value = selection.exam_session_id;
             if (selection.exam_date) date.value = selection.exam_date;
             if (selection.exam_session_name) sessionName.value = selection.exam_session_name;
-            const hold = body.data || body; const id = hold.id ?? hold.hold_id ?? hold.temporary_hold_id;
+            const hold = body.data || body;
+            const id = hold.id ?? hold.hold_id ?? hold.temporary_hold_id;
             if (!id) throw new Error('SVP returned no temporary hold ID.');
-            holdId.value = id; holdExpiry.value = hold.expired_at || hold.expires_at || '';
-            holdStatus.textContent = 'Hold #' + id + ' created' + (holdExpiry.value ? ' — expires ' + formatExpiry(holdExpiry.value) : '') + '. You may now confirm the reschedule.';
-            holdStatus.classList.remove('text-red-700'); syncActionButtons();
-        }).catch(error => { holdId.value = ''; holdExpiry.value = ''; confirmButton.disabled = true; holdStatus.textContent = error.message; holdStatus.classList.add('text-red-700'); }).finally(() => { holdRequest = null; syncActionButtons(); });
+            holdId.value = id;
+            holdExpiry.value = hold.expired_at || hold.expires_at || '';
+            holdStatus.textContent = 'Hold #' + id + ' created' + (holdExpiry.value ? ' — expires ' + new Date(holdExpiry.value).toLocaleString() : '') + '. You may now confirm the reschedule.';
+            holdStatus.classList.remove('text-red-700');
+            syncActionButtons();
+        }).catch(error => {
+            holdId.value = '';
+            holdExpiry.value = '';
+            confirmButton.disabled = true;
+            holdStatus.textContent = error.message;
+            holdStatus.classList.add('text-red-700');
+        }).finally(() => { holdRequest = null; syncActionButtons(); });
         await holdRequest;
     }
 
-    city.addEventListener('change', loadCenters);
-    center.addEventListener('change', async function () {
-        const option = center.options[center.selectedIndex]; centerName.value = option?.dataset?.name || option?.textContent?.replace(/\s+—\s+SVP ID:.*$/, '') || '';
-        await loadSessions();
+    city.addEventListener('change', async function () {
+        centerSection.style.display = 'none';
+        center.innerHTML = '<option value="">Select a live date first…</option>';
+        session.innerHTML = '<option value="">Select a date and test center first…</option>';
+        availableDateCatalog = [];
+        sessionSnapshot = [];
+        renderAvailableDates();
+        sessionSummary?.classList.add('hidden');
+        centerName.value = '';
+        sessionName.value = '';
+        date.value = '';
+        showError(dateError, '');
+        resetHold('Select a live date, center slot, and exact session before creating a temporary hold.');
+        if (city.value) await loadPortalDatesForCity(city.value);
+        syncActionButtons();
     });
+
+    language.addEventListener('change', async function () {
+        showError(languageError, '');
+        centerSection.style.display = 'none';
+        center.innerHTML = '<option value="">Select a live date first…</option>';
+        session.innerHTML = '<option value="">Select a date and test center first…</option>';
+        centerName.value = '';
+        sessionName.value = '';
+        sessionSnapshot = [];
+        sessionSummary?.classList.add('hidden');
+        resetHold('Select a center slot and exact session before creating a temporary hold.');
+        if (availableDate.value) await loadTestCentersForDate(availableDate.value);
+        syncActionButtons();
+    });
+
+    availableDate.addEventListener('change', async function () {
+        const value = normalizeDate(availableDate.value);
+        date.value = value;
+        centerSection.style.display = 'none';
+        center.innerHTML = '<option value="">Loading live center slots…</option>';
+        session.innerHTML = '<option value="">Select a center slot first…</option>';
+        centerName.value = '';
+        sessionName.value = '';
+        sessionSnapshot = [];
+        sessionSummary?.classList.add('hidden');
+        showError(dateError, '');
+        resetHold('Select a center slot and exact session for this date before creating a temporary hold.');
+        availabilityCalendar?.setSelected(value, true);
+        if (value) await loadTestCentersForDate(value, false);
+        syncActionButtons();
+    });
+
+    center.addEventListener('change', async function () {
+        const option = center.options[center.selectedIndex];
+        centerName.value = option?.dataset?.name || '';
+        session.innerHTML = '<option value="">Loading exact SVP sessions…</option>';
+        sessionName.value = '';
+        sessionSnapshot = [];
+        sessionSummary?.classList.add('hidden');
+        resetHold('Select an exact SVP session for this date, then create a temporary hold before confirming.');
+        if (center.value && availableDate.value) await loadSessionsForDate(availableDate.value);
+        syncActionButtons();
+    });
+
     session.addEventListener('change', function () {
         const option = session.options[session.selectedIndex];
-        centerError.classList.add('hidden'); dateError.classList.add('hidden');
-        // Centerless (empty dataset.centerId) is trusted for this SVP tenant —
-        // only an explicit, different center id is a real mismatch.
-        if (option?.dataset?.centerId && option.dataset.centerId !== String(center.value)) { session.value = ''; resetHold('The selected session belongs to another test center and is blocked.'); const sessionCenterName = option?.dataset?.centerName || option?.dataset?.name || 'another test center'; const selectedCenterName = center.options[center.selectedIndex]?.dataset?.name || center.options[center.selectedIndex]?.textContent || 'the selected test center'; centerError.textContent = 'Blocked: session center "' + sessionCenterName + '" does not match selected center "' + selectedCenterName + '".'; centerError.classList.remove('hidden'); return; }
-        sessionName.value = option?.dataset?.name || option?.textContent || ''; date.value = option?.dataset?.date || ''; holdPanel.classList.remove('hidden'); resetHold('Create a temporary hold for this exact session and date before confirming.'); syncActionButtons();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date.value)) { dateError.textContent = 'The selected SVP session did not return an exam date.'; dateError.classList.remove('hidden'); holdButton.disabled = true; }
+        showError(centerError, '');
+        showError(dateError, '');
+        if (option?.dataset?.centerId && option.dataset.centerId !== String(center.value)) {
+            session.value = '';
+            resetHold('The selected session belongs to another test center and is blocked.');
+            const selectedName = option.dataset.centerName || option.dataset.name || 'another test center';
+            const centerLabel = center.options[center.selectedIndex]?.dataset?.name || center.options[center.selectedIndex]?.textContent || 'the selected test center';
+            showError(centerError, 'Blocked: session center "' + selectedName + '" does not match selected center "' + centerLabel + '".');
+            return;
+        }
+        const selectedDate = normalizeDate(availableDate.value);
+        const sessionDateValue = normalizeDate(option?.dataset?.date);
+        if (selectedDate && sessionDateValue && selectedDate !== sessionDateValue) {
+            session.value = '';
+            resetHold('The selected session date does not match the selected available date.');
+            showError(dateError, 'This session belongs to ' + sessionDateValue + '. Please select a session for ' + selectedDate + '.');
+            return;
+        }
+        sessionName.value = option?.dataset?.name || option?.textContent || '';
+        date.value = selectedDate || sessionDateValue || '';
+        if (session.value) holdPanel.classList.remove('hidden');
+        resetHold('Create a temporary hold for this exact session and date before confirming.');
+        syncActionButtons();
     });
-    candidate.addEventListener('change', function () { loadCredit(); syncActionButtons(); });
-    form.addEventListener('submit', event => {
+
+    candidate.addEventListener('change', function () { void loadCredit(); syncActionButtons(); });
+    form.addEventListener('submit', function (event) {
         if (!candidate.value) {
             event.preventDefault();
             holdPanel.classList.remove('hidden');
@@ -536,7 +641,12 @@
         }
     });
     holdButton.addEventListener('click', createHold);
-    loadCredit(); loadCities();
+
+    centerSection.style.display = 'none';
+    sessionSummary?.classList.add('hidden');
+    loadCredit();
+    loadLiveLanguages();
+    loadCities();
 })();
 </script>
 @endsection
