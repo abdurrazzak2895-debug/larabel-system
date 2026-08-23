@@ -10,6 +10,7 @@ use App\Services\SvpReservationCreditService;
 use App\Services\SvpTemporaryHoldService;
 use App\Services\WalletService;
 use App\Services\PortalAvailabilityService;
+use App\Services\SvpDirectAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -30,7 +31,8 @@ class BookingController extends Controller
         private SvpReservationCreditService $credits,
         private SvpTemporaryHoldService $holds,
         private WalletService $wallet,
-        private PortalAvailabilityService $portalAvailability
+        private PortalAvailabilityService $portalAvailability,
+        private SvpDirectAvailabilityService $directAvailability
     ) {
     }
 
@@ -376,22 +378,45 @@ class BookingController extends Controller
         ]);
 
         try {
+            $centers = filled($data['date'] ?? null)
+                ? $this->portalAvailability->bookingCentersForDate(
+                    $data['category_id'],
+                    $data['city'],
+                    $data['date'],
+                    $data['occupation_id'],
+                    $data['language_code'],
+                )
+                : $this->portalAvailability->bookingCenters(
+                    $data['category_id'],
+                    $data['city'],
+                    $data['occupation_id'],
+                    $data['language_code'],
+                )['test_centers'];
+            $availabilitySource = 'portal_availability';
+            $fallback = false;
+
+            if (filled($data['date'] ?? null) && $centers === []) {
+                $token = $this->ensureSvpToken($request);
+                if ($token) {
+                    $direct = $this->directAvailability->centersForDate($token, [
+                        'city' => $data['city'],
+                        'category_id' => $data['category_id'],
+                        'date' => $data['date'],
+                    ]);
+                    if (($direct['requires_svp_login'] ?? false) === true) {
+                        return response()->json($direct, 401);
+                    }
+                    $centers = $direct['centers'];
+                    $availabilitySource = $direct['availability_source'];
+                    $fallback = $direct['fallback'];
+                }
+            }
+
             return response()->json([
                 'success' => true,
-                'data' => ['test_centers' => filled($data['date'] ?? null)
-                    ? $this->portalAvailability->bookingCentersForDate(
-                        $data['category_id'],
-                        $data['city'],
-                        $data['date'],
-                        $data['occupation_id'],
-                        $data['language_code'],
-                    )
-                    : $this->portalAvailability->bookingCenters(
-                        $data['category_id'],
-                        $data['city'],
-                        $data['occupation_id'],
-                        $data['language_code'],
-                    )['test_centers']],
+                'availability_source' => $availabilitySource,
+                'fallback' => $fallback,
+                'data' => ['test_centers' => $centers],
             ]);
         } catch (\Throwable $e) {
             Log::error('Portal lookup test-centers failed', ['error' => $e->getMessage()]);

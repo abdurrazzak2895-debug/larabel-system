@@ -1042,17 +1042,24 @@
             const url = "{{ route('user.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId) + "&date=" + encodeURIComponent(date) + "&occupation_id=" + encodeURIComponent(occupationId) + "&language_code=" + encodeURIComponent(languageCode);
             const data = await fetchJSON(url);
             const centers = data?.data?.test_centers || (data && Array.isArray(data.data) ? data.data : []);
+            const directSvpFallback = data?.fallback === true || data?.availability_source === 'candidate_authenticated_sessions';
             centerResponse?.renderCenters(centers, {
                 city: city,
                 date: date,
-                emptyText: 'No live test-center slots returned for the selected date.'
+                emptyText: directSvpFallback
+                    ? 'Active SVP authentication returned no exact session at a configured center for this date.'
+                    : 'No live test-center slots returned for the selected date.'
             });
             testCenterSelect.value = '';
             testCenterSelect.dataset.name = '';
             if (dhakaCenterSummary) {
                 dhakaCenterSummary.textContent = centers.length
-                    ? 'Portal Availability returned ' + centers.length + ' center slot' + (centers.length === 1 ? '' : 's') + ' for ' + city + ' on ' + date + '. Select one to load exact SVP sessions.'
-                    : 'No center slots returned for ' + city + ' on ' + date + '.';
+                    ? (directSvpFallback
+                        ? 'Portal Availability had no slot; active SVP authentication confirmed ' + centers.length + ' center slot' + (centers.length === 1 ? '' : 's') + ' for ' + city + ' on ' + date + '. Select one to load exact SVP sessions.'
+                        : 'Portal Availability returned ' + centers.length + ' center slot' + (centers.length === 1 ? '' : 's') + ' for ' + city + ' on ' + date + '. Select one to load exact SVP sessions.')
+                    : (directSvpFallback
+                        ? 'Active SVP authentication returned no exact session for ' + city + ' on ' + date + '.'
+                        : 'No center slots returned for ' + city + ' on ' + date + '.');
             }
             testCenterSection.style.display = centers.length ? '' : 'none';
             prefetchSessionsForCenters(centers, date);

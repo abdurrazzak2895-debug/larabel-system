@@ -411,19 +411,26 @@
             const url = '{{ route('user.bookings.lookup.test-centers') }}?city=' + encodeURIComponent(city.value) + '&category_id=' + encodeURIComponent(category.value) + '&date=' + encodeURIComponent(dateValue) + '&occupation_id=' + encodeURIComponent(occupation.value) + '&language_code=' + encodeURIComponent(language.value);
             const body = await getJson(url);
             const items = body?.data?.test_centers || (Array.isArray(body?.data) ? body.data : []);
+            const directSvpFallback = body?.fallback === true || body?.availability_source === 'candidate_authenticated_sessions';
             center.value = '';
             center.dataset.name = '';
             centerName.value = '';
             centerResponse?.renderCenters(items, {
                 city: city.value,
                 date: dateValue,
-                emptyText: 'No live test-center slots returned for the selected date.'
+                emptyText: directSvpFallback
+                    ? 'Active SVP authentication returned no exact session at a configured center for this date.'
+                    : 'No live test-center slots returned for the selected date.'
             });
             centerSection.style.display = items.length ? '' : 'none';
             prefetchSessionsForCenters(items, dateValue);
             centerSummary.textContent = items.length
-                ? 'Portal Availability returned ' + items.length + ' center slot' + (items.length === 1 ? '' : 's') + ' for ' + city.value + ' on ' + dateValue + '. Click one card to load exact SVP sessions.'
-                : 'No center slots returned for ' + city.value + ' on ' + dateValue + '.';
+                ? (directSvpFallback
+                    ? 'Portal Availability had no slot; active SVP authentication confirmed ' + items.length + ' center slot' + (items.length === 1 ? '' : 's') + ' for ' + city.value + ' on ' + dateValue + '. Click one card to load exact SVP sessions.'
+                    : 'Portal Availability returned ' + items.length + ' center slot' + (items.length === 1 ? '' : 's') + ' for ' + city.value + ' on ' + dateValue + '. Click one card to load exact SVP sessions.')
+                : (directSvpFallback
+                    ? 'Active SVP authentication returned no exact session for ' + city.value + ' on ' + dateValue + '.'
+                    : 'No center slots returned for ' + city.value + ' on ' + dateValue + '.');
             if (restoreOldCenter && oldCenter) {
                 const restored = items.find(function (item) {
                     return String(item.id || item.test_center_id || item.site_id || item.center_id || '') === String(oldCenter);

@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\Candidate;
 use App\Models\Setting;
 use App\Models\PortalAvailabilityCredential;
+use App\Models\TestCenter;
 use App\Models\User;
 use App\Services\WalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -698,6 +699,88 @@ class UserPanelTest extends TestCase
         $this->assertAuthenticatedAs($user, 'web');
 
         $this->get(route('user.dashboard'))->assertOk();
+    }
+
+    public function test_user_center_lookup_falls_back_to_real_candidate_sessions_when_portal_is_empty(): void
+    {
+        $this->loginAgencyUser();
+
+        PortalAvailabilityCredential::query()->create([
+            'name' => 'Empty portal fallback',
+            'portal_account_id' => 'fallback-portal-account',
+            'session_cookie' => 'session=fallback-authorized',
+            'active' => true,
+        ]);
+        TestCenter::query()->create([
+            'svp_id' => '171',
+            'name' => 'Jashore Technical Training Centre',
+            'city' => 'Khulna',
+            'country_code' => 'BD',
+        ]);
+        TestCenter::query()->create([
+            'svp_id' => '181',
+            'name' => 'Narail Technical Training Centre',
+            'city' => 'Khulna',
+            'country_code' => 'BD',
+        ]);
+
+        Http::fake([
+            'https://svp-international.xyz/api/centers' => Http::response(['centers' => []], 200),
+            'https://svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_sessions*' => function ($request) {
+                $centerId = str_contains($request->url(), 'test_center_id=171') ? '171' : '181';
+                $count = $centerId === '171' ? 4 : 1;
+                $sessions = [];
+
+                for ($index = 1; $index <= $count; $index++) {
+                    $sessions[] = [
+                        'id' => 'fallback-'.$centerId.'-'.$index,
+                        'exam_date' => '2026-08-31',
+                        'test_center_id' => $centerId,
+                        'available_seats' => 1,
+                    ];
+                }
+
+                return Http::response(['exam_sessions' => $sessions], 200);
+            },
+        ]);
+
+        $response = $this->withSession(['svp_token' => 'candidate-token'])
+            ->getJson(route('user.bookings.lookup.test-centers', [
+                'city' => 'Khulna',
+                'category_id' => '159',
+                'date' => '2026-08-31',
+                'occupation_id' => '2061',
+                'language_code' => 'LOABB',
+            ]));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('fallback', true)
+            ->assertJsonPath('availability_source', 'candidate_authenticated_sessions')
+            ->assertJsonPath('data.test_centers.0.test_center_id', '171')
+            ->assertJsonPath('data.test_centers.0.session_count', 4)
+            ->assertJsonPath('data.test_centers.1.test_center_id', '181')
+            ->assertJsonPath('data.test_centers.1.session_count', 1);
+
+        $agencyResponse = $this->withSession(['svp_token' => 'candidate-token'])
+            ->getJson(route('agency.bookings.lookup.test-centers', [
+                'city' => 'Khulna',
+                'category_id' => '159',
+                'date' => '2026-08-31',
+                'occupation_id' => '2061',
+                'language_code' => 'LOABB',
+            ]));
+
+        $agencyResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('fallback', true)
+            ->assertJsonPath('availability_source', 'candidate_authenticated_sessions')
+            ->assertJsonPath('data.test_centers.0.test_center_id', '171')
+            ->assertJsonPath('data.test_centers.0.session_count', 4)
+            ->assertJsonPath('data.test_centers.1.test_center_id', '181')
+            ->assertJsonPath('data.test_centers.1.session_count', 1);
+
+        Http::assertSentCount(5);
     }
 
     public function test_booking_create_renders_read_only_lookups_without_candidate_token(): void
