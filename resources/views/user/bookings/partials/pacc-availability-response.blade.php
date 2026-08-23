@@ -6,6 +6,7 @@
     $sessionSelectId = $sessionSelectId ?? 'exam_session_id';
     $sessionNameInputId = $sessionNameInputId ?? 'exam_session_name';
     $dateInputId = $dateInputId ?? 'exam_date';
+    $hidePanel = $hidePanel ?? false;
 @endphp
 
 @once
@@ -199,7 +200,7 @@
     </script>
 @endonce
 
-<div id="{{ $componentId }}" class="mt-3" data-pacc-availability-response data-pacc-mode="{{ $mode }}">
+<div id="{{ $componentId }}" class="{{ $hidePanel ? 'hidden' : '' }} mt-3" data-pacc-availability-response data-pacc-mode="{{ $mode }}" @if($hidePanel) aria-hidden="true" @endif>
     <div data-pacc-panel class="hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div class="mb-2 flex items-center justify-between gap-3">
             <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ $mode === 'centers' ? 'Live center slots' : 'Live verified sessions' }}</p>

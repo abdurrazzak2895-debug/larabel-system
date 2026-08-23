@@ -165,6 +165,7 @@
                     @include('user.bookings.partials.pacc-availability-response', [
                         'componentId' => 'agency-session-response',
                         'mode' => 'sessions',
+                        'hidePanel' => true,
                         'centerSelectId' => 'test_center_id',
                         'sessionSelectId' => 'exam_session_id',
                         'sessionNameInputId' => 'exam_session_name',
