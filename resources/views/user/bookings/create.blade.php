@@ -135,8 +135,8 @@
                         class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select a test center first…</option>
                     </select>
-                    <p class="text-xs text-slate-400 mt-1">Only days returned live by SVP for the selected center are clickable. Pick a day, then choose its session/shift.</p>
-                    <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available session / shift</label>
+                    <p class="text-xs text-slate-400 mt-1">Only days returned live by SVP for the selected center are clickable. Pick a day, then choose one of its verified sessions.</p>
+                    <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available SVP session</label>
                     <select name="exam_session_id" id="exam_session_id" required
                         class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
@@ -144,17 +144,17 @@
                     <input type="hidden" name="exam_session_name" id="exam_session_name" value="">
                     <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="">
                     <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
-                    <div id="session-shift-summary" class="hidden mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"></div>
+                    <div id="session-availability-summary" class="hidden mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"></div>
                     <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
                     @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                     @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
-                    <label for="exam_date" class="block text-sm font-medium text-slate-700 mb-1">Exam Date <span class="text-slate-400 font-normal">(from selected SVP session)</span></label>
-                    <input type="date" name="exam_date" id="exam_date" value="{{ old('exam_date') }}" required readonly
+                    <label for="exam_date" class="block text-sm font-medium text-slate-700 mb-1">Selected exam date</label>
+                    <input type="date" name="exam_date" id="exam_date" required readonly
                         class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
                     <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
-                    <p class="text-xs text-slate-400 mt-1">PACC assigns the exact start time and session at reservation. We reserve only at the selected center; if the selected session is unavailable there, the next available date at that same center is used.</p>
+                    <p class="text-xs text-slate-400 mt-1">No date is preselected. The date is filled only after you choose a live available day and verified session from the selected center.</p>
                     @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
             </div>
@@ -202,7 +202,7 @@
         {{-- Actions --}}
         <div class="flex items-center gap-3">
             <button type="submit" id="confirm-booking-button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
-                Confirm &amp; Book
+                Complete booking
             </button>
             <a href="{{ route('user.bookings.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition">
                 Cancel
@@ -230,7 +230,7 @@
     const availableDateSelect = document.getElementById('available_session_date');
     const sessionSelect = document.getElementById('exam_session_id');
     const sessionNameInput = document.getElementById('exam_session_name');
-    const sessionShiftSummary = document.getElementById('session-shift-summary');
+    const sessionAvailabilitySummary = document.getElementById('session-availability-summary');
     const sessionCenterError = document.getElementById('session-center-error');
     const dateInput = document.getElementById('exam_date');
     const dateError = document.getElementById('date-error');
@@ -365,7 +365,7 @@
 
     function renderSessionsForDate(date) {
         const filtered = (sessionCatalog || []).filter(session => !date || sessionDate(session) === date);
-        renderSessionShiftSummary(sessionCatalog);
+        renderSessionAvailabilitySummary(sessionCatalog);
         populateSelect(sessionSelect, filtered, 'id', 'name');
         if (sessionSelect) sessionSelect.disabled = filtered.length === 0;
         return filtered;
@@ -399,15 +399,33 @@
         }
     }
 
-    function shiftLabel(session, sameDateIndex) {
-        const source = String(session?.shift || session?.session_name || session?.name || '').toLowerCase();
-        const match = source.match(/(?:shift|session)\s*([1-9][0-9]*)/);
-        const number = match ? Number(match[1]) : sameDateIndex + 1;
-        return number === 1 ? 'First Shift' : number === 2 ? 'Second Shift' : number === 3 ? 'Third Shift' : number === 4 ? 'Fourth Shift' : 'Shift ' + number;
+    function sessionTime(session) {
+        const value = session?.test_time || session?.start_time || session?.time || session?.start_at || session?.start_date_in_browser_time_zone || session?.start_date_in_tc_time_zone || '';
+        return String(value).replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
     }
 
-    function renderSessionShiftSummary(sessions) {
-        if (!sessionShiftSummary) return;
+    function sessionSeatCount(session) {
+        const value = session?.available_seats ?? session?.availableSeats ?? session?.remaining_seats ?? session?.remainingSeats ?? session?.seats ?? null;
+        if (value === null || value === '' || Number.isNaN(Number(value))) return null;
+        return Number(value);
+    }
+
+    function sessionDisplayName(session, index) {
+        const value = String(session?.session_name || session?.name || session?.label || session?.title || '').trim();
+        return value || 'Session ' + (index + 1);
+    }
+
+    function sessionOptionLabel(session, index) {
+        const details = [sessionDisplayName(session, index)];
+        const time = sessionTime(session);
+        const seats = sessionSeatCount(session);
+        if (time) details.push('Time: ' + time);
+        details.push(seats === null ? 'Live seats unavailable' : 'Seats: ' + seats);
+        return details.join(' · ');
+    }
+
+    function renderSessionAvailabilitySummary(sessions) {
+        if (!sessionAvailabilitySummary) return;
         const selectedCenterId = String(testCenterSelect?.value || '');
         const grouped = {};
         (sessions || []).forEach(function (session) {
@@ -425,12 +443,12 @@
                 // an EXPLICIT different center id is a real mismatch.
                 const matches = centerId === '' || centerId === selectedCenterId;
                 const sessionId = session.id || session.exam_session_id || '';
-                return '<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + escapeHtml(shiftLabel(session, index)) + '</span> · Session ' + escapeHtml(String(sessionId).slice(0, 18)) + ' · ' + escapeHtml(sessionCenterName(session)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>';
+                return '<div class="ml-2 ' + (matches ? 'text-slate-600' : 'text-red-700') + '"><span class="font-medium">' + escapeHtml(sessionDisplayName(session, index)) + '</span> · ' + escapeHtml(sessionTime(session) ? 'Time: ' + sessionTime(session) : 'Time unavailable') + ' · ' + escapeHtml(sessionSeatCount(session) === null ? 'Live seats unavailable' : 'Seats: ' + sessionSeatCount(session)) + ' · Session ' + escapeHtml(String(sessionId).slice(0, 18)) + ' · ' + escapeHtml(sessionCenterName(session)) + (matches ? '' : ' · <strong>BLOCKED: center mismatch</strong>') + '</div>';
             }).join('');
             return '<div class="mb-2 last:mb-0"><div class="font-semibold text-slate-700">' + escapeHtml(date) + '</div>' + rows + '</div>';
         }).join('');
-        sessionShiftSummary.innerHTML = '<div class="mb-1 font-medium text-slate-700">Sessions grouped by date and shift</div>' + (html || '<div>No sessions returned.</div>');
-        sessionShiftSummary.classList.remove('hidden');
+        sessionAvailabilitySummary.innerHTML = '<div class="mb-1 font-medium text-slate-700">Live sessions and seat counts</div>' + (html || '<div>No verified sessions returned.</div>');
+        sessionAvailabilitySummary.classList.remove('hidden');
     }
 
     function clearSessionCenterError() {
@@ -600,7 +618,12 @@
             option.dataset.centerId = centerId || '';
             option.dataset.date = item.exam_date || item.test_date || item.date || item.start_date_in_browser_time_zone || item.start_date_in_tc_time_zone || '';
             if (select === testCenterSelect && centerId) {
-                option.textContent = centerName || baseLabel;
+                const centerDetails = [centerName || baseLabel];
+                const centerTime = sessionTime(item);
+                const centerSeats = sessionSeatCount(item);
+                if (centerTime) centerDetails.push('Time: ' + centerTime);
+                if (centerSeats !== null) centerDetails.push('Seats: ' + centerSeats);
+                option.textContent = centerDetails.join(' · ');
             } else if (select === sessionSelect) {
                 const date = option.dataset.date || 'Unknown date';
                 const sameDateIndex = sessionDateCounts[date] || 0;
@@ -617,7 +640,7 @@
                     || testCenterSelect?.options?.[testCenterSelect.selectedIndex]?.textContent
                     || '';
                 const centerText = resolvedCenterName ? ' · ' + resolvedCenterName : ' · Center metadata unavailable';
-                option.textContent = date + ' — ' + shiftLabel(item, sameDateIndex) + centerText;
+                option.textContent = date + ' — ' + sessionOptionLabel(item, sameDateIndex) + centerText;
                 option.disabled = !!(centerId && testCenterSelect?.value && String(centerId) !== String(testCenterSelect.value));
             } else {
                 option.textContent = baseLabel;
@@ -934,11 +957,11 @@
                 mergeSessionCatalog(sessions);
                 const dates = renderAvailableDates(sessionCatalog, availableDateCatalog);
                 if (dates.length) {
-                    availableDateSelect.value = dates[0];
-                    availabilityCalendar?.setSelected(dates[0], true);
-                    dateInput.value = dates[0];
-                    renderSessionsForDate(dates[0]);
-                    await loadSessionsForDate(dates[0]);
+                    availableDateSelect.value = '';
+                    availabilityCalendar?.setSelected('', true);
+                    dateInput.value = '';
+                    renderSessionsForDate('');
+                    if (temporaryHoldStatus) temporaryHoldStatus.textContent = dates.length + ' live exam date' + (dates.length === 1 ? '' : 's') + ' available. Select a date to view its verified sessions and seat counts.';
                 } else {
                     renderSessionsForDate('');
                     if (temporaryHoldStatus) temporaryHoldStatus.textContent = 'No exam sessions or available dates returned for the selected test center.';
