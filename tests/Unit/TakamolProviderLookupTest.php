@@ -102,6 +102,56 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_date_specific_sessions_only_return_the_requested_date(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'success' => true,
+                'data' => [
+                    'exam_sessions' => [
+                        [
+                            'id' => 'session-selected-date',
+                            'exam_date' => '2026-08-24',
+                            'test_center' => ['id' => 'center-45', 'name' => 'Bangladesh German TTC', 'city' => 'Khulna'],
+                        ],
+                        [
+                            'id' => 'session-other-date',
+                            'exam_date' => '2026-08-25',
+                            'test_center' => ['id' => 'center-45', 'name' => 'Bangladesh German TTC', 'city' => 'Khulna'],
+                        ],
+                        [
+                            'id' => 'opaque-session-selected-date',
+                            'test_center' => ['id' => 'center-45', 'name' => 'Bangladesh German TTC', 'city' => 'Khulna'],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $payload = (new TakamolProvider())->withToken('test-token')->examSessions([
+            'city' => 'Khulna',
+            'category_id' => '159',
+            'test_center_id' => 'center-45',
+            'exam_date' => '2026-08-24',
+        ])->getData(true);
+
+        $sessions = $payload['data']['sessions'];
+        $this->assertSame([
+            'session-selected-date',
+            'opaque-session-selected-date',
+        ], array_column($sessions, 'id'));
+        $this->assertSame('2026-08-24', $sessions[1]['exam_date']);
+        $this->assertStringNotContainsString('session-other-date', json_encode($sessions));
+
+        Http::assertSent(function ($request): bool {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return ($query['exam_date'] ?? null) === '2026-08-24'
+                && ($query['test_center_id'] ?? null) === 'center-45'
+                && ($query['available_seats'] ?? null) === 'greater_than::0';
+        });
+    }
+
     public function test_sessions_extract_nested_json_api_items_and_attributes_metadata(): void
     {
         Http::fake([

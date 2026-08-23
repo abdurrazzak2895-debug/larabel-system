@@ -394,10 +394,18 @@
     }
 
     function renderSessionsForDate(date) {
-        const filtered = (sessionCatalog || []).filter(session => !date || sessionDate(session) === date);
-        renderSessionAvailabilitySummary(sessionCatalog);
+        const selectedDate = String(date || '').substring(0, 10);
+        const filtered = selectedDate
+            ? (sessionCatalog || []).filter(session => sessionDate(session) === selectedDate)
+            : [];
+        renderSessionAvailabilitySummary(filtered, selectedDate);
         populateSelect(sessionSelect, filtered, 'id', 'name');
-        if (sessionSelect) sessionSelect.disabled = filtered.length === 0;
+        if (sessionSelect) {
+            sessionSelect.disabled = filtered.length === 0;
+            if (!selectedDate) {
+                sessionSelect.innerHTML = '<option value="">Select an available date first</option>';
+            }
+        }
         return filtered;
     }
 
@@ -411,7 +419,7 @@
             const params = new URLSearchParams({city: citySelect.value, category_id: categorySelect.value, test_center_id: testCenterSelect.value, exam_date: date});
             const data = await fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString());
             const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
-            mergeSessionCatalog(sessions);
+            sessionCatalog = Array.isArray(sessions) ? sessions.slice() : [];
             renderAvailableDates(sessionCatalog, availableDateCatalog);
             availableDateSelect.value = date;
             availabilityCalendar?.setSelected(date, true);
@@ -454,8 +462,13 @@
         return details.join(' · ');
     }
 
-    function renderSessionAvailabilitySummary(sessions) {
+    function renderSessionAvailabilitySummary(sessions, selectedDate) {
         if (!sessionAvailabilitySummary) return;
+        if (!selectedDate) {
+            sessionAvailabilitySummary.innerHTML = '<div class="font-medium text-slate-700">Select an available date to view only that date\'s SVP sessions and seat counts.</div>';
+            sessionAvailabilitySummary.classList.remove('hidden');
+            return;
+        }
         const selectedCenterId = String(testCenterSelect?.value || '');
         const grouped = {};
         (sessions || []).forEach(function (session) {
@@ -859,6 +872,7 @@
             availableDateCatalog = [];
             renderAvailableDates([], []);
             populateSelect(sessionSelect, []);
+            renderSessionsForDate('');
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
             dateInput.value = '';
@@ -900,6 +914,7 @@
             availableDateCatalog = [];
             renderAvailableDates([], []);
             populateSelect(sessionSelect, []);
+            renderSessionsForDate('');
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
             dateInput.value = '';
@@ -929,6 +944,7 @@
             testCenterSection.style.display = 'none';
             populateSelect(testCenterSelect, []);
             populateSelect(sessionSelect, []);
+            renderSessionsForDate('');
             renderAvailableDates([], []);
             dateInput.value = '';
             clearTemporaryHold('Select a live exam language and city to load verified test centers.');
@@ -945,6 +961,7 @@
             availableDateCatalog = [];
             renderAvailableDates([], []);
             populateSelect(sessionSelect, []);
+            renderSessionsForDate('');
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
             dateInput.value = '';
@@ -990,6 +1007,7 @@
             availableDateCatalog = [];
             renderAvailableDates([], []);
             populateSelect(sessionSelect, []);
+            renderSessionsForDate('');
             dateInput.value = '';
             clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
 
@@ -1003,10 +1021,9 @@
                 const data = await fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString());
                 const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
                 const availableDates = data?.data?.available_dates || data?.available_dates || data?.meta?.available_dates || [];
-                sessionCatalog = [];
-                availableDateCatalog = availableDates;
-                mergeSessionCatalog(sessions);
-                const dates = renderAvailableDates(sessionCatalog, availableDateCatalog);
+            sessionCatalog = [];
+            availableDateCatalog = availableDates;
+            const dates = renderAvailableDates(sessions, availableDateCatalog);
                 if (dates.length) {
                     availableDateSelect.value = '';
                     availabilityCalendar?.setSelected('', true);
@@ -1032,7 +1049,7 @@
             clearTemporaryHold('Select a session for this date, then create a temporary hold before confirming the booking.');
             clearDateError();
             if (!date) {
-                populateSelect(sessionSelect, []);
+                renderSessionsForDate('');
                 return;
             }
             await loadSessionsForDate(date);
@@ -1052,7 +1069,6 @@
                     const selectedCenterName = testCenterSelect.options[testCenterSelect.selectedIndex]?.dataset?.centerName || testCenterSelect.options[testCenterSelect.selectedIndex]?.textContent || 'the selected test center';
                     sessionCenterError.textContent = 'Blocked: selected session center "' + selectedSessionCenterName + '" does not match selected center "' + selectedCenterName + '".';
                     sessionCenterError.classList.remove('hidden');
-                }
                 return;
             }
             if (sessionNameInput) sessionNameInput.value = selectedSessionOption?.dataset?.name || selectedSessionOption?.textContent || '';

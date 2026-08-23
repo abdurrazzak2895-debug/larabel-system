@@ -54,7 +54,9 @@ class SvpTemporaryHoldService
      *
      * SVP session IDs can rotate between two list requests. Holding the exact
      * list returned to this browser lets the hold endpoint validate the selected
-     * session/date without replacing it with a different upstream list.
+     * session/date without replacing it with a different upstream list. An empty
+     * response intentionally replaces the previous snapshot so stale sessions
+     * cannot survive a date-specific availability miss.
      *
      * @param array<string, mixed> $context
      * @param mixed $payload
@@ -62,9 +64,6 @@ class SvpTemporaryHoldService
     public function rememberSessionLookup(Request $request, array $context, mixed $payload): void
     {
         $sessions = $this->extractSessions($payload);
-        if ($sessions === []) {
-            return;
-        }
 
         $lookups = $this->sessionLookups($request);
         $key = $this->lookupKey($context);

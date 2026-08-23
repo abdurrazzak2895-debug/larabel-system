@@ -188,6 +188,17 @@ class TakamolProvider implements BookingProviderInterface
             $sessions
         );
 
+        // A date-specific lookup is authoritative for the selected calendar
+        // date. Some SVP responses ignore or partially apply exam_date, so
+        // discard any row whose explicit session date differs. Rows without a
+        // date were annotated above with the requested date because the exact
+        // date query is the only authoritative context available for them.
+        if ($requestedDate !== null) {
+            $sessions = array_values(array_filter($sessions, static function (array $session) use ($requestedDate): bool {
+                return self::normalizeExamDate($session['exam_date'] ?? null) === $requestedDate;
+            }));
+        }
+
         // The session lookup is already scoped to the requested center. SVP
         // sometimes returns only an opaque session id and date, without any
         // embedded center metadata. In that response shape, the requested

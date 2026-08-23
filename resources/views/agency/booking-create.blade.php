@@ -389,13 +389,21 @@
             sessionCatalog = Array.from(merged.values());
         }
 
-        function renderSessionsForDate(date) {
-            const filtered = (sessionCatalog || []).filter(session => !date || sessionDate(session) === date);
-            renderSessionAvailabilitySummary(sessionCatalog);
-            populateSelect(sessionSelect, filtered, 'id', 'name');
-            if (sessionSelect) sessionSelect.disabled = filtered.length === 0;
-            return filtered;
+    function renderSessionsForDate(date) {
+        const selectedDate = String(date || '').substring(0, 10);
+        const filtered = selectedDate
+            ? (sessionCatalog || []).filter(session => sessionDate(session) === selectedDate)
+            : [];
+        renderSessionAvailabilitySummary(filtered, selectedDate);
+        populateSelect(sessionSelect, filtered, 'id', 'name');
+        if (sessionSelect) {
+            sessionSelect.disabled = filtered.length === 0;
+            if (!selectedDate) {
+                sessionSelect.innerHTML = '<option value="">Select an available date first</option>';
+            }
         }
+        return filtered;
+    }
 
         async function loadSessionsForDate(date) {
             if (!date || !citySelect.value || !categorySelect.value || !testCenterSelect.value) {
@@ -407,8 +415,8 @@
                 const params = new URLSearchParams({city: citySelect.value, category_id: categorySelect.value, test_center_id: testCenterSelect.value, exam_date: date});
                 const data = await fetchJSON("{{ route('agency.bookings.lookup.sessions') }}?" + params.toString());
                 const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
-                mergeSessionCatalog(sessions);
-                renderAvailableDates(sessionCatalog, availableDateCatalog);
+            sessionCatalog = Array.isArray(sessions) ? sessions.slice() : [];
+            renderAvailableDates(sessionCatalog, availableDateCatalog);
                 availableDateSelect.value = date;
                 dateInput.value = date;
                 renderSessionsForDate(date);
@@ -446,9 +454,14 @@
             return details.join(' · ');
         }
 
-        function renderSessionAvailabilitySummary(sessions) {
-            if (!sessionAvailabilitySummary) return;
-            const selectedCenterId = String(testCenterSelect?.value || '');
+    function renderSessionAvailabilitySummary(sessions, selectedDate) {
+        if (!sessionAvailabilitySummary) return;
+        if (!selectedDate) {
+            sessionAvailabilitySummary.innerHTML = '<div class="font-medium text-slate-700">Select an available date to view only that date\'s SVP sessions and seat counts.</div>';
+            sessionAvailabilitySummary.classList.remove('hidden');
+            return;
+        }
+        const selectedCenterId = String(testCenterSelect?.value || '');
             const grouped = {};
             (sessions || []).forEach(function (session) {
                 const date = sessionDate(session) || 'Date unavailable';
@@ -884,6 +897,7 @@
                 availableDateCatalog = [];
                 renderAvailableDates([], []);
                 populateSelect(sessionSelect, []);
+                renderSessionsForDate('');
                 if (testCenterNameInput) testCenterNameInput.value = '';
                 if (sessionNameInput) sessionNameInput.value = '';
                 dateInput.value = '';
@@ -940,6 +954,7 @@
                 availableDateCatalog = [];
                 renderAvailableDates([], []);
                 populateSelect(sessionSelect, []);
+                renderSessionsForDate('');
                 if (testCenterNameInput) testCenterNameInput.value = '';
                 if (sessionNameInput) sessionNameInput.value = '';
                 dateInput.value = '';
@@ -977,6 +992,7 @@
                 testCenterSection.style.display = 'none';
                 populateSelect(testCenterSelect, []);
                 populateSelect(sessionSelect, []);
+                renderSessionsForDate('');
                 renderAvailableDates([], []);
                 dateInput.value = '';
                 clearTemporaryHold('Select a live exam language and city to load verified test centers.');
@@ -993,6 +1009,7 @@
                 availableDateCatalog = [];
                 renderAvailableDates([], []);
                 populateSelect(sessionSelect, []);
+                renderSessionsForDate('');
                 if (testCenterNameInput) testCenterNameInput.value = '';
                 if (sessionNameInput) sessionNameInput.value = '';
                 dateInput.value = '';
@@ -1044,6 +1061,7 @@
                 availableDateCatalog = [];
                 renderAvailableDates([], []);
                 populateSelect(sessionSelect, []);
+                renderSessionsForDate('');
                 dateInput.value = '';
                 clearTemporaryHold('Select a session and date, then create a temporary hold before confirming the booking.');
                 clearError(sessionError);
@@ -1063,10 +1081,9 @@
                     const data = await fetchJSON("{{ route('agency.bookings.lookup.sessions') }}?" + params.toString());
                     const sessions = data?.data?.sessions || data?.data?.exam_sessions || data?.sessions || data?.exam_sessions || [];
                     const availableDates = data?.data?.available_dates || data?.available_dates || data?.meta?.available_dates || [];
-                    sessionCatalog = [];
-                    availableDateCatalog = availableDates;
-                    mergeSessionCatalog(sessions);
-                    const dates = renderAvailableDates(sessionCatalog, availableDateCatalog);
+            sessionCatalog = [];
+            availableDateCatalog = availableDates;
+            const dates = renderAvailableDates(sessions, availableDateCatalog);
                     if (dates.length) {
                         availableDateSelect.value = '';
                         dateInput.value = '';
@@ -1091,10 +1108,10 @@
                 dateInput.value = date || '';
                 clearTemporaryHold('Select a session for this date, then create a temporary hold before confirming the booking.');
                 clearError(dateError);
-                if (!date) {
-                    populateSelect(sessionSelect, []);
-                    return;
-                }
+            if (!date) {
+                renderSessionsForDate('');
+                return;
+            }
                 await loadSessionsForDate(date);
             });
         }

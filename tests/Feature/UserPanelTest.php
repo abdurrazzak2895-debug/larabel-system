@@ -371,9 +371,19 @@ class UserPanelTest extends TestCase
             ->assertDontSee('Selected exam date', false)
             ->assertSee('id="available_session_date"', false)
             ->assertSee('Pick a test center to load its open exam dates.', false)
+            ->assertSee('Select an available date first', false)
             ->assertSee('loadSessionsForDate', false)
             ->assertDontSee('>load<', false)
             ->assertDontSee('>loading<', false);
+
+        $agencyPage = $this->get(route('agency.bookings.create'));
+
+        $agencyPage->assertOk()
+            ->assertSee('Select a live SVP exam language…', false)
+            ->assertSee('/agency/bookings/lookup/languages', false)
+            ->assertSee('Select an available date first', false)
+            ->assertSee('loadSessionsForDate', false)
+            ->assertDontSee('Selected exam date', false);
     }
 
     public function test_user_live_language_lookup_uses_portal_session_and_returns_all_languages(): void
