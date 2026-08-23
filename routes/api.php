@@ -105,3 +105,21 @@ Route::prefix('v1')->group(function (): void {
 Route::any('svp/{any}', [\App\Http\Controllers\SvpProxyController::class, 'proxy'])
     ->where('any', '.*')
     ->middleware([\App\Http\Middleware\HandleSvpCors::class, 'throttle:60,1']);
+
+
+// ---------------------------------------------------------------------
+// External read-only portal availability API.
+// This route group is intentionally separate from the official booking
+// proxy above and exposes no login, booking, payment, reservation, OTP,
+// token-refresh, deletion, or account-changing operation.
+// ---------------------------------------------------------------------
+Route::prefix('external/portal-availability/v1')
+    ->middleware(['portal.api.key', 'throttle:portal-external-api'])
+    ->group(function (): void {
+        Route::get('/occupations', [\App\Http\Controllers\Admin\PortalAvailabilityController::class, 'externalOccupations'])
+            ->name('external.portal-availability.occupations');
+        Route::post('/search_dates', [\App\Http\Controllers\Admin\PortalAvailabilityController::class, 'externalDates'])
+            ->name('external.portal-availability.search-dates');
+        Route::post('/centers', [\App\Http\Controllers\Admin\PortalAvailabilityController::class, 'externalCenters'])
+            ->name('external.portal-availability.centers');
+    });

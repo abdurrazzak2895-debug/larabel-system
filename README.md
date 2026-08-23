@@ -23,7 +23,7 @@ Laravel is accessible, powerful, and provides tools required for large, robust a
 
 ## Portal Availability
 
-The repository includes an isolated, read-only adapter for the authenticated portal availability chain. See [`docs/portal-availability.md`](docs/portal-availability.md) for migration, deployment, credential handling, dashboard usage, and validation instructions. The existing official SVP/Takamol booking flow remains separate and unchanged.
+The repository includes an isolated, read-only adapter for the authenticated portal availability chain. See [`docs/portal-availability.md`](docs/portal-availability.md) for migration, deployment, credential handling, dashboard usage, and validation instructions. The external website API-key gateway is documented in [`docs/portal-availability-external-api.md`](docs/portal-availability-external-api.md). The existing official SVP/Takamol booking flow remains separate and unchanged.
 
 ## Learning Laravel
 

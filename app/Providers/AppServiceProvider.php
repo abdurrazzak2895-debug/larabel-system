@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use App\Contracts\PortalAvailabilityProviderInterface;
@@ -35,6 +38,17 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->environment('production')) {
             URL::forceScheme('https');
         }
+
+        RateLimiter::for('portal-external-api', function (Request $request): Limit {
+            $header = (string) config('portal.external_api.header', 'X-Portal-API-Key');
+            $presentedKey = trim((string) $request->header($header));
+            $bucket = $presentedKey !== ''
+                ? 'key:'.hash('sha256', $presentedKey)
+                : 'ip:'.($request->ip() ?? 'unknown');
+
+            return Limit::perMinute(max(1, (int) config('portal.external_api.rate_limit_per_minute', 60)))
+                ->by($bucket);
+        });
 
         // Permission seeding removed — use database/seeders instead.
     }

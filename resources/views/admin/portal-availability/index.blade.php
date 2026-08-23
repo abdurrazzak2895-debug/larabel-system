@@ -108,6 +108,62 @@
         </div>
     </section>
 
+    @if (session('created_api_key'))
+        <section class="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
+            <h3 class="text-base font-bold text-amber-950">New external API key — copy it now</h3>
+            <p class="mt-1 text-sm leading-6 text-amber-900">This key is shown once only. Store it in the other website’s server-side environment, never in browser JavaScript, GitHub, logs, or screenshots.</p>
+            <input value="{{ session('created_api_key') }}" readonly class="mt-3 w-full rounded-xl border-amber-300 bg-white font-mono text-sm text-slate-900" aria-label="New external API key">
+        </section>
+    @endif
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <h3 class="text-base font-bold text-slate-900">External website API access</h3>
+                <p class="mt-1 max-w-3xl text-xs leading-5 text-slate-500">Generate a key for a server-side consumer. The key can call only the read-only occupations, search_dates, and centers endpoints and is mapped to one encrypted portal session.</p>
+            </div>
+            <span class="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">X-Portal-API-Key</span>
+        </div>
+        <form method="POST" action="{{ route('admin.portal-availability.api-keys.store') }}" class="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
+            @csrf
+            <label class="block text-sm font-medium text-slate-700">Consumer name
+                <input name="name" required maxlength="120" value="{{ old('name') }}" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm" placeholder="Partner website">
+            </label>
+            <label class="block text-sm font-medium text-slate-700">Portal session
+                <select name="portal_availability_credential_id" required class="mt-1.5 w-full rounded-xl border-slate-300 text-sm">
+                    <option value="">Select a ready session</option>
+                    @foreach ($credentials as $credential)
+                        @if ($credential['usable'])<option value="{{ $credential['id'] }}">{{ $credential['name'] }} · {{ $credential['portal_account_id'] }}</option>@endif
+                    @endforeach
+                </select>
+            </label>
+            <label class="block text-sm font-medium text-slate-700">Expires (optional)
+                <input name="expires_at" type="datetime-local" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm">
+            </label>
+            <label class="block text-sm font-medium text-slate-700">Requests per minute
+                <input name="rate_limit_per_minute" type="number" min="1" max="1000" value="60" required class="mt-1.5 w-full rounded-xl border-slate-300 text-sm">
+            </label>
+            <div class="md:col-span-4"><button class="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Generate API key</button></div>
+        </form>
+
+        <div class="mt-6 border-t border-slate-200 pt-5">
+            <h4 class="text-sm font-bold text-slate-900">Issued external keys</h4>
+            <div class="mt-3 space-y-2">
+                @forelse ($apiKeys as $apiKey)
+                    <article class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2"><span class="font-semibold text-slate-900">{{ $apiKey->name }}</span><span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-600">{{ $apiKey->key_prefix }}…</span>@if ($apiKey->revoked_at)<span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">Revoked</span>@elseif ($apiKey->expires_at && $apiKey->expires_at->isPast())<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">Expired</span>@else<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Active</span>@endif</div>
+                            <p class="mt-1 text-xs text-slate-500">Session: {{ $apiKey->credential?->name ?? 'Deleted session' }} · Limit: {{ $apiKey->rate_limit_per_minute }}/minute@if ($apiKey->expires_at) · Expires: {{ $apiKey->expires_at->toIso8601String() }}@endif</p>
+                        </div>
+                        @if (! $apiKey->revoked_at)<form method="POST" action="{{ route('admin.portal-availability.api-keys.revoke', $apiKey->id) }}">@csrf<button class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Revoke</button></form>@endif
+                    </article>
+                @empty
+                    <p class="rounded-xl border border-dashed border-slate-300 px-4 py-5 text-center text-xs text-slate-500">No external API keys issued yet.</p>
+                @endforelse
+            </div>
+        </div>
+    </section>
+
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
             <label class="text-sm font-medium text-slate-700">Session credential

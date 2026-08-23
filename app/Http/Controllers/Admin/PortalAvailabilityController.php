@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\PortalAvailabilityApiKey;
 use App\Models\PortalAvailabilityCredential;
 use App\Services\PortalAvailabilityService;
 use Illuminate\Http\JsonResponse;
@@ -24,6 +25,10 @@ final class PortalAvailabilityController extends Controller
     {
         return view('admin.portal-availability.index', [
             'credentials' => $this->availability->credentials(),
+            'apiKeys' => PortalAvailabilityApiKey::query()
+                ->with('credential')
+                ->orderByDesc('created_at')
+                ->get(),
         ]);
     }
 
@@ -81,6 +86,42 @@ final class PortalAvailabilityController extends Controller
     {
         $credential->forceFill(['active' => true, 'last_error' => null])->save();
         return back()->with('success', 'Portal availability credential activated.');
+    }
+
+    public function storeApiKey(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'portal_availability_credential_id' => ['required', 'integer', 'exists:portal_availability_credentials,id'],
+            'expires_at' => ['nullable', 'date'],
+            'rate_limit_per_minute' => ['required', 'integer', 'min:1', 'max:1000'],
+        ]);
+
+        $credential = PortalAvailabilityCredential::query()->findOrFail($data['portal_availability_credential_id']);
+        if (! $credential->hasUsableSession()) {
+            return back()->withErrors(['portal_availability_credential_id' => 'Choose an active portal session with a valid cookie.']);
+        }
+
+        $plaintext = PortalAvailabilityApiKey::generatePlaintext();
+        PortalAvailabilityApiKey::query()->create([
+            'portal_availability_credential_id' => $credential->id,
+            'name' => trim($data['name']),
+            'key_prefix' => PortalAvailabilityApiKey::prefix($plaintext),
+            'key_hash' => PortalAvailabilityApiKey::hashPlaintext($plaintext),
+            'expires_at' => $data['expires_at'] ?? null,
+            'rate_limit_per_minute' => (int) $data['rate_limit_per_minute'],
+        ]);
+
+        return back()
+            ->with('success', 'API key created. Copy it now; it will not be shown again.')
+            ->with('created_api_key', $plaintext);
+    }
+
+    public function revokeApiKey(PortalAvailabilityApiKey $apiKey): RedirectResponse
+    {
+        $apiKey->forceFill(['revoked_at' => now()])->saveQuietly();
+
+        return back()->with('success', 'External API key revoked.');
     }
 
     public function occupations(Request $request): JsonResponse
@@ -150,6 +191,78 @@ final class PortalAvailabilityController extends Controller
         }
     }
 
+    public function externalOccupations(Request $request): JsonResponse
+    {
+        try {
+            $result = $this->availability->occupations($this->externalCredentialId($request));
+
+            return response()->json([
+                'success' => true,
+                'data' => $result['data'],
+                'fetched_at' => $result['fetched_at'],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+            return $this->failure($exception, 'Portal occupation lookup failed.');
+        }
+    }
+
+    public function externalDates(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'category_id' => ['required', 'integer', 'min:1'],
+            'start_from' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        try {
+            $result = $this->availability->searchDates(
+                $this->externalCredentialId($request),
+                $data['category_id'],
+                $data['start_from'],
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => $result['data'],
+                'fetched_at' => $result['fetched_at'],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+            return $this->failure($exception, 'Portal date availability lookup failed.');
+        }
+    }
+
+    public function externalCenters(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'category_id' => ['required', 'integer', 'min:1'],
+            'city' => ['required', 'string', 'max:150'],
+            'date' => ['required', 'date_format:Y-m-d'],
+            'occupation_id' => ['required', 'integer'],
+            'language_code' => ['required', 'string', 'max:120'],
+        ]);
+
+        try {
+            $result = $this->availability->centers(
+                $this->externalCredentialId($request),
+                $data['category_id'],
+                trim($data['city']),
+                $data['date'],
+                (int) $data['occupation_id'],
+                trim($data['language_code']),
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => $result['data'],
+                'fetched_at' => $result['fetched_at'],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+            return $this->failure($exception, 'Portal center availability lookup failed.');
+        }
+    }
+
     private function credentialId(Request $request): int
     {
         $id = $request->integer('credential_id');
@@ -165,6 +278,16 @@ final class PortalAvailabilityController extends Controller
         }
 
         return (int) $id;
+    }
+
+    private function externalCredentialId(Request $request): int
+    {
+        $apiKey = $request->attributes->get('portal_availability_api_key');
+        if (! $apiKey instanceof PortalAvailabilityApiKey) {
+            throw new \RuntimeException('External API key authentication is required.');
+        }
+
+        return (int) $apiKey->portal_availability_credential_id;
     }
 
     private function failure(Throwable $exception, string $fallback): JsonResponse

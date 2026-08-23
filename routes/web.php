@@ -118,6 +118,8 @@ Route::middleware('web')->group(function () {
         Route::put('/credentials/{credential}', [PortalAvailabilityController::class, 'updateCredential'])->name('credentials.update');
         Route::post('/credentials/{credential}/activate', [PortalAvailabilityController::class, 'activate'])->name('credentials.activate');
         Route::post('/credentials/{credential}/deactivate', [PortalAvailabilityController::class, 'deactivate'])->name('credentials.deactivate');
+        Route::post('/api-keys', [PortalAvailabilityController::class, 'storeApiKey'])->name('api-keys.store');
+        Route::post('/api-keys/{apiKey}/revoke', [PortalAvailabilityController::class, 'revokeApiKey'])->name('api-keys.revoke');
         Route::get('/occupations', [PortalAvailabilityController::class, 'occupations'])->name('occupations');
         Route::post('/dates', [PortalAvailabilityController::class, 'dates'])->name('dates');
         Route::post('/centers', [PortalAvailabilityController::class, 'centers'])->name('centers');

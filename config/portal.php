@@ -7,4 +7,8 @@ return [
     'cache_ttl' => (int) env('PORTAL_AVAILABILITY_CACHE_TTL', 30),
     'credential_cache_ttl' => (int) env('PORTAL_AVAILABILITY_CREDENTIAL_CACHE_TTL', 60),
     'rate_limit_delay_ms' => (int) env('PORTAL_AVAILABILITY_DELAY_MS', 250),
+    'external_api' => [
+        'header' => 'X-Portal-API-Key',
+        'rate_limit_per_minute' => (int) env('PORTAL_AVAILABILITY_EXTERNAL_RATE_LIMIT', 60),
+    ],
 ];
