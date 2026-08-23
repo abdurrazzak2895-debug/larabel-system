@@ -88,15 +88,15 @@
             const sessionSelect = document.getElementById(options.sessionSelectId || 'exam_session_id');
             const sessionNameInput = document.getElementById(options.sessionNameInputId || 'exam_session_name');
             const dateInput = document.getElementById(options.dateInputId || 'exam_date');
+            let selectedCardKey = '';
 
             function setVisible(visible) {
                 panel?.classList.toggle('hidden', !visible);
             }
 
             function syncSelection() {
-                const selected = mode === 'centers' ? String(centerSelect?.value || '') : String(sessionSelect?.value || '');
                 list?.querySelectorAll('[data-pacc-value]').forEach(card => {
-                    card.dataset.selected = card.dataset.paccValue === selected ? '1' : '0';
+                    card.dataset.selected = card.dataset.paccIndex === selectedCardKey ? '1' : '0';
                 });
             }
 
@@ -108,6 +108,7 @@
 
             function renderCenters(rows, meta = {}) {
                 const items = Array.isArray(rows) ? rows : [];
+                selectedCardKey = '';
                 setVisible(true);
                 if (!items.length) {
                     empty(meta.emptyText || 'No live test-center slots returned for the selected date.');
@@ -121,12 +122,13 @@
                         const time = centerTime(row);
                         const id = centerId(row);
                         return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}" data-pacc-index="${index}">
-                            <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block truncate text-sm text-slate-900">${esc(centerName(row))}</strong><span class="mt-1 block text-[11px] text-slate-500">Center ID: ${esc(id || 'Not provided')}</span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
+                            <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block break-words whitespace-normal text-sm text-slate-900">${esc(centerName(row))}</strong><span class="mt-1 block text-[11px] text-slate-500">Center ID: ${esc(id || 'Not provided')}</span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
                             <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>Time: <b class="text-slate-700">${esc(time || 'Not provided')}</b></span><span>Sessions: <b class="text-slate-700">${esc(sessionCount === null ? 'Live lookup' : sessionCount)}</b></span><span>Available slot ${index + 1}</span></span>
                         </button>`;
                     }).join('');
                     list.querySelectorAll('[data-pacc-index]').forEach(card => card.addEventListener('click', () => {
                         if (!centerSelect) return;
+                        selectedCardKey = String(card.dataset.paccIndex || '');
                         const selectedRow = items[Number(card.dataset.paccIndex)];
                         centerSelect.value = String(centerId(selectedRow));
                         centerSelect.dataset.name = centerName(selectedRow);
@@ -144,6 +146,7 @@
 
             function renderSessions(rows, meta = {}) {
                 const items = Array.isArray(rows) ? rows : [];
+                selectedCardKey = '';
                 setVisible(true);
                 if (!items.length) {
                     empty(meta.emptyText || 'No exact SVP sessions returned for the selected center and date.');
@@ -166,6 +169,7 @@
                     }).join('');
                     list.querySelectorAll('[data-pacc-value]').forEach(card => card.addEventListener('click', () => {
                         if (!sessionSelect) return;
+                        selectedCardKey = String(card.dataset.paccIndex || '');
                         const index = Number(card.dataset.paccIndex || 0);
                         const selectedRow = items[index] || {};
                         const selectedId = card.dataset.paccValue || '';
@@ -183,6 +187,7 @@
             }
 
             function clear() {
+                selectedCardKey = '';
                 if (list) list.innerHTML = '';
                 if (status) status.textContent = '';
                 setVisible(false);
@@ -200,7 +205,7 @@
     </script>
 @endonce
 
-<div id="{{ $componentId }}" class="{{ $hidePanel ? 'hidden' : '' }} mt-3" data-pacc-availability-response data-pacc-mode="{{ $mode }}" @if($hidePanel) aria-hidden="true" @endif>
+<div id="{{ $componentId }}" class="{{ $hidePanel ? 'hidden ' : '' }}mt-3" data-pacc-availability-response data-pacc-mode="{{ $mode }}" @if($hidePanel) aria-hidden="true" @endif>
     <div data-pacc-panel class="hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div class="mb-2 flex items-center justify-between gap-3">
             <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ $mode === 'centers' ? 'Live center slots' : 'Live verified sessions' }}</p>
