@@ -37,6 +37,10 @@
             const value = row?.available_seats ?? row?.availableSeats ?? row?.remaining_seats ?? row?.seats ?? null;
             return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
         };
+        const centerSessionCount = row => {
+            const value = row?.session_count ?? row?.sessionCount ?? row?.sessions_count ?? null;
+            return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
+        };
         const sessionId = row => String(row?.id ?? row?.exam_session_id ?? row?.session_id ?? '');
         const sessionName = (row, index) => String(row?.session_name || row?.name || row?.label || row?.title || '').trim() || `Session ${index + 1}`;
         const sessionDate = row => normalizeDate(row?.exam_date || row?.test_date || row?.date || row?.start_date_in_browser_time_zone || row?.start_date_in_tc_time_zone);
@@ -44,10 +48,6 @@
         const sessionSeats = row => {
             const value = row?.available_seats ?? row?.availableSeats ?? row?.remaining_seats ?? row?.remainingSeats ?? row?.seats ?? null;
             return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
-        };
-        const shortId = value => {
-            const id = String(value || '');
-            return id.length > 20 ? id.slice(0, 18) + '…' : id;
         };
 
         function create(root, options = {}) {
@@ -89,11 +89,12 @@
                 if (list) {
                     list.innerHTML = items.map((row, index) => {
                         const seats = centerSeats(row);
+                        const sessionCount = centerSessionCount(row);
                         const time = centerTime(row);
                         const id = centerId(row);
                         return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}" data-pacc-index="${index}">
                             <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block truncate text-sm text-slate-900">${esc(centerName(row))}</strong><span class="mt-1 block text-[11px] text-slate-500">Center ID: ${esc(id || 'Not provided')}</span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
-                            <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>Time: <b class="text-slate-700">${esc(time || 'Not provided')}</b></span><span>Available slot ${index + 1}</span></span>
+                            <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>Time: <b class="text-slate-700">${esc(time || 'Not provided')}</b></span><span>Sessions: <b class="text-slate-700">${esc(sessionCount === null ? 'Live lookup' : sessionCount)}</b></span><span>Available slot ${index + 1}</span></span>
                         </button>`;
                     }).join('');
                     list.querySelectorAll('[data-pacc-index]').forEach(card => card.addEventListener('click', () => {
@@ -128,7 +129,7 @@
                         const seats = sessionSeats(row);
                         const date = sessionDate(row) || meta.date || 'Date unavailable';
                         return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}" data-pacc-index="${index}">
-                            <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block truncate text-sm text-slate-900">${esc(sessionName(row, index))}</strong><span class="mt-1 block text-[11px] text-slate-500">${esc(date)} · Session ${esc(shortId(id))}</span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
+                            <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block text-sm text-slate-900">${esc(sessionName(row, index))}</strong><span class="mt-1 block text-[11px] text-slate-500">${esc(date)}</span><span class="mt-1 block break-all text-[10px] text-slate-500">Session ID: <b class="font-mono text-slate-700">${esc(id || 'Not provided')}</b></span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
                             <span class="mt-2 block text-[11px] text-slate-500">Time: <b class="text-slate-700">${esc(time || 'Not provided')}</b></span>
                         </button>`;
                     }).join('');

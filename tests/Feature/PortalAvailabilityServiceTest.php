@@ -35,7 +35,7 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertArrayNotHasKey('session_cookie', $credential->fresh()->toArray());
     }
 
-    public function test_service_exposes_only_local_center_selection_fields(): void
+    public function test_service_preserves_portal_session_identity_and_per_center_count(): void
     {
         $credential = PortalAvailabilityCredential::query()->create([
             'name' => 'Authorized Portal Session',
@@ -64,8 +64,10 @@ class PortalAvailabilityServiceTest extends TestCase
                         'test_center_id' => 171,
                         'test_time' => '02:00 PM',
                         'available_seats' => '12',
-                        'payable_id' => 'should-not-leave-service',
-                        'user_id' => 'should-not-leave-service',
+                        'exam_session_id' => 'portal-session-1',
+                        'payable_id' => 'portal-payable-1',
+                        'category_id' => 159,
+                        'user_id' => 'portal-user-1',
                     ]],
                 ];
             }
@@ -86,6 +88,9 @@ class PortalAvailabilityServiceTest extends TestCase
             'test_center_id' => 171,
             'test_time' => '02:00 PM',
             'available_seats' => 12,
+            'exam_session_id' => 'portal-session-1',
+            'category_id' => 159,
+            'session_count' => 1,
         ], $center);
         $this->assertArrayNotHasKey('payable_id', $center);
         $this->assertArrayNotHasKey('user_id', $center);
@@ -126,12 +131,14 @@ class PortalAvailabilityServiceTest extends TestCase
                         'test_center_id' => 171,
                         'test_time' => '09:30 AM',
                         'available_seats' => 3,
+                        'exam_session_id' => 'portal-session-2',
                     ],
                     [
                         'test_center_name' => 'Jashore TTC',
                         'test_center_id' => 171,
                         'test_time' => '11:00 AM',
                         'available_seats' => 7,
+                        'exam_session_id' => 'portal-session-3',
                     ],
                 ]];
             }
@@ -156,6 +163,8 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertCount(2, $slots);
         $this->assertSame('09:30 AM', $slots[0]['test_time']);
         $this->assertSame(7, $slots[1]['available_seats']);
+        $this->assertSame(['portal-session-2', 'portal-session-3'], array_column($slots, 'exam_session_id'));
+        $this->assertSame([2, 2], array_column($slots, 'session_count'));
         $centers = $service->bookingCenters('159', 'Khulna', '2061', 'LOABB')['test_centers'];
         $this->assertCount(1, $centers);
         $this->assertSame('171', (string) $centers[0]['id']);

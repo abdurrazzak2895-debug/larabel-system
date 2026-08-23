@@ -379,15 +379,13 @@ final class PortalAvailabilityService
                 'test_center_id' => $item['test_center_id'] ?? null,
                 'test_time' => $item['test_time'] ?? null,
                 'available_seats' => is_numeric($item['available_seats'] ?? null) ? (int) $item['available_seats'] : 0,
-                // The upstream Portal Availability row is already a specific
-                // bookable session slot at this center, not just a center
-                // summary — exam_session_id and payable_id must survive so
-                // the booking/hold flow can use this exact slot without a
-                // second SVP session lookup.
+                // Preserve the upstream opaque session identity and category
+                // for display/counting. Payable and user identifiers are not
+                // needed by the read-only adapter and must not cross its API
+                // boundary; booking still uses candidate-authenticated
+                // exact-session verification before any hold or reservation.
                 'exam_session_id' => $item['exam_session_id'] ?? null,
-                'payable_id' => $item['payable_id'] ?? null,
                 'category_id' => $item['category_id'] ?? null,
-                'user_id' => $item['user_id'] ?? null,
             ])
             ->filter(fn (array $item): bool => $item['test_center_name'] !== '' && $item['test_center_id'] !== null)
             ->values();
