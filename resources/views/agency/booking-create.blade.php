@@ -151,6 +151,12 @@
                         <input type="hidden" name="test_center_name" id="test_center_name" value="">
                         <p id="test-center-error" class="hidden text-red-600 text-xs mt-1"></p>
                         <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Select a live date to load the Portal Availability center slots for that date.</p>
+                        @include('user.bookings.partials.pacc-availability-response', [
+                            'componentId' => 'agency-center-response',
+                            'mode' => 'centers',
+                            'centerSelectId' => 'test_center_id',
+                            'sessionSelectId' => 'exam_session_id',
+                        ])
                     </div>
 
                     <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available SVP session</label>
@@ -161,7 +167,13 @@
                     <input type="hidden" name="exam_session_name" id="exam_session_name" value="">
                     <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="">
                     <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
-                    <div id="session-availability-summary" class="hidden mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"></div>
+                    @include('user.bookings.partials.pacc-availability-response', [
+                        'componentId' => 'agency-session-response',
+                        'mode' => 'sessions',
+                        'centerSelectId' => 'test_center_id',
+                        'sessionSelectId' => 'exam_session_id',
+                    ])
+                    <div id="session-availability-summary" class="hidden"></div>
                     <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
                     @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                     <p id="session-error" class="hidden text-red-600 text-xs mt-1"></p>
@@ -228,6 +240,8 @@
         const sessionSelect = document.getElementById('exam_session_id');
         const sessionNameInput = document.getElementById('exam_session_name');
         const sessionAvailabilitySummary = document.getElementById('session-availability-summary');
+        const centerResponse = window.PaccAvailabilityInstances?.['agency-center-response'];
+        const sessionResponse = window.PaccAvailabilityInstances?.['agency-session-response'];
         const sessionCenterError = document.getElementById('session-center-error');
         const sessionError = document.getElementById('session-error');
         const dateInput = document.getElementById('exam_date');
@@ -399,6 +413,14 @@
         const filtered = selectedDate
             ? (sessionCatalog || []).filter(session => sessionDate(session) === selectedDate)
             : [];
+        if (selectedDate) {
+            sessionResponse?.renderSessions(filtered, {
+                date: selectedDate,
+                emptyText: 'No exact SVP sessions returned for the selected center and date.'
+            });
+        } else {
+            sessionResponse?.clear();
+        }
         renderSessionAvailabilitySummary(filtered, selectedDate);
         populateSelect(sessionSelect, filtered, 'id', 'name');
         if (sessionSelect) {
@@ -1046,6 +1068,11 @@
                 const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId) + "&date=" + encodeURIComponent(date) + "&occupation_id=" + encodeURIComponent(occupationId) + "&language_code=" + encodeURIComponent(languageCode);
                 const data = await fetchJSON(url);
                 const centers = data?.data?.test_centers || (data && Array.isArray(data.data) ? data.data : []);
+                centerResponse?.renderCenters(centers, {
+                    city: city,
+                    date: date,
+                    emptyText: 'No live test-center slots returned for the selected date.'
+                });
                 populateSelect(testCenterSelect, centers, 'id', 'name');
                 if (dhakaCenterSummary) {
                     dhakaCenterSummary.textContent = centers.length

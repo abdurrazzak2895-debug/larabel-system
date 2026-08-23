@@ -132,6 +132,12 @@
                 </select>
                 <input type="hidden" name="test_center_name" id="test_center_name" value="{{ old('test_center_name') }}">
                 <p id="center-summary" class="text-xs text-slate-500 mt-1">Select a live date to load every Portal Availability center slot for that date.</p>
+                @include('user.bookings.partials.pacc-availability-response', [
+                    'componentId' => 'reschedule-center-response',
+                    'mode' => 'centers',
+                    'centerSelectId' => 'test_center_id',
+                    'sessionSelectId' => 'exam_session_id',
+                ])
                 @error('test_center_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
 
@@ -144,7 +150,13 @@
                 <input type="hidden" name="exam_date" id="exam_date" value="{{ old('exam_date') }}">
                 <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="{{ old('temporary_hold_id') }}">
                 <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
-                <div id="session-shift-summary" class="hidden mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"></div>
+                @include('user.bookings.partials.pacc-availability-response', [
+                    'componentId' => 'reschedule-session-response',
+                    'mode' => 'sessions',
+                    'centerSelectId' => 'test_center_id',
+                    'sessionSelectId' => 'exam_session_id',
+                ])
+                <div id="session-shift-summary" class="hidden"></div>
                 <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
                 <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
                 @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
@@ -192,6 +204,8 @@
     const sessionName = document.getElementById('exam_session_name');
     const date = document.getElementById('exam_date');
     const sessionSummary = document.getElementById('session-shift-summary');
+    const centerResponse = window.PaccAvailabilityInstances?.['reschedule-center-response'];
+    const sessionResponse = window.PaccAvailabilityInstances?.['reschedule-session-response'];
     const centerError = document.getElementById('session-center-error');
     const dateError = document.getElementById('date-error');
     const language = document.getElementById('language_code');
@@ -312,6 +326,14 @@
     function renderSessions(items, selectedDate) {
         sessionSnapshot = Array.isArray(items) ? items : [];
         const visible = sessionSnapshot.filter(item => !selectedDate || sessionDate(item) === selectedDate);
+        if (selectedDate) {
+            sessionResponse?.renderSessions(visible, {
+                date: selectedDate,
+                emptyText: 'No exact SVP sessions returned for the selected center and date.'
+            });
+        } else {
+            sessionResponse?.clear();
+        }
         session.innerHTML = '<option value="">Select an exact session for this date…</option>';
         const counts = {};
         visible.forEach(function (item) {
@@ -403,6 +425,11 @@
             const url = '{{ route('user.bookings.lookup.test-centers') }}?city=' + encodeURIComponent(city.value) + '&category_id=' + encodeURIComponent(category.value) + '&date=' + encodeURIComponent(dateValue) + '&occupation_id=' + encodeURIComponent(occupation.value) + '&language_code=' + encodeURIComponent(language.value);
             const body = await getJson(url);
             const items = body?.data?.test_centers || (Array.isArray(body?.data) ? body.data : []);
+            centerResponse?.renderCenters(items, {
+                city: city.value,
+                date: dateValue,
+                emptyText: 'No live test-center slots returned for the selected date.'
+            });
             center.innerHTML = '<option value="">Select a live center slot…</option>';
             items.forEach(function (item) {
                 const id = item.id || item.test_center_id || item.site_id || item.center_id || '';
@@ -447,6 +474,7 @@
             const body = await getJson('{{ route('user.bookings.lookup.sessions') }}?' + params.toString());
             renderSessions(body?.data?.sessions || body?.data?.exam_sessions || body?.sessions || body?.exam_sessions || [], dateValue);
         } catch (error) {
+            sessionResponse?.renderSessions([], {date: dateValue, emptyText: error.message});
             session.innerHTML = '<option value="">Could not load sessions for this date</option>';
             showError(dateError, error.message);
             console.error(error);
@@ -547,6 +575,8 @@
         sessionSnapshot = [];
         renderAvailableDates();
         sessionSummary?.classList.add('hidden');
+        centerResponse?.clear();
+        sessionResponse?.clear();
         centerName.value = '';
         sessionName.value = '';
         date.value = '';
@@ -565,6 +595,8 @@
         sessionName.value = '';
         sessionSnapshot = [];
         sessionSummary?.classList.add('hidden');
+        centerResponse?.clear();
+        sessionResponse?.clear();
         resetHold('Select a center slot and exact session before creating a temporary hold.');
         if (availableDate.value) await loadTestCentersForDate(availableDate.value);
         syncActionButtons();
@@ -580,6 +612,8 @@
         sessionName.value = '';
         sessionSnapshot = [];
         sessionSummary?.classList.add('hidden');
+        centerResponse?.clear();
+        sessionResponse?.clear();
         showError(dateError, '');
         resetHold('Select a center slot and exact session for this date before creating a temporary hold.');
         availabilityCalendar?.setSelected(value, true);
@@ -594,6 +628,7 @@
         sessionName.value = '';
         sessionSnapshot = [];
         sessionSummary?.classList.add('hidden');
+        sessionResponse?.clear();
         resetHold('Select an exact SVP session for this date, then create a temporary hold before confirming.');
         if (center.value && availableDate.value) await loadSessionsForDate(availableDate.value);
         syncActionButtons();
