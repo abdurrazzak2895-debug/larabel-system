@@ -183,14 +183,6 @@
             </div>
         </div>
 
-        {{-- Notes --}}
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-            <label for="notes" class="block text-sm font-medium text-slate-700 mb-1">Notes <span class="text-slate-400 font-normal">(optional)</span></label>
-            <textarea name="notes" id="notes" rows="3" maxlength="500" placeholder="Anything the SVP booking should know…"
-                class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">{{ old('notes') }}</textarea>
-            @error('notes')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-        </div>
-
         {{-- Actions --}}
         <div class="flex items-center gap-3">
             <button type="submit" id="confirm-booking-button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">

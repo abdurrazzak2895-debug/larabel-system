@@ -667,7 +667,12 @@ class UserPanelTest extends TestCase
         $this->get(route('user.bookings.create'))
             ->assertOk()
             ->assertSee('Connect your candidate SVP account before creating a hold or booking.')
-            ->assertSee('id="occupation-search"', false);
+            ->assertSee('id="occupation-search"', false)
+            ->assertSee('Available Sessions — date-first PACC booking')
+            ->assertSee('lookup/dates', false)
+            ->assertSee('lookup/test-centers', false)
+            ->assertDontSee('Notes (optional)')
+            ->assertDontSee('Anything the SVP booking should know');
     }
 
     public function test_agency_booking_create_clears_expired_svp_jwt_but_keeps_read_only_page_available(): void
@@ -687,7 +692,12 @@ class UserPanelTest extends TestCase
             ->get(route('agency.bookings.create'));
 
         $response->assertOk()
-            ->assertSee('Connect your candidate SVP account before creating a hold or booking.');
+            ->assertSee('Connect your candidate SVP account before creating a hold or booking.')
+            ->assertSee('Available Sessions — date-first PACC booking')
+            ->assertSee('lookup/dates', false)
+            ->assertSee('lookup/test-centers', false)
+            ->assertDontSee('Notes (optional)')
+            ->assertDontSee('Anything the SVP booking should know');
         $this->assertNull(session('svp_token'));
     }
 }
