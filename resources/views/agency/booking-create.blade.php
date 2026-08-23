@@ -121,12 +121,12 @@
         </div>
 
         {{-- Test Center --}}
-        <div class="bg-white rounded-xl border border-slate-200 p-5 space-y-4" id="test-center-section" style="display:none;">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4" id="test-center-section" style="display:none;">
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Test Center</p>
             <div>
                 <label for="test_center_id" class="block text-sm font-medium text-slate-700 mb-1">Test Center</label>
                 <select name="test_center_id" id="test_center_id"
-                    class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                     <option value="">Select…</option>
                 </select>
                 <input type="hidden" name="test_center_name" id="test_center_name" value="">
@@ -136,19 +136,20 @@
         </div>
 
         {{-- Session, date, and live SVP payment routing --}}
-        <div class="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC booking</p>
             <div class="grid grid-cols-1 gap-4">
                 <div>
-                    <label for="available_session_date" class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
-                    <select id="available_session_date" required
-                        class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
+                    @include('user.bookings.partials.svp-calendar', ['calendarId' => 'agency-booking-availability-calendar'])
+                    <select id="available_session_date" aria-hidden="true" tabindex="-1"
+                        class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select a live available date first…</option>
                     </select>
                     <p class="text-xs text-slate-400 mt-1">Only dates returned live by Portal Availability for the selected city are clickable. Pick a date, then choose a center slot and one of its verified SVP sessions.</p>
                     <label for="exam_session_id" class="block text-sm font-medium text-slate-700 mb-1 mt-3">Available SVP session</label>
                     <select name="exam_session_id" id="exam_session_id" required
-                        class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                        class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select…</option>
                     </select>
                     <input type="hidden" name="exam_session_name" id="exam_session_name" value="">
@@ -163,14 +164,14 @@
                 <input type="hidden" name="exam_date" id="exam_date" value="">
                 <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
             </div>
-            <div id="temporary-hold-panel" class="hidden rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div id="temporary-hold-panel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div>
                         <p class="text-sm font-semibold text-amber-900">Temporary SVP seat hold</p>
                         <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">Select a session and date, then create a temporary hold before confirming the booking.</p>
                     </div>
                     <button type="button" id="create-temporary-hold" disabled
-                        class="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition">
+                        class="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition">
                         Create temporary hold
                     </button>
                 </div>
@@ -178,7 +179,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
-                    <select name="language_code" id="language_code" required disabled class="w-full rounded-lg border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <select name="language_code" id="language_code" required disabled class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
                         <option value="">Select a live SVP exam language…</option>
                     </select>
                     <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
@@ -186,7 +187,7 @@
                 </div>
                 <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
             </div>
-            <div id="svp-credit-panel" class="rounded-lg border border-sky-200 bg-sky-50 p-4">
+            <div id="svp-credit-panel" class="rounded-xl border border-sky-200 bg-sky-50 p-4">
                 <p class="text-sm font-semibold text-sky-900">SVP reservation credit</p>
                 <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Select a candidate and occupation to check the live SVP credit. If no credit is available, confirmation will open the official SVP card-payment page.</p>
                 <p class="text-xs text-sky-700 mt-2">The payable amount is set by SVP after reservation creation; it is not entered in this form.</p>
@@ -195,10 +196,10 @@
 
         {{-- Actions --}}
         <div class="flex items-center gap-3">
-            <button type="submit" id="confirm-booking-button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition">
+            <button type="submit" id="confirm-booking-button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
                 Complete booking
             </button>
-            <a href="{{ route('agency.bookings.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition">
+            <a href="{{ route('agency.bookings.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition">
                 Cancel
             </a>
         </div>
@@ -252,6 +253,20 @@
         let creditStatusRequest = null;
         let sessionCatalog = [];
         let availableDateCatalog = [];
+        let availabilityCalendar = null;
+
+        function mountAvailabilityCalendar() {
+            if (!window.SvpCalendar || availabilityCalendar) return;
+            availabilityCalendar = window.SvpCalendar.create('agency-booking-availability-calendar', {
+                emptyText: 'Pick a test center to load its open exam dates.',
+                onSelect: function (date) {
+                    if (!date || date === availableDateSelect.value) return;
+                    availableDateSelect.value = date;
+                    availableDateSelect.dispatchEvent(new Event('change'));
+                }
+            });
+        }
+        mountAvailabilityCalendar();
 
         async function loadLiveLanguages(occupationId) {
             if (!languageSelect) return;
@@ -369,6 +384,10 @@
                 availableDateSelect.appendChild(option);
             });
             availableDateSelect.disabled = sortedDates.length === 0;
+            if (availabilityCalendar) {
+                availabilityCalendar.setDates(sortedDates);
+                availabilityCalendar.setSelected(availableDateSelect.value, true);
+            }
             return sortedDates;
         }
 
@@ -410,6 +429,7 @@
             sessionCatalog = Array.isArray(sessions) ? sessions.slice() : [];
             renderAvailableDates(sessionCatalog, availableDateCatalog);
                 availableDateSelect.value = date;
+                availabilityCalendar?.setSelected(date, true);
                 dateInput.value = date;
                 renderSessionsForDate(date);
                 if (!sessions.length) showError(sessionError, 'No sessions returned for this date at the selected center.');
