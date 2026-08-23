@@ -44,11 +44,38 @@
         const sessionId = row => String(row?.id ?? row?.exam_session_id ?? row?.session_id ?? '');
         const sessionName = (row, index) => String(row?.session_name || row?.name || row?.label || row?.title || '').trim() || `Session ${index + 1}`;
         const sessionDate = row => normalizeDate(row?.exam_date || row?.test_date || row?.date || row?.start_date_in_browser_time_zone || row?.start_date_in_tc_time_zone);
-        const sessionTime = row => String(row?.test_time || row?.start_time || row?.time || row?.start_at || row?.start_date_in_browser_time_zone || row?.start_date_in_tc_time_zone || '').replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
+        const sessionTime = row => String(row?.test_time || row?.start_time || row?.time || row?.start_at_in_tc_time_zone || row?.start_at_in_browser_time_zone || row?.start_at || row?.start_date_in_tc_time_zone || row?.start_date_in_browser_time_zone || '').replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
         const sessionSeats = row => {
             const value = row?.available_seats ?? row?.availableSeats ?? row?.remaining_seats ?? row?.remainingSeats ?? row?.seats ?? null;
             return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
         };
+        const sessionPriority = row => {
+            const explicit = [row?.priority, row?.session_priority, row?.session_order, row?.shift_number, row?.sequence, row?.sort_order]
+                .map(value => Number(value))
+                .find(value => Number.isFinite(value));
+            if (explicit !== undefined) return explicit;
+            const label = String(row?.session_name || row?.name || row?.label || row?.title || '').toLowerCase();
+            const named = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+            const namedIndex = named.findIndex(word => label.includes(word + ' shift'));
+            if (namedIndex >= 0) return namedIndex + 1;
+            const numbered = label.match(/\bshift\s*(\d+)\b/);
+            return numbered ? Number(numbered[1]) : Number.MAX_SAFE_INTEGER;
+        };
+        const sessionSortTime = row => {
+            const value = sessionTime(row).match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+            if (!value) return Number.MAX_SAFE_INTEGER;
+            let hours = Number(value[1]);
+            const minutes = Number(value[2] || 0);
+            const meridiem = String(value[3] || '').toUpperCase();
+            if (meridiem === 'PM' && hours < 12) hours += 12;
+            if (meridiem === 'AM' && hours === 12) hours = 0;
+            return hours * 60 + minutes;
+        };
+        const prioritizeSessions = items => items.map((row, index) => ({row, index})).sort((left, right) => {
+            return sessionPriority(left.row) - sessionPriority(right.row)
+                || sessionSortTime(left.row) - sessionSortTime(right.row)
+                || left.index - right.index;
+        });
 
         function create(root, options = {}) {
             const mode = options.mode || 'centers';
@@ -85,7 +112,7 @@
                     empty(meta.emptyText || 'No live test-center slots returned for the selected date.');
                     return items;
                 }
-                if (status) status.textContent = `${meta.city ? meta.city + ' · ' : ''}${meta.date ? meta.date + ' · ' : ''}${items.length} live center slot${items.length === 1 ? '' : 's'} · Click a card to select.`;
+                if (status) status.textContent = `${meta.city ? meta.city + ' · ' : ''}${meta.date ? meta.date + ' · ' : ''}${items.length} live center slot${items.length === 1 ? '' : 's'}`;
                 if (list) {
                     list.innerHTML = items.map((row, index) => {
                         const seats = centerSeats(row);
@@ -121,15 +148,18 @@
                     empty(meta.emptyText || 'No exact SVP sessions returned for the selected center and date.');
                     return items;
                 }
-                if (status) status.textContent = `${meta.date ? 'Sessions for ' + meta.date + ' · ' : ''}${items.length} exact SVP session${items.length === 1 ? '' : 's'} · Click a card to select.`;
+                if (status) status.textContent = `${meta.date ? 'Sessions for ' + meta.date + ' · ' : ''}${items.length} exact SVP session${items.length === 1 ? '' : 's'}`;
                 if (list) {
-                    list.innerHTML = items.map((row, index) => {
+                    const prioritized = prioritizeSessions(items);
+                    list.innerHTML = prioritized.map((entry, displayIndex) => {
+                        const row = entry.row;
+                        const index = entry.index;
                         const id = sessionId(row);
                         const time = sessionTime(row);
                         const seats = sessionSeats(row);
                         const date = sessionDate(row) || meta.date || 'Date unavailable';
                         return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}" data-pacc-index="${index}">
-                            <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block text-sm text-slate-900">${esc(sessionName(row, index))}</strong><span class="mt-1 block text-[11px] text-slate-500">${esc(date)}</span><span class="mt-1 block break-all text-[10px] text-slate-500">Session ID: <b class="font-mono text-slate-700">${esc(id || 'Not provided')}</b></span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
+                            <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block text-sm text-slate-900">${esc(sessionName(row, displayIndex))}</strong><span class="mt-1 block text-[11px] text-slate-500">${esc(date)}</span><span class="mt-1 block break-all text-[10px] text-slate-500">Session ID: <b class="font-mono text-slate-700">${esc(id || 'Not provided')}</b></span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
                             <span class="mt-2 block text-[11px] text-slate-500">Time: <b class="text-slate-700">${esc(time || 'Not provided')}</b></span>
                         </button>`;
                     }).join('');

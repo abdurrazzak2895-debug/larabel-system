@@ -576,6 +576,17 @@ class TakamolProvider implements BookingProviderInterface
         $category = is_array($node['category'] ?? null)
             ? ($node['category']['english_name'] ?? $node['category']['arabic_name'] ?? null)
             : null;
+        $startTime = self::firstScalarDeep($node, [
+            'test_time',
+            'start_time',
+            'time',
+            'start_at_in_tc_time_zone',
+            'start_at_in_browser_time_zone',
+            'start_at',
+            'start_date_in_tc_time_zone',
+            'start_date_in_browser_time_zone',
+        ], 4);
+        $priority = self::sessionPriority($node);
 
         if ($centerId !== null && $centerId !== '') {
             $node['test_center_id'] = (string) $centerId;
@@ -585,6 +596,12 @@ class TakamolProvider implements BookingProviderInterface
         }
         if (is_string($city) && trim($city) !== '') {
             $node['test_center_city'] = trim($city);
+        }
+        if ($startTime !== null && trim((string) $startTime) !== '') {
+            $node['test_time'] ??= trim((string) $startTime);
+        }
+        if ($priority !== null) {
+            $node['session_priority'] ??= $priority;
         }
 
         // The session's own start date is the only booking date that may be
@@ -612,6 +629,36 @@ class TakamolProvider implements BookingProviderInterface
      *
      * @return array{id: ?string, name: ?string, city: ?string}
      */
+    protected static function sessionPriority(array $node): ?int
+    {
+        foreach (['priority', 'session_priority', 'session_order', 'shift_number', 'sequence', 'sort_order'] as $key) {
+            $value = $node[$key] ?? null;
+            if (is_numeric($value)) {
+                return (int) $value;
+            }
+        }
+
+        $label = strtolower(trim((string) (
+            $node['session_name']
+            ?? $node['name']
+            ?? $node['label']
+            ?? $node['title']
+            ?? ''
+        )));
+        $named = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+        foreach ($named as $index => $word) {
+            if (str_contains($label, $word.' shift')) {
+                return $index + 1;
+            }
+        }
+
+        if (preg_match('/\\bshift\\s*(\\d+)\\b/i', $label, $matches) === 1) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
     protected static function extractCenterMetadata(array $node, int $depth = 0): array
     {
         $id = self::firstScalar($node, [

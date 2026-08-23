@@ -151,6 +151,40 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_sessions_preserve_timezone_start_time_and_named_shift_priority(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'data' => [
+                    'exam_sessions' => [
+                        [
+                            'id' => 'second-shift-session',
+                            'name' => 'Second Shift',
+                            'start_at_in_tc_time_zone' => '2026-08-25T13:30:00+03:00',
+                        ],
+                        [
+                            'id' => 'first-shift-session',
+                            'name' => 'First Shift',
+                            'start_at_in_browser_time_zone' => '2026-08-25T09:30:00+03:00',
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $sessions = (new TakamolProvider())->withToken('test-token')->examSessions([
+            'city' => 'Khulna',
+            'category_id' => '159',
+            'test_center_id' => '171',
+            'exam_date' => '2026-08-25',
+        ])->getData(true)['data']['sessions'];
+
+        $this->assertSame('2026-08-25T13:30:00+03:00', $sessions[0]['test_time']);
+        $this->assertSame(2, $sessions[0]['session_priority']);
+        $this->assertSame('2026-08-25T09:30:00+03:00', $sessions[1]['test_time']);
+        $this->assertSame(1, $sessions[1]['session_priority']);
+    }
+
     public function test_date_specific_sessions_only_return_the_requested_date(): void
     {
         Http::fake([

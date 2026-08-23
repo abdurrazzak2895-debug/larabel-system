@@ -128,7 +128,6 @@
             <div id="test-center-section" style="display:none;" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div class="mb-2 flex items-center justify-between gap-3">
                     <span class="text-sm font-medium text-slate-700">Test center slot</span>
-                    <span class="text-[11px] text-slate-400">Click one card to select</span>
                 </div>
                 <input type="hidden" name="test_center_id" id="test_center_id" value="{{ old('test_center_id') }}">
                 <input type="hidden" name="test_center_name" id="test_center_name" value="{{ old('test_center_name') }}">

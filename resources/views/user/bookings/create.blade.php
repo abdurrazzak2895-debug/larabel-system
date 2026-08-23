@@ -135,7 +135,6 @@
                     <div id="test-center-section" style="display:none;" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                         <div class="mb-2 flex items-center justify-between gap-3">
                             <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Test Center</span>
-                            <span class="text-[11px] text-slate-400">Click one card to select</span>
                         </div>
                         <input type="hidden" name="test_center_id" id="test_center_id" value="">
                         <input type="hidden" name="test_center_name" id="test_center_name" value="">
