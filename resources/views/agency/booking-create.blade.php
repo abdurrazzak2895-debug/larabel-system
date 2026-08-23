@@ -143,11 +143,11 @@
                     <p class="text-xs text-slate-400 mt-1">Only dates returned live by Portal Availability for the selected city are clickable. Pick a date, then choose a center slot and one of its verified SVP sessions.</p>
 
                     <div id="test-center-section" style="display:none;" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <label for="test_center_id" class="block text-xs font-medium uppercase tracking-wide text-slate-500 mb-2">Test Center</label>
-                        <select name="test_center_id" id="test_center_id"
-                            class="w-full rounded-xl border-slate-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500">
-                            <option value="">Select a live date first…</option>
-                        </select>
+                        <div class="mb-2 flex items-center justify-between gap-3">
+                            <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Test Center</span>
+                            <span class="text-[11px] text-slate-400">Click one card to select</span>
+                        </div>
+                        <input type="hidden" name="test_center_id" id="test_center_id" value="">
                         <input type="hidden" name="test_center_name" id="test_center_name" value="">
                         <p id="test-center-error" class="hidden text-red-600 text-xs mt-1"></p>
                         <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Select a live date to load the Portal Availability center slots for that date.</p>
@@ -264,6 +264,22 @@
         let availableDateCatalog = [];
         let availabilityCalendar = null;
 
+        function selectedTestCenterLabel() {
+            return String(testCenterNameInput?.value || testCenterSelect?.dataset?.name || '').trim();
+        }
+
+        function resetTestCenterSelection() {
+            if (testCenterSelect) {
+                testCenterSelect.value = '';
+                testCenterSelect.dataset.name = '';
+            }
+            if (testCenterNameInput) {
+                testCenterNameInput.value = '';
+                delete testCenterNameInput.dataset.centerId;
+            }
+            centerResponse?.clear();
+        }
+
         function mountAvailabilityCalendar() {
             if (!window.SvpCalendar || availabilityCalendar) return;
             availabilityCalendar = window.SvpCalendar.create('agency-booking-availability-calendar', {
@@ -360,8 +376,7 @@
             // entirely (only city/country come back). The list is already
             // scoped to the center the user selected, so fall back to that
             // known name instead of showing "Unknown center" for every row.
-            const selectedName = testCenterSelect?.options?.[testCenterSelect.selectedIndex]?.dataset?.centerName
-                || testCenterSelect?.options?.[testCenterSelect.selectedIndex]?.textContent;
+                const selectedName = selectedTestCenterLabel();
             return (selectedName && selectedName.trim()) || 'Unknown center';
         }
 
@@ -500,7 +515,7 @@
                 clearTemporaryHold('The selected session belongs to another test center and is blocked.');
                 if (sessionCenterError) {
                     const selectedSessionCenterName = selectedSessionOption.dataset.centerName || selectedSessionOption.dataset.name || 'another test center';
-                    const selectedCenterName = testCenterSelect.options[testCenterSelect.selectedIndex]?.dataset?.centerName || testCenterSelect.options[testCenterSelect.selectedIndex]?.textContent || 'the selected test center';
+                    const selectedCenterName = selectedTestCenterLabel() || 'the selected test center';
                     sessionCenterError.textContent = 'Blocked: session center "' + selectedSessionCenterName + '" does not match selected center "' + selectedCenterName + '".';
                     sessionCenterError.classList.remove('hidden');
                 }
@@ -531,9 +546,7 @@
                 const verification = await fetchJSON(verifyUrl.toString());
                 if (!verification.verified) {
                     const actualName = verification.actual?.test_center_name || 'unknown center';
-                    const selectedName = testCenterSelect.options[testCenterSelect.selectedIndex]?.dataset?.centerName
-                        || testCenterSelect.options[testCenterSelect.selectedIndex]?.textContent
-                        || 'the selected test center';
+                    const selectedName = selectedTestCenterLabel() || 'the selected test center';
                     const message = 'Blocked before hold: live SVP session belongs to "' + actualName + '" instead of "' + selectedName + '" or its date/metadata is not valid.';
                     if (sessionCenterError) {
                         sessionCenterError.textContent = message;
@@ -663,12 +676,7 @@
                     // resolveCenterSession's/verifyForHold's fallback on the
                     // backend. Only disable an option when it carries an
                     // EXPLICIT, different center id.
-                    const resolvedCenterName = centerName
-                        || testCenterSelect?.options?.[testCenterSelect.selectedIndex]?.dataset?.centerName
-                        || testCenterSelect?.options?.[testCenterSelect.selectedIndex]?.textContent
-                        || '';
-                    const centerText = resolvedCenterName ? ' · ' + resolvedCenterName : ' · Center metadata unavailable';
-                    option.textContent = date + ' — ' + sessionOptionLabel(item, sameDateIndex) + centerText;
+                option.textContent = date + ' — ' + sessionOptionLabel(item, sameDateIndex);
                     option.disabled = !!(centerId && testCenterSelect?.value && String(centerId) !== String(testCenterSelect.value));
                 } else {
                     option.textContent = baseLabel;
@@ -887,7 +895,7 @@
                 testCenterSection.style.display = 'none';
                 populateSelect(citySelect, []);
                 populateSelect(categorySelect, []);
-                populateSelect(testCenterSelect, []);
+                resetTestCenterSelection();
                 sessionCatalog = [];
                 availableDateCatalog = [];
                 renderAvailableDates([], []);
@@ -944,7 +952,7 @@
                 const categoryId = categorySelect.value;
                 testCenterSection.style.display = 'none';
                 populateSelect(citySelect, []);
-                populateSelect(testCenterSelect, []);
+                resetTestCenterSelection();
                 sessionCatalog = [];
                 availableDateCatalog = [];
                 renderAvailableDates([], []);
@@ -985,7 +993,7 @@
                 citySelect.dispatchEvent(new Event('change'));
             } else {
                 testCenterSection.style.display = 'none';
-                populateSelect(testCenterSelect, []);
+                resetTestCenterSelection();
                 populateSelect(sessionSelect, []);
                 renderSessionsForDate('');
                 renderAvailableDates([], []);
@@ -1041,7 +1049,8 @@
                     date: date,
                     emptyText: 'No live test-center slots returned for the selected date.'
                 });
-                populateSelect(testCenterSelect, centers, 'id', 'name');
+                testCenterSelect.value = '';
+                testCenterSelect.dataset.name = '';
                 if (dhakaCenterSummary) {
                     dhakaCenterSummary.textContent = centers.length
                         ? 'Portal Availability returned ' + centers.length + ' center slot' + (centers.length === 1 ? '' : 's') + ' for ' + city + ' on ' + date + '. Select one to load exact SVP sessions.'
@@ -1062,7 +1071,7 @@
             citySelect.addEventListener('change', async function () {
                 const city = citySelect.value;
                 testCenterSection.style.display = 'none';
-                populateSelect(testCenterSelect, []);
+                resetTestCenterSelection();
                 sessionCatalog = [];
                 availableDateCatalog = [];
                 renderAvailableDates([], []);
@@ -1085,10 +1094,8 @@
         if (testCenterSelect) {
             testCenterSelect.addEventListener('change', async function () {
                 const testCenterId = testCenterSelect.value;
-                const selectedCenterOption = testCenterSelect.options[testCenterSelect.selectedIndex];
-                const selectedCenterName = selectedCenterOption?.dataset?.centerName || selectedCenterOption?.textContent?.replace(/\s+—\s+SVP ID:.*$/, '') || '';
+                const selectedCenterName = selectedTestCenterLabel();
                 const date = availableDateSelect?.value || '';
-                if (testCenterNameInput) testCenterNameInput.value = selectedCenterName.trim();
                 if (sessionNameInput) sessionNameInput.value = '';
                 sessionCatalog = [];
                 populateSelect(sessionSelect, []);
@@ -1109,7 +1116,7 @@
                 dateInput.value = date || '';
                 clearError(dateError);
                 clearTemporaryHold('Select a center slot and session for this date, then create a temporary hold before confirming the booking.');
-                populateSelect(testCenterSelect, []);
+                resetTestCenterSelection();
                 if (testCenterNameInput) testCenterNameInput.value = '';
                 if (sessionNameInput) sessionNameInput.value = '';
                 sessionCatalog = [];
@@ -1130,7 +1137,7 @@
                     clearTemporaryHold('The selected session belongs to another center and has been blocked.');
                     if (sessionCenterError) {
                         const selectedSessionCenterName = selectedSessionOption.dataset.centerName || selectedSessionOption.dataset.name || 'another test center';
-                        const selectedCenterName = testCenterSelect.options[testCenterSelect.selectedIndex]?.dataset?.centerName || testCenterSelect.options[testCenterSelect.selectedIndex]?.textContent || 'the selected test center';
+                        const selectedCenterName = selectedTestCenterLabel() || 'the selected test center';
                         sessionCenterError.textContent = 'Blocked: selected session center "' + selectedSessionCenterName + '" does not match selected center "' + selectedCenterName + '".';
                         sessionCenterError.classList.remove('hidden');
                     }

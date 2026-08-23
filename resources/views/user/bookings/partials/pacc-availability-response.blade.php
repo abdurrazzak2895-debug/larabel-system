@@ -2,6 +2,7 @@
     $mode = $mode ?? 'centers';
     $componentId = $componentId ?? 'pacc-availability-response';
     $centerSelectId = $centerSelectId ?? 'test_center_id';
+    $centerNameInputId = $centerNameInputId ?? 'test_center_name';
     $sessionSelectId = $sessionSelectId ?? 'exam_session_id';
 @endphp
 
@@ -53,6 +54,7 @@
             const status = root.querySelector('[data-pacc-status]');
             const list = root.querySelector('[data-pacc-list]');
             const centerSelect = document.getElementById(options.centerSelectId || 'test_center_id');
+            const centerNameInput = document.getElementById(options.centerNameInputId || 'test_center_name');
             const sessionSelect = document.getElementById(options.sessionSelectId || 'exam_session_id');
 
             function setVisible(visible) {
@@ -92,7 +94,13 @@
                     }).join('');
                     list.querySelectorAll('[data-pacc-index]').forEach(card => card.addEventListener('click', () => {
                         if (!centerSelect) return;
-                        centerSelect.value = String(centerId(items[Number(card.dataset.paccIndex)]));
+                        const selectedRow = items[Number(card.dataset.paccIndex)];
+                        centerSelect.value = String(centerId(selectedRow));
+                        centerSelect.dataset.name = centerName(selectedRow);
+                        if (centerNameInput) {
+                            centerNameInput.value = centerName(selectedRow);
+                            centerNameInput.dataset.centerId = String(centerId(selectedRow));
+                        }
                         centerSelect.dispatchEvent(new Event('change', {bubbles: true}));
                         syncSelection();
                     }));
@@ -163,7 +171,7 @@
     window.PaccAvailabilityInstances = window.PaccAvailabilityInstances || {};
     window.PaccAvailabilityInstances['{{ $componentId }}'] = window.PaccAvailabilityComponent.create(
         document.getElementById('{{ $componentId }}'),
-        {mode: '{{ $mode }}', centerSelectId: '{{ $centerSelectId }}', sessionSelectId: '{{ $sessionSelectId }}'}
+        {mode: '{{ $mode }}', centerSelectId: '{{ $centerSelectId }}', centerNameInputId: '{{ $centerNameInputId }}', sessionSelectId: '{{ $sessionSelectId }}'}
     );
 })();
 </script>

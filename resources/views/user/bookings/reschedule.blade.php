@@ -126,10 +126,11 @@
             </div>
 
             <div id="test-center-section" style="display:none;" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <label for="test_center_id" class="block text-sm font-medium text-slate-700 mb-1">Test center slot</label>
-                <select name="test_center_id" id="test_center_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <option value="">Select a live date first…</option>
-                </select>
+                <div class="mb-2 flex items-center justify-between gap-3">
+                    <span class="text-sm font-medium text-slate-700">Test center slot</span>
+                    <span class="text-[11px] text-slate-400">Click one card to select</span>
+                </div>
+                <input type="hidden" name="test_center_id" id="test_center_id" value="{{ old('test_center_id') }}">
                 <input type="hidden" name="test_center_name" id="test_center_name" value="{{ old('test_center_name') }}">
                 <p id="center-summary" class="text-xs text-slate-500 mt-1">Select a live date to load every Portal Availability center slot for that date.</p>
                 @include('user.bookings.partials.pacc-availability-response', [
@@ -415,37 +416,30 @@
             const url = '{{ route('user.bookings.lookup.test-centers') }}?city=' + encodeURIComponent(city.value) + '&category_id=' + encodeURIComponent(category.value) + '&date=' + encodeURIComponent(dateValue) + '&occupation_id=' + encodeURIComponent(occupation.value) + '&language_code=' + encodeURIComponent(language.value);
             const body = await getJson(url);
             const items = body?.data?.test_centers || (Array.isArray(body?.data) ? body.data : []);
+            center.value = '';
+            center.dataset.name = '';
+            centerName.value = '';
             centerResponse?.renderCenters(items, {
                 city: city.value,
                 date: dateValue,
                 emptyText: 'No live test-center slots returned for the selected date.'
             });
-            center.innerHTML = '<option value="">Select a live center slot…</option>';
-            items.forEach(function (item) {
-                const id = item.id || item.test_center_id || item.site_id || item.center_id || '';
-                if (!id) return;
-                const name = item.name || item.english_name || item.test_center_name || item.site_name || item.center_name || 'SVP test center';
-                const time = String(item.test_time || item.start_time || item.time || item.start_at || '').replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
-                const seats = sessionSeatCount(item);
-                const option = document.createElement('option');
-                option.value = id;
-                option.dataset.name = name;
-                option.dataset.centerName = name;
-                option.dataset.time = time;
-                option.dataset.seats = seats === null ? '' : String(seats);
-                const details = [name];
-                if (time) details.push('Time: ' + time);
-                if (seats !== null) details.push('Seats: ' + seats);
-                option.textContent = details.join(' · ');
-                center.appendChild(option);
-            });
             centerSection.style.display = items.length ? '' : 'none';
             centerSummary.textContent = items.length
-                ? 'Portal Availability returned ' + items.length + ' center slot' + (items.length === 1 ? '' : 's') + ' for ' + city.value + ' on ' + dateValue + '. Duplicate center rows with different time or seats remain selectable.'
+                ? 'Portal Availability returned ' + items.length + ' center slot' + (items.length === 1 ? '' : 's') + ' for ' + city.value + ' on ' + dateValue + '. Click one card to load exact SVP sessions.'
                 : 'No center slots returned for ' + city.value + ' on ' + dateValue + '.';
             if (restoreOldCenter && oldCenter) {
-                center.value = oldCenter;
-                if (center.value) center.dispatchEvent(new Event('change'));
+                const restored = items.find(function (item) {
+                    return String(item.id || item.test_center_id || item.site_id || item.center_id || '') === String(oldCenter);
+                });
+                if (restored) {
+                    const restoredName = restored.name || restored.english_name || restored.test_center_name || restored.site_name || restored.center_name || 'SVP test center';
+                    center.value = String(oldCenter);
+                    center.dataset.name = restoredName;
+                    centerName.value = restoredName;
+                    centerResponse?.syncSelection();
+                    center.dispatchEvent(new Event('change'));
+                }
             }
         } catch (error) {
             centerSection.style.display = 'none';
@@ -559,7 +553,8 @@
 
     city.addEventListener('change', async function () {
         centerSection.style.display = 'none';
-        center.innerHTML = '<option value="">Select a live date first…</option>';
+        center.value = '';
+        center.dataset.name = '';
         session.innerHTML = '<option value="">Select a date and test center first…</option>';
         availableDateCatalog = [];
         sessionSnapshot = [];
@@ -579,7 +574,8 @@
     language.addEventListener('change', async function () {
         showError(languageError, '');
         centerSection.style.display = 'none';
-        center.innerHTML = '<option value="">Select a live date first…</option>';
+        center.value = '';
+        center.dataset.name = '';
         session.innerHTML = '<option value="">Select a date and test center first…</option>';
         centerName.value = '';
         sessionName.value = '';
@@ -596,7 +592,8 @@
         const value = normalizeDate(availableDate.value);
         date.value = value;
         centerSection.style.display = 'none';
-        center.innerHTML = '<option value="">Loading live center slots…</option>';
+        center.value = '';
+        center.dataset.name = '';
         session.innerHTML = '<option value="">Select a center slot first…</option>';
         centerName.value = '';
         sessionName.value = '';
@@ -612,8 +609,9 @@
     });
 
     center.addEventListener('change', async function () {
-        const option = center.options[center.selectedIndex];
-        centerName.value = option?.dataset?.name || '';
+        const selectedCenterName = String(centerName.value || center.dataset.name || '').trim();
+        center.dataset.name = selectedCenterName;
+        centerName.value = selectedCenterName;
         session.innerHTML = '<option value="">Loading exact SVP sessions…</option>';
         sessionName.value = '';
         sessionSnapshot = [];
@@ -632,7 +630,7 @@
             session.value = '';
             resetHold('The selected session belongs to another test center and is blocked.');
             const selectedName = option.dataset.centerName || option.dataset.name || 'another test center';
-            const centerLabel = center.options[center.selectedIndex]?.dataset?.name || center.options[center.selectedIndex]?.textContent || 'the selected test center';
+            const centerLabel = centerName.value || center.dataset.name || 'the selected test center';
             showError(centerError, 'Blocked: session center "' + selectedName + '" does not match selected center "' + centerLabel + '".');
             return;
         }
