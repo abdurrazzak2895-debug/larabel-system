@@ -379,13 +379,35 @@ final class PortalAvailabilityService
                 'test_center_id' => $item['test_center_id'] ?? null,
                 'test_time' => $item['test_time'] ?? null,
                 'available_seats' => is_numeric($item['available_seats'] ?? null) ? (int) $item['available_seats'] : 0,
+                // The upstream Portal Availability row is already a specific
+                // bookable session slot at this center, not just a center
+                // summary — exam_session_id and payable_id must survive so
+                // the booking/hold flow can use this exact slot without a
+                // second SVP session lookup.
+                'exam_session_id' => $item['exam_session_id'] ?? null,
+                'payable_id' => $item['payable_id'] ?? null,
+                'category_id' => $item['category_id'] ?? null,
+                'user_id' => $item['user_id'] ?? null,
             ])
             ->filter(fn (array $item): bool => $item['test_center_name'] !== '' && $item['test_center_id'] !== null)
             ->values();
 
+        // Group by center so callers can see how many live session slots each
+        // center actually has (matching the sessionCount SVP reports),
+        // without losing any individual session's exam_session_id.
+        $sessionCounts = $centers
+            ->groupBy(fn (array $item): string => (string) $item['test_center_id'])
+            ->map(fn ($group) => $group->count());
+
+        $centers = $centers->map(function (array $item) use ($sessionCounts): array {
+            $item['session_count'] = $sessionCounts->get((string) $item['test_center_id'], 1);
+
+            return $item;
+        });
+
         return [
-            'centers' => $centers->all(),
-            'center_count' => $centers->count(),
+            'centers' => $centers->values()->all(),
+            'center_count' => $centers->pluck('test_center_id')->unique()->count(),
         ];
     }
 
