@@ -140,6 +140,9 @@
                         const selectedCenterName = centerName(selectedRow);
                         const selectedDate = centerDate(selectedRow, meta.date);
                         const selectedSessionId = centerSessionId(selectedRow);
+                        const exactSessionControl = sessionSelect || document.getElementById(options.sessionSelectId || 'exam_session_id');
+                        const exactSessionNameInput = sessionNameInput || document.getElementById(options.sessionNameInputId || 'exam_session_name');
+                        const exactDateInput = dateInput || document.getElementById(options.dateInputId || 'exam_date');
                         centerSelect.value = selectedCenterId;
                         centerSelect.dataset.name = selectedCenterName;
                         centerSelect.dataset.sessionId = selectedSessionId;
@@ -148,15 +151,15 @@
                             centerNameInput.value = selectedCenterName;
                             centerNameInput.dataset.centerId = selectedCenterId;
                         }
-                        if (selectedSessionId && sessionSelect) {
-                            sessionSelect.value = selectedSessionId;
-                            sessionSelect.dataset.centerId = selectedCenterId;
-                            sessionSelect.dataset.centerName = selectedCenterName;
-                            sessionSelect.dataset.name = selectedRow.session_name || selectedRow.name || selectedCenterName;
-                            sessionSelect.dataset.date = selectedDate;
-                            if (sessionNameInput) sessionNameInput.value = sessionSelect.dataset.name;
-                            if (dateInput) dateInput.value = selectedDate;
-                            sessionSelect.dispatchEvent(new Event('change', {bubbles: true}));
+                        if (selectedSessionId && exactSessionControl) {
+                            exactSessionControl.value = selectedSessionId;
+                            exactSessionControl.dataset.centerId = selectedCenterId;
+                            exactSessionControl.dataset.centerName = selectedCenterName;
+                            exactSessionControl.dataset.name = selectedRow.session_name || selectedRow.name || selectedCenterName;
+                            exactSessionControl.dataset.date = selectedDate;
+                            if (exactSessionNameInput) exactSessionNameInput.value = exactSessionControl.dataset.name;
+                            if (exactDateInput) exactDateInput.value = selectedDate;
+                            exactSessionControl.dispatchEvent(new Event('change', {bubbles: true}));
                         } else {
                             centerSelect.dispatchEvent(new Event('change', {bubbles: true}));
                         }

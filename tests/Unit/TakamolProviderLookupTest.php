@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Services\Providers\TakamolProvider;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -15,6 +16,12 @@ class TakamolProviderLookupTest extends TestCase
         config()->set('svp.base_url', 'https://svp.test');
         config()->set('svp.country_id', 78);
         config()->set('svp.session_date_probe_backfill_days', 0);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_exam_session_by_id_uses_authoritative_read_only_endpoint_and_locale(): void
@@ -585,6 +592,7 @@ class TakamolProviderLookupTest extends TestCase
 
     public function test_center_session_lookup_backfills_dates_missing_from_available_metadata(): void
     {
+        Carbon::setTestNow('2026-08-22 12:00:00');
         config()->set('svp.session_date_probe_backfill_days', 14);
         $validDates = ['2026-08-23', '2026-08-24', '2026-08-25'];
 
