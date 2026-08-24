@@ -30,7 +30,6 @@ class WalletController extends Controller
         return view('user.wallets.index', [
             'wallet'       => $wallet,
             'balance'      => (float) ($wallet->available_balance ?? 0),
-            'reserved'     => (float) ($wallet->reserved_balance ?? 0),
             'creditLimit'  => (float) ($wallet->credit_limit ?? 0),
             'transactions' => $transactions,
             'totals'       => $totals,

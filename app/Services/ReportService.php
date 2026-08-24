@@ -71,7 +71,6 @@ class ReportService
     {
         return [
             'total_available'    => DB::table('agency_wallets')->sum('available_balance'),
-            'total_reserved'     => DB::table('agency_wallets')->sum('reserved_balance'),
             'total_credit_limit' => DB::table('agency_wallets')->sum('credit_limit'),
         ];
     }

@@ -22,8 +22,7 @@
             <thead class="bg-slate-50 text-left">
                 <tr>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Agency</th>
-                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Available</th>
-                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Reserved</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Wallet Balance</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Credit Limit</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -33,7 +32,6 @@
                     <tr class="hover:bg-slate-50/50 transition">
                         <td class="px-6 py-4 font-medium text-slate-700">{{ $wallet->agency?->name ?? 'N/A' }}</td>
                         <td class="px-6 py-4 font-bold text-emerald-600">{{ number_format($wallet->available_balance, 2) }}</td>
-                        <td class="px-6 py-4 text-slate-600">{{ number_format($wallet->reserved_balance, 2) }}</td>
                         <td class="px-6 py-4 text-slate-600">{{ number_format($wallet->credit_limit, 2) }}</td>
                         <td class="px-6 py-4">
                             <a href="{{ route('admin.wallets.show', $wallet->agency) }}" class="text-xs font-medium text-brand-600 hover:text-brand-700 transition">View</a>
@@ -41,7 +39,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-6 py-12 text-center">
+                        <td colspan="4" class="px-6 py-12 text-center">
                             <p class="text-sm text-slate-400">No wallets yet.</p>
                         </td>
                     </tr>

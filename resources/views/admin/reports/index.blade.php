@@ -40,10 +40,6 @@
                 <dd class="text-sm font-bold text-emerald-600">{{ number_format($walletSummary['total_available'] ?? 0, 2) }} BDT</dd>
             </div>
             <div class="flex items-center justify-between">
-                <dt class="text-sm text-slate-500">Total Reserved</dt>
-                <dd class="text-sm font-bold text-amber-600">{{ number_format($walletSummary['total_reserved'] ?? 0, 2) }} BDT</dd>
-            </div>
-            <div class="flex items-center justify-between">
                 <dt class="text-sm text-slate-500">Total Credit Limit</dt>
                 <dd class="text-sm font-bold text-slate-800">{{ number_format($walletSummary['total_credit_limit'] ?? 0, 2) }} BDT</dd>
             </div>

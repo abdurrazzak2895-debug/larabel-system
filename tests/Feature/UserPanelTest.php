@@ -87,6 +87,28 @@ class UserPanelTest extends TestCase
     }
 
 
+    public function test_wallet_pages_show_only_the_main_balance_not_reserved_balance(): void
+    {
+        $this->loginAgencyUser();
+
+        foreach ([
+            route('user.dashboard'),
+            route('user.wallets.index'),
+            route('user.bookings.create'),
+            route('agency.dashboard'),
+            route('agency.wallets.index'),
+            route('agency.bookings.create'),
+        ] as $url) {
+            $response = $this->get($url)->assertOk();
+            $response->assertSee('Wallet Balance')
+                ->assertDontSee('Reserved Balance')
+                ->assertDontSee('Reserved:');
+        }
+
+        $this->get(route('user.dashboard'))->assertDontSee('>Reserved<');
+        $this->get(route('agency.dashboard'))->assertDontSee('>Reserved<');
+    }
+
     public function test_failed_card_payment_refunds_portal_fee_to_available_balance(): void
     {
         $user = $this->loginAgencyUser();
@@ -131,7 +153,7 @@ class UserPanelTest extends TestCase
             ]));
 
         $response->assertRedirect(route('user.bookings.show', $booking));
-        $response->assertSessionHas('error', 'SVP payment was not confirmed. The reserved portal fee has been refunded to the main wallet balance.');
+        $response->assertSessionHas('error', 'SVP payment was not confirmed. The portal fee has been refunded to the main wallet balance.');
 
         $this->assertDatabaseHas('bookings', [
             'id' => $booking->id,

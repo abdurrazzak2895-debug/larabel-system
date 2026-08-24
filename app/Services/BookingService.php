@@ -819,7 +819,7 @@ class BookingService
                 $this->notifications->send(
                     $booking->user_id,
                     'Booking failed',
-                    'Your booking could not be completed. Any reserved amount has been refunded to your main wallet balance.'
+                    'Your booking could not be completed. The portal fee has been refunded to your main wallet balance.'
                 );
             }
 

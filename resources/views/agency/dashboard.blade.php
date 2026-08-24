@@ -10,16 +10,12 @@
     <div class="absolute -bottom-24 -left-16 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl"></div>
     <div class="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
         <div>
-            <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Available Wallet Balance</p>
+            <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Wallet Balance</p>
             <p class="text-4xl sm:text-5xl font-black tracking-tight">
                 {{ number_format($availableWallet, 2) }}
                 <span class="text-lg sm:text-xl font-bold text-indigo-300">BDT</span>
             </p>
             <div class="flex flex-wrap gap-4 mt-4 text-sm">
-                <span class="inline-flex items-center gap-1.5 text-slate-300">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                    Reserved {{ number_format($reservedWallet, 2) }}
-                </span>
                 <span class="inline-flex items-center gap-1.5 text-slate-300">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                     Credit Limit {{ number_format($creditRemaining, 2) }}

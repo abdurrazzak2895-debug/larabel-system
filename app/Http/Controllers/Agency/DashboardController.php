@@ -31,7 +31,6 @@ class DashboardController extends Controller
         return view('agency.dashboard', [
             'wallet'         => $this->getWallet($agencyId),
             'availableWallet' => $this->getWallet($agencyId)->available_balance,
-            'reservedWallet'  => $this->getWallet($agencyId)->reserved_balance,
             'creditRemaining' => $this->getWallet($agencyId)->credit_limit,
             'todayBookings'   => Booking::where('agency_id', $agencyId)
                 ->whereDate('created_at', today())->count(),

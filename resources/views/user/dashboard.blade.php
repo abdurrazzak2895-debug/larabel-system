@@ -38,7 +38,7 @@
             <div class="min-w-0">
                 <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Wallet Balance</p>
                 <p class="text-xl font-bold text-slate-900 mt-0.5">{{ number_format($walletBalance, 2) }} <span class="text-sm font-medium text-slate-400">BDT</span></p>
-                <p class="text-xs text-slate-400 mt-0.5 truncate">Reserved: {{ number_format($reservedBalance, 2) }} · Credit: {{ number_format($creditLimit, 2) }}</p>
+                <p class="text-xs text-slate-400 mt-0.5 truncate">Credit limit: {{ number_format($creditLimit, 2) }}</p>
             </div>
         </div>
 
@@ -213,13 +213,9 @@
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-fuchsia-950 p-6 text-white shadow-xl shadow-indigo-900/20">
                 <div class="absolute -top-16 -right-16 w-48 h-48 bg-indigo-500/25 rounded-full blur-3xl pointer-events-none"></div>
                 <div class="relative">
-                    <p class="text-xs text-indigo-300 font-medium">Available Balance</p>
+                    <p class="text-xs text-indigo-300 font-medium">Wallet Balance</p>
                     <p class="text-3xl font-extrabold mt-1 tracking-tight">{{ number_format($walletBalance, 2) }} <span class="text-sm font-medium text-slate-400">BDT</span></p>
-                    <div class="grid grid-cols-2 gap-3 mt-5 pt-5 border-t border-white/10">
-                        <div>
-                            <p class="text-[11px] text-slate-400">Reserved</p>
-                            <p class="text-sm font-bold mt-0.5">{{ number_format($reservedBalance, 2) }}</p>
-                        </div>
+                    <div class="grid grid-cols-1 gap-3 mt-5 pt-5 border-t border-white/10">
                         <div>
                             <p class="text-[11px] text-slate-400">Credit Limit</p>
                             <p class="text-sm font-bold mt-0.5">{{ number_format($creditLimit, 2) }}</p>

@@ -18,16 +18,12 @@
 <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-900 to-fuchsia-900 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/10 mb-6">
     <div class="absolute -top-24 -right-24 w-72 h-72 bg-fuchsia-500/20 rounded-full blur-3xl"></div>
     <div class="relative">
-        <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Available Balance</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Wallet Balance</p>
         <p class="text-4xl sm:text-5xl font-black tracking-tight">
             {{ number_format($wallet?->available_balance ?? 0, 2) }}
             <span class="text-lg sm:text-xl font-bold text-indigo-300">BDT</span>
         </p>
         <div class="flex flex-wrap gap-4 mt-4 text-sm">
-            <span class="inline-flex items-center gap-1.5 text-slate-300">
-                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                Reserved {{ number_format($wallet?->reserved_balance ?? 0, 2) }}
-            </span>
             <span class="inline-flex items-center gap-1.5 text-slate-300">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 Credit Limit {{ number_format($wallet?->credit_limit ?? 0, 2) }}

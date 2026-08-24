@@ -38,7 +38,6 @@ class DashboardController extends Controller
         return view('user.dashboard', [
             'wallet'             => $wallet,
             'walletBalance'      => $wallet?->available_balance ?? 0,
-            'reservedBalance'    => $wallet?->reserved_balance ?? 0,
             'creditLimit'        => $wallet?->credit_limit ?? 0,
             'totalBookings'      => $counts['all'],
             'confirmedBookings'  => $counts['booked'],

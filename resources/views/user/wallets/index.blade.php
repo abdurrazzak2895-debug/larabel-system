@@ -24,18 +24,14 @@
         <div class="absolute -bottom-24 -left-16 w-56 h-56 bg-fuchsia-500/20 rounded-full blur-3xl pointer-events-none"></div>
         <div class="relative">
             <div class="flex items-center justify-between">
-                <p class="text-sm text-indigo-300 font-medium">Available Balance</p>
+                <p class="text-sm text-indigo-300 font-medium">Wallet Balance</p>
                 <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/10 text-xs text-indigo-200">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     BDT
                 </span>
             </div>
             <p class="text-4xl sm:text-5xl font-extrabold mt-2 tracking-tight">{{ number_format($balance, 2) }}</p>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-white/10">
-                <div>
-                    <p class="text-xs text-slate-400">Reserved Balance</p>
-                    <p class="text-lg font-bold mt-0.5">{{ number_format($reserved, 2) }}</p>
-                </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-white/10">
                 <div>
                     <p class="text-xs text-slate-400">Credit Limit</p>
                     <p class="text-lg font-bold mt-0.5">{{ number_format($creditLimit, 2) }}</p>

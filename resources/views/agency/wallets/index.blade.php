@@ -9,7 +9,7 @@
     <div class="absolute -top-24 -right-24 w-72 h-72 bg-fuchsia-500/20 rounded-full blur-3xl"></div>
     <div class="absolute -bottom-24 -left-16 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl"></div>
     <div class="relative">
-        <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Available Balance</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Wallet Balance</p>
         <p class="text-4xl sm:text-5xl font-black tracking-tight">
             {{ number_format($wallet?->available_balance ?? 0, 2) }}
             <span class="text-lg sm:text-xl font-bold text-indigo-300">BDT</span>
@@ -18,18 +18,10 @@
 </div>
 
 {{-- Summary cards --}}
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Reserved Balance</p>
-        <p class="text-2xl font-bold text-slate-900 mt-1">{{ number_format($wallet?->reserved_balance ?? 0, 2) }} <span class="text-sm font-medium text-slate-500">BDT</span></p>
-    </div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
         <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Credit Limit</p>
         <p class="text-2xl font-bold text-slate-900 mt-1">{{ number_format($wallet?->credit_limit ?? 0, 2) }} <span class="text-sm font-medium text-slate-500">BDT</span></p>
-    </div>
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Net Position</p>
-        <p class="text-2xl font-bold text-slate-900 mt-1">{{ number_format(($wallet?->available_balance ?? 0) - ($wallet?->reserved_balance ?? 0), 2) }} <span class="text-sm font-medium text-slate-500">BDT</span></p>
     </div>
 </div>
 

@@ -97,6 +97,25 @@ class AdminAuthTest extends TestCase
         }
     }
 
+    public function test_admin_wallet_pages_show_main_balance_without_reserved_balance(): void
+    {
+        $admin = Admin::where('email', env('ADMIN_EMAIL', 'admin@takamol.example.com'))->firstOrFail();
+        $agency = \App\Models\Agency::firstOrFail();
+        Auth::guard('admin')->login($admin);
+
+        $this->get(route('admin.wallets.index'))
+            ->assertOk()
+            ->assertSee('Wallet Balance')
+            ->assertDontSee('Reserved');
+        $this->get(route('admin.wallets.show', ['agency' => $agency->id]))
+            ->assertOk()
+            ->assertSee('Wallet Balance')
+            ->assertDontSee('Reserved');
+        $this->get(route('admin.reports.index'))
+            ->assertOk()
+            ->assertDontSee('Total Reserved');
+    }
+
     public function test_admin_can_credit_an_agency_wallet_through_manual_adjustment(): void
     {
         $admin = Admin::where('email', env('ADMIN_EMAIL', 'admin@takamol.example.com'))->firstOrFail();
