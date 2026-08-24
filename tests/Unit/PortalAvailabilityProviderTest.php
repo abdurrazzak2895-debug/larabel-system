@@ -19,6 +19,33 @@ class PortalAvailabilityProviderTest extends TestCase
         ]);
     }
 
+    public function test_it_refreshes_an_account_and_merges_the_rotated_set_cookie(): void
+    {
+        Http::fake([
+            'https://svp-international.xyz/api/accounts/ab9b8cf489a3/refresh' => Http::response(
+                ['success' => true, 'expires_at' => '2030-09-01T12:00:00Z'],
+                200,
+                ['Set-Cookie' => 'session=rotated-session; Path=/; HttpOnly']
+            ),
+        ]);
+
+        $result = app(PortalAvailabilityProvider::class)->refreshAccount(
+            'session=authorized; csrf=keep',
+            'ab9b8cf489a3',
+        );
+
+        $this->assertSame('session=rotated-session; csrf=keep', $result['session_cookie']);
+        $this->assertTrue($result['rotated']);
+        $this->assertSame('2030-09-01 12:00:00', $result['expires_at']);
+        $this->assertArrayNotHasKey('success', $result);
+        Http::assertSent(function (Request $request): bool {
+            return $request->method() === 'POST'
+                && $request->url() === 'https://svp-international.xyz/api/accounts/ab9b8cf489a3/refresh'
+                && $request->data() === []
+                && $request->hasHeader('Cookie', 'session=authorized; csrf=keep');
+        });
+    }
+
     public function test_it_fetches_occupations_from_the_allowlisted_get_endpoint(): void
     {
         Http::fake([

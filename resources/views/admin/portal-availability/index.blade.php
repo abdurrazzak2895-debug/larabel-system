@@ -86,8 +86,9 @@
                                     <p class="mt-2 text-xs text-red-700">{{ $credential['last_error'] }}</p>
                                 @endif
                             </div>
-                            <div class="flex shrink-0 gap-2">
+                            <div class="flex shrink-0 flex-wrap gap-2">
                                 @if ($credential['active'])
+                                    <form method="POST" action="{{ route('admin.portal-availability.credentials.refresh', $credential['id']) }}">@csrf<button class="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">Refresh now</button></form>
                                     <form method="POST" action="{{ route('admin.portal-availability.credentials.deactivate', $credential['id']) }}">@csrf<button class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Deactivate</button></form>
                                 @else
                                     <form method="POST" action="{{ route('admin.portal-availability.credentials.activate', $credential['id']) }}">@csrf<button class="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Activate</button></form>

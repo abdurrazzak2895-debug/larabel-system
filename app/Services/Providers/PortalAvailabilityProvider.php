@@ -15,6 +15,28 @@ final class PortalAvailabilityProvider implements PortalAvailabilityProviderInte
         '/api/centers',
     ];
 
+    public function refreshAccount(string $sessionCookie, string $accountId): array
+    {
+        $accountId = trim($accountId);
+        if ($accountId === '' || preg_match('/^[A-Za-z0-9_-]+$/', $accountId) !== 1) {
+            throw new RuntimeException('Portal account ID is invalid.');
+        }
+
+        $path = sprintf((string) config('portal.refresh_path', '/api/accounts/%s/refresh'), rawurlencode($accountId));
+        $response = $this->client($sessionCookie)->post($path);
+        $body = $response->json();
+        $this->decode($path, $response->status(), $body);
+
+        $refreshedCookie = $this->refreshedCookie($response, is_array($body) ? $body : [], $sessionCookie);
+        $expiresAt = $this->refreshExpiry(is_array($body) ? $body : []);
+
+        return [
+            'session_cookie' => $refreshedCookie,
+            'expires_at' => $expiresAt,
+            'rotated' => $refreshedCookie !== null && $refreshedCookie !== trim($sessionCookie),
+        ];
+    }
+
     public function occupations(string $sessionCookie): array
     {
         $body = $this->get('/api/occupations', $sessionCookie);
@@ -91,7 +113,9 @@ final class PortalAvailabilityProvider implements PortalAvailabilityProviderInte
 
     private function decode(string $path, int $status, mixed $body): array
     {
-        if (! in_array($path, self::ALLOWED_PATHS, true)) {
+        $allowed = in_array($path, self::ALLOWED_PATHS, true)
+            || preg_match('#^/api/accounts/[A-Za-z0-9_-]+/refresh$#', $path) === 1;
+        if (! $allowed) {
             throw new RuntimeException('Blocked non-availability portal endpoint.');
         }
 
@@ -104,5 +128,95 @@ final class PortalAvailabilityProvider implements PortalAvailabilityProviderInte
         }
 
         return $body;
+    }
+
+    private function refreshedCookie(mixed $response, array $body, string $previousCookie): ?string
+    {
+        $cookies = [];
+        $setCookies = $response->toPsrResponse()->getHeader('Set-Cookie');
+        foreach ($setCookies as $setCookie) {
+            $pair = trim(explode(';', $setCookie, 2)[0]);
+            if ($pair !== '' && str_contains($pair, '=')) {
+                [$name, $value] = explode('=', $pair, 2);
+                $name = trim($name);
+                if ($name !== '') {
+                    $cookies[$name] = $name.'='.trim($value);
+                }
+            }
+        }
+
+        foreach ($this->cookieCandidates($body) as $candidate) {
+            foreach ($this->cookiePairs($candidate) as $name => $pair) {
+                $cookies[$name] = $pair;
+            }
+        }
+
+        if ($cookies === []) {
+            return null;
+        }
+
+        foreach ($this->cookiePairs($previousCookie) as $name => $pair) {
+            $cookies[$name] ??= $pair;
+        }
+
+        return implode('; ', array_values($cookies));
+    }
+
+    /** @return array<int, string> */
+    private function cookieCandidates(array $body): array
+    {
+        $candidates = [];
+        foreach ([
+            data_get($body, 'session_cookie'),
+            data_get($body, 'cookie'),
+            data_get($body, 'set_cookie'),
+            data_get($body, 'data.session_cookie'),
+            data_get($body, 'data.cookie'),
+            data_get($body, 'data.set_cookie'),
+            data_get($body, 'result.session_cookie'),
+            data_get($body, 'result.cookie'),
+        ] as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                $candidates[] = trim($candidate);
+            }
+        }
+
+        return $candidates;
+    }
+
+    /** @return array<string, string> */
+    private function cookiePairs(string $header): array
+    {
+        $pairs = [];
+        foreach (preg_split('/;\\s*/', trim($header)) ?: [] as $part) {
+            if (! str_contains($part, '=')) {
+                continue;
+            }
+            [$name, $value] = explode('=', $part, 2);
+            $name = trim($name);
+            $value = trim($value);
+            if ($name !== '' && $value !== '' && preg_match('/^[A-Za-z0-9_!#$%&\'*+.^`|~-]+$/', $name) === 1) {
+                $pairs[$name] = $name.'='.$value;
+            }
+        }
+
+        return $pairs;
+    }
+
+    private function refreshExpiry(array $body): ?string
+    {
+        foreach ([
+            data_get($body, 'expires_at'),
+            data_get($body, 'expiresAt'),
+            data_get($body, 'data.expires_at'),
+            data_get($body, 'data.expiresAt'),
+            data_get($body, 'result.expires_at'),
+        ] as $value) {
+            if (is_string($value) && trim($value) !== '' && strtotime($value) !== false) {
+                return date('Y-m-d H:i:s', strtotime($value));
+            }
+        }
+
+        return null;
     }
 }

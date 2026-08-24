@@ -4,6 +4,9 @@ namespace App\Contracts;
 
 interface PortalAvailabilityProviderInterface
 {
+    /** @return array<string, mixed> */
+    public function refreshAccount(string $sessionCookie, string $accountId): array;
+
     /** @return array<int, array<string, mixed>> */
     public function occupations(string $sessionCookie): array;
 

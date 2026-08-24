@@ -76,6 +76,25 @@ final class PortalAvailabilityController extends Controller
         return back()->with('success', 'Portal credential details updated securely.');
     }
 
+    public function refreshCredential(PortalAvailabilityCredential $credential): RedirectResponse
+    {
+        try {
+            $result = $this->availability->refreshCredential($credential);
+
+            return back()->with('success', sprintf(
+                'Portal session refreshed for %s%s.',
+                $credential->name,
+                ($result['rotated'] ?? false) ? ' and the encrypted cookie was rotated' : '',
+            ));
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withErrors([
+                'portal_refresh' => 'Portal session refresh failed. Check the saved session and upstream portal availability.',
+            ]);
+        }
+    }
+
     public function deactivate(PortalAvailabilityCredential $credential): RedirectResponse
     {
         $credential->forceFill(['active' => false])->save();

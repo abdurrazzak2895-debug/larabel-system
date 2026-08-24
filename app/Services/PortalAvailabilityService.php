@@ -15,6 +15,76 @@ final class PortalAvailabilityService
     ) {
     }
 
+    /** @return array<string, mixed> */
+    public function refreshCredential(PortalAvailabilityCredential $credential): array
+    {
+        if (! $credential->active) {
+            throw new RuntimeException('Portal availability credential is inactive.');
+        }
+        if (! filled($credential->session_cookie)) {
+            throw new RuntimeException('Portal availability session is not configured.');
+        }
+
+        try {
+            $result = $this->provider->refreshAccount(
+                (string) $credential->session_cookie,
+                trim((string) $credential->portal_account_id),
+            );
+            $updates = [
+                'last_checked_at' => now(),
+                'last_error' => null,
+            ];
+            if (filled($result['session_cookie'] ?? null)) {
+                $updates['session_cookie'] = trim((string) $result['session_cookie']);
+            }
+            if (filled($result['expires_at'] ?? null)) {
+                $updates['expires_at'] = $result['expires_at'];
+            }
+
+            $credential->forceFill($updates)->saveQuietly();
+
+            return [
+                'credential' => $this->credentialSummary($credential),
+                'rotated' => (bool) ($result['rotated'] ?? false),
+                'expires_at' => $credential->fresh()->expires_at?->toIso8601String(),
+                'checked_at' => $credential->fresh()->last_checked_at?->toIso8601String(),
+            ];
+        } catch (\Throwable $exception) {
+            $credential->forceFill([
+                'last_checked_at' => now(),
+                'last_error' => Str::limit($exception->getMessage(), 500),
+            ])->saveQuietly();
+            throw $exception;
+        }
+    }
+
+    /** @return array{refreshed: int, failed: int, failures: array<int, array{id: int, message: string}>} */
+    public function refreshCredentials(?int $credentialId = null): array
+    {
+        $query = PortalAvailabilityCredential::query()
+            ->where('active', true)
+            ->whereNotNull('session_cookie');
+        if ($credentialId !== null) {
+            $query->whereKey($credentialId);
+        }
+
+        $summary = ['refreshed' => 0, 'failed' => 0, 'failures' => []];
+        foreach ($query->orderBy('id')->get() as $credential) {
+            try {
+                $this->refreshCredential($credential);
+                $summary['refreshed']++;
+            } catch (\Throwable $exception) {
+                $summary['failed']++;
+                $summary['failures'][] = [
+                    'id' => (int) $credential->id,
+                    'message' => Str::limit($exception->getMessage(), 200),
+                ];
+            }
+        }
+
+        return $summary;
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function credentials(): array
     {

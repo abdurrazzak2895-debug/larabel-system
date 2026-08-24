@@ -116,6 +116,7 @@ Route::middleware('web')->group(function () {
         Route::get('/', [PortalAvailabilityController::class, 'index'])->name('index');
         Route::post('/credentials', [PortalAvailabilityController::class, 'storeCredential'])->name('credentials.store');
         Route::put('/credentials/{credential}', [PortalAvailabilityController::class, 'updateCredential'])->name('credentials.update');
+        Route::post('/credentials/{credential}/refresh', [PortalAvailabilityController::class, 'refreshCredential'])->name('credentials.refresh');
         Route::post('/credentials/{credential}/activate', [PortalAvailabilityController::class, 'activate'])->name('credentials.activate');
         Route::post('/credentials/{credential}/deactivate', [PortalAvailabilityController::class, 'deactivate'])->name('credentials.deactivate');
         Route::post('/api-keys', [PortalAvailabilityController::class, 'storeApiKey'])->name('api-keys.store');

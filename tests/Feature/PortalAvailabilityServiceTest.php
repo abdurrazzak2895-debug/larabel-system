@@ -19,6 +19,36 @@ class PortalAvailabilityServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_service_refreshes_and_encrypts_a_rotated_portal_cookie_without_exposing_it(): void
+    {
+        $credential = PortalAvailabilityCredential::query()->create([
+            'name' => 'Refreshable Portal Session',
+            'portal_account_id' => 'ab9b8cf489a3',
+            'session_cookie' => 'session=old-cookie',
+            'active' => true,
+        ]);
+        $provider = $this->createMock(PortalAvailabilityProviderInterface::class);
+        $provider->expects($this->once())
+            ->method('refreshAccount')
+            ->with('session=old-cookie', 'ab9b8cf489a3')
+            ->willReturn([
+                'session_cookie' => 'session=new-cookie',
+                'expires_at' => '2030-09-01 12:00:00',
+                'rotated' => true,
+            ]);
+
+        $result = (new PortalAvailabilityService($provider))->refreshCredential($credential);
+        $fresh = $credential->fresh();
+
+        $this->assertTrue($result['rotated']);
+        $this->assertSame('ab9b8cf489a3', $result['credential']['portal_account_id']);
+        $this->assertArrayNotHasKey('session_cookie', $result);
+        $this->assertSame('session=new-cookie', $fresh->session_cookie);
+        $this->assertNotNull($fresh->last_checked_at);
+        $this->assertNull($fresh->last_error);
+        $this->assertNotSame('session=new-cookie', DB::table('portal_availability_credentials')->whereKey($credential->id)->value('session_cookie'));
+    }
+
     public function test_session_cookie_is_encrypted_and_hidden_from_model_arrays(): void
     {
         $credential = PortalAvailabilityCredential::query()->create([
@@ -46,6 +76,11 @@ class PortalAvailabilityServiceTest extends TestCase
 
         $provider = new class implements PortalAvailabilityProviderInterface
         {
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
             public function occupations(string $sessionCookie): array
             {
                 return [];
@@ -107,6 +142,11 @@ class PortalAvailabilityServiceTest extends TestCase
 
         $provider = new class implements PortalAvailabilityProviderInterface
         {
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
             public function occupations(string $sessionCookie): array
             {
                 return [];
@@ -149,6 +189,11 @@ class PortalAvailabilityServiceTest extends TestCase
 
         $provider = new class implements PortalAvailabilityProviderInterface
         {
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
             public function occupations(string $sessionCookie): array
             {
                 return [[
@@ -277,6 +322,7 @@ class PortalAvailabilityServiceTest extends TestCase
             ->assertSee('External website API access')
             ->assertSee('Partner website')
             ->assertSee('Active')
+            ->assertSee('Refresh now')
             ->assertDontSee('session=authorized');
     }
 

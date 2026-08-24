@@ -145,3 +145,31 @@ Schedule::command('bookings:refund-expired-pending')
     ->everyMinute()
     ->withoutOverlapping(15)
     ->description('Refund pending bookings that have exceeded the payment timeout.');
+
+Artisan::command('portal:refresh-availability {--credential-id= : Refresh one local credential ID} {--account-id= : Refresh one portal account ID}', function (): int {
+    $credentialId = $this->option('credential-id') !== null && $this->option('credential-id') !== ''
+        ? max(1, (int) $this->option('credential-id'))
+        : null;
+    if ($credentialId === null && filled($this->option('account-id'))) {
+        $credentialId = \App\Models\PortalAvailabilityCredential::query()
+            ->where('portal_account_id', trim((string) $this->option('account-id')))
+            ->value('id');
+        if (! $credentialId) {
+            $this->error('No local Portal Availability credential matches that account ID.');
+            return 1;
+        }
+    }
+
+    $summary = app(\App\Services\PortalAvailabilityService::class)->refreshCredentials($credentialId);
+    $this->info(sprintf('Portal sessions refreshed: %d; failed: %d.', $summary['refreshed'], $summary['failed']));
+    if ($summary['failures'] !== []) {
+        $this->table(['Credential ID', 'Error'], $summary['failures']);
+    }
+
+    return $summary['failed'] > 0 ? 1 : 0;
+})->purpose('Refresh active encrypted Portal Availability sessions without exposing cookies');
+
+Schedule::command('portal:refresh-availability')
+    ->everyTenMinutes()
+    ->withoutOverlapping(9)
+    ->description('Refresh active Portal Availability sessions before they expire.');
