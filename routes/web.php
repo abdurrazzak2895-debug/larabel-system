@@ -32,9 +32,7 @@ use App\Http\Controllers\User\RefundController as UserRefundController;
 use App\Http\Controllers\User\WalletController as UserWalletController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return redirect()->route('login');
-})->middleware('web');
+Route::get('/', [LoginController::class, 'showLoginForm'])->middleware('web');
 
 // -------------------------------
 // Authentication
