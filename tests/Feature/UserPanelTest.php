@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Booking;
+use App\Models\BookingAttempt;
 use App\Models\Candidate;
 use App\Models\Setting;
 use App\Models\PortalAvailabilityCredential;
@@ -83,6 +84,73 @@ class UserPanelTest extends TestCase
         if ($booking) {
             $this->get(route('user.bookings.show', $booking))->assertOk();
         }
+    }
+
+
+    public function test_failed_card_payment_refunds_portal_fee_to_available_balance(): void
+    {
+        $user = $this->loginAgencyUser();
+        Setting::create(['key' => 'booking_price', 'value' => '100.00', 'agency_id' => null]);
+
+        $walletBefore = app(WalletService::class)->getWallet($user->agency_id)->fresh();
+        $availableBefore = (float) $walletBefore->available_balance;
+        $reservedBefore = (float) $walletBefore->reserved_balance;
+        app(WalletService::class)->deposit($user->agency_id, 200.00, 'PAYMENT-FAILURE-DEPOSIT');
+
+        $booking = Booking::create([
+            'agency_id' => $user->agency_id,
+            'user_id' => $user->id,
+            'booking_status' => 'pending',
+            'booking_reference' => 'PAYMENT-FAILURE-BOOKING',
+            'reservation_id' => '5370114',
+        ]);
+        BookingAttempt::create([
+            'booking_id' => $booking->id,
+            'status' => 'payment_required',
+            'request_payload' => ['booking_id' => $booking->id],
+        ]);
+        app(WalletService::class)->hold($user->agency_id, 100.00, 'portal-booking-fee-'.$booking->id, [
+            'booking_id' => $booking->id,
+            'purpose' => 'portal_booking_fee',
+        ]);
+
+        $walletAfterHold = app(WalletService::class)->getWallet($user->agency_id)->fresh();
+        $this->assertSame($availableBefore + 100.00, (float) $walletAfterHold->available_balance);
+        $this->assertSame($reservedBefore + 100.00, (float) $walletAfterHold->reserved_balance);
+
+        Http::fake([
+            'svp-international-api.pacc.sa/api/v1/checkouts/payment-failed*' => Http::response([
+                'result' => ['code' => '800.100.100'],
+            ], 200),
+        ]);
+
+        $response = $this->withSession(['svp_token' => 'test-svp-token'])
+            ->get(route('user.bookings.payment-return', [
+                'booking' => $booking->id,
+                'resourcePath' => '/checkouts/payment-failed',
+            ]));
+
+        $response->assertRedirect(route('user.bookings.show', $booking));
+        $response->assertSessionHas('error', 'SVP payment was not confirmed. The reserved portal fee has been refunded to the main wallet balance.');
+
+        $this->assertDatabaseHas('bookings', [
+            'id' => $booking->id,
+            'booking_status' => 'failed',
+        ]);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'type' => 'refund',
+            'amount' => 100.00,
+            'reference' => 'portal-booking-fee-'.$booking->id,
+        ]);
+        $this->assertDatabaseHas('refund_requests', [
+            'booking_id' => $booking->id,
+            'agency_id' => $user->agency_id,
+            'amount' => 100.00,
+            'status' => 'processed',
+        ]);
+        $walletAfterRefund = app(WalletService::class)->getWallet($user->agency_id)->fresh();
+        $this->assertSame($availableBefore + 200.00, (float) $walletAfterRefund->available_balance);
+        $this->assertSame($reservedBefore, (float) $walletAfterRefund->reserved_balance);
     }
 
     public function test_user_can_see_live_svp_reservations_and_download_a_ticket(): void
