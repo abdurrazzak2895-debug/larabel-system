@@ -244,9 +244,14 @@
     const sessionDate = item => normalizeDate(item?.exam_date || item?.test_date || item?.date || item?.start_date_in_browser_time_zone || item?.start_date_in_tc_time_zone);
     const sessionCenterId = item => String(item?.test_center_id ?? item?.site_id ?? item?.center_id ?? item?.test_center?.id ?? item?.site?.id ?? item?.center?.id ?? '');
     const sessionCenterName = item => item?.test_center_name || item?.site_name || item?.center_name || item?.test_center?.name || item?.site?.name || item?.center?.name || centerName.value || 'Selected test center';
-    const sessionTime = item => String(item?.test_time || item?.start_time || item?.time || item?.start_at || '').replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
+    const sessionTime = item => {
+        const value = String(item?.test_time || item?.start_time || item?.time || item?.start_at || item?.start_at_in_browser_time_zone || item?.start_at_in_tc_time_zone || item?.start_date_in_browser_time_zone || item?.start_date_in_tc_time_zone || '').trim();
+        if (!value || /^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
+        const normalized = value.replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
+        return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? '' : normalized;
+    };
     const sessionSeatCount = item => {
-        const value = item?.available_seats ?? item?.availableSeats ?? item?.remaining_seats ?? item?.remainingSeats ?? item?.seats ?? null;
+        const value = item?.available_seats ?? item?.availableSeats ?? item?.remaining_seats ?? item?.remainingSeats ?? item?.seats_available ?? item?.available_seat_count ?? item?.seat_count ?? item?.seats ?? null;
         return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
     };
     const sessionDisplayName = (item, index) => String(item?.session_name || item?.name || item?.label || item?.title || '').trim() || 'Session ' + (index + 1);

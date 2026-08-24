@@ -31,14 +31,19 @@
             '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
         })[character]);
         const normalizeDate = value => String(value ?? '').substring(0, 10);
-        const formatTime = value => String(value ?? '').replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').replace(/(?:Z|[+-]\d{2}:?\d{2})$/, '').trim();
+        const formatTime = value => {
+            const raw = String(value ?? '').trim();
+            if (!raw || /^\d{4}-\d{2}-\d{2}$/.test(raw)) return '';
+            const normalized = raw.replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').replace(/(?:Z|[+-]\d{2}:?\d{2})$/, '').trim();
+            return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? '' : normalized;
+        };
         const centerId = row => String(row?.test_center_id ?? row?.site_id ?? row?.center_id ?? row?.id ?? '');
         const centerName = row => String(row?.test_center_name || row?.name || row?.site_name || row?.center_name || 'Live test center').trim();
         const centerSessionId = row => String(row?.exam_session_id ?? row?.session_id ?? row?.sessionId ?? '');
         const centerDate = (row, fallback = '') => normalizeDate(row?.exam_date || row?.test_date || row?.date || row?.start_date_in_tc_time_zone || row?.start_date_in_browser_time_zone || fallback);
         const centerTime = row => formatTime(row?.test_time || row?.start_time || row?.time || row?.start_at_in_tc_time_zone || row?.start_at_in_browser_time_zone || row?.start_at || row?.start_date_in_tc_time_zone || row?.start_date_in_browser_time_zone);
         const centerSeats = row => {
-            const value = row?.available_seats ?? row?.availableSeats ?? row?.remaining_seats ?? row?.seats ?? null;
+            const value = row?.available_seats ?? row?.availableSeats ?? row?.remaining_seats ?? row?.remainingSeats ?? row?.seats_available ?? row?.available_seat_count ?? row?.seat_count ?? row?.seats ?? null;
             return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
         };
         const centerSessionCount = row => {
@@ -50,7 +55,7 @@
         const sessionDate = row => normalizeDate(row?.exam_date || row?.test_date || row?.date || row?.start_date_in_browser_time_zone || row?.start_date_in_tc_time_zone);
         const sessionTime = row => formatTime(row?.test_time || row?.start_time || row?.time || row?.start_at_in_tc_time_zone || row?.start_at_in_browser_time_zone || row?.start_at || row?.start_date_in_tc_time_zone || row?.start_date_in_browser_time_zone);
         const sessionSeats = row => {
-            const value = row?.available_seats ?? row?.availableSeats ?? row?.remaining_seats ?? row?.remainingSeats ?? row?.seats ?? null;
+            const value = row?.available_seats ?? row?.availableSeats ?? row?.remaining_seats ?? row?.remainingSeats ?? row?.seats_available ?? row?.available_seat_count ?? row?.seat_count ?? row?.seats ?? null;
             return value === null || value === '' || Number.isNaN(Number(value)) ? null : Number(value);
         };
         const sessionPriority = row => {

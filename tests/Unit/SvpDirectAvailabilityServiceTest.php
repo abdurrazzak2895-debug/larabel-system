@@ -12,6 +12,49 @@ class SvpDirectAvailabilityServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_fallback_does_not_render_date_only_values_as_time_and_accepts_seat_aliases(): void
+    {
+        TestCenter::query()->create([
+            'svp_id' => '171',
+            'name' => 'Jashore Technical Training Centre',
+            'city' => 'Khulna',
+            'country_code' => 'BD',
+        ]);
+
+        $booking = $this->createMock(BookingService::class);
+        $booking->method('sessionsForCenter')->willReturn(
+            response()->json([
+                'success' => true,
+                'data' => [
+                    'sessions' => [[
+                        'id' => 'date-only-session',
+                        'exam_date' => '2026-08-31',
+                        'test_center_id' => '171',
+                        'test_time' => '2026-08-31',
+                        'available_seat_count' => 12,
+                    ]],
+                ],
+            ])
+        );
+
+        $result = (new SvpDirectAvailabilityService($booking))->centersForDate('candidate-token', [
+            'city' => 'Khulna',
+            'category_id' => '159',
+            'date' => '2026-08-31',
+        ]);
+
+        $this->assertSame([
+            'test_center_name' => 'Jashore Technical Training Centre',
+            'test_center_id' => '171',
+            'test_time' => null,
+            'available_seats' => 12,
+            'session_count' => 1,
+            'exam_session_id' => 'date-only-session',
+            'exam_date' => '2026-08-31',
+            'availability_source' => 'candidate_authenticated_sessions',
+        ], $result['centers'][0]);
+    }
+
     public function test_fallback_returns_all_real_sessions_for_each_configured_center_and_filters_foreign_rows(): void
     {
         TestCenter::query()->create([

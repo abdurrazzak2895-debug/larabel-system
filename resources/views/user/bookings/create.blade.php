@@ -527,12 +527,14 @@
     }
 
     function sessionTime(session) {
-        const value = session?.test_time || session?.start_time || session?.time || session?.start_at || session?.start_date_in_browser_time_zone || session?.start_date_in_tc_time_zone || '';
-        return String(value).replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
+        const value = String(session?.test_time || session?.start_time || session?.time || session?.start_at || session?.start_at_in_browser_time_zone || session?.start_at_in_tc_time_zone || session?.start_date_in_browser_time_zone || session?.start_date_in_tc_time_zone || '').trim();
+        if (!value || /^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
+        const normalized = value.replace(/^\d{4}-\d{2}-\d{2}[T ]/, '').trim();
+        return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? '' : normalized;
     }
 
     function sessionSeatCount(session) {
-        const value = session?.available_seats ?? session?.availableSeats ?? session?.remaining_seats ?? session?.remainingSeats ?? session?.seats ?? null;
+        const value = session?.available_seats ?? session?.availableSeats ?? session?.remaining_seats ?? session?.remainingSeats ?? session?.seats_available ?? session?.available_seat_count ?? session?.seat_count ?? session?.seats ?? null;
         if (value === null || value === '' || Number.isNaN(Number(value))) return null;
         return Number(value);
     }

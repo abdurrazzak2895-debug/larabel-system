@@ -261,9 +261,21 @@ final class SvpDirectAvailabilityService
             'start_date_in_browser_time_zone',
         ] as $key) {
             $value = $session[$key] ?? null;
-            if (is_scalar($value) && trim((string) $value) !== '') {
-                return trim((string) $value);
+            if (! is_scalar($value)) {
+                continue;
             }
+
+            $time = trim((string) $value);
+            if ($time === '' || preg_match('/^\d{4}-\d{2}-\d{2}$/', $time) === 1) {
+                continue;
+            }
+
+            $time = preg_replace('/^\d{4}-\d{2}-\d{2}[T ]/', '', $time) ?? $time;
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($time)) === 1) {
+                continue;
+            }
+
+            return trim($time);
         }
 
         return null;
@@ -275,6 +287,9 @@ final class SvpDirectAvailabilityService
             ?? $session['availableSeats']
             ?? $session['remaining_seats']
             ?? $session['remainingSeats']
+            ?? $session['seats_available']
+            ?? $session['available_seat_count']
+            ?? $session['seat_count']
             ?? $session['seats']
             ?? null;
 
