@@ -8,7 +8,7 @@
   },
   "deploy": {
     "runtime": "V2",
-    "startCommand": "php artisan serve --host=0.0.0.0 --port=$PORT",
+    "startCommand": "exec sh railway/start.sh",
     "healthcheckPath": "/login",
     "healthcheckTimeout": 300,
     "numReplicas": 1,
