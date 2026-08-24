@@ -1123,7 +1123,15 @@ class BookingController extends Controller
                     'status' => $response->getStatusCode(),
                 ]);
 
-                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. Please review the payment result and try again if needed.');
+                $attempt = $booking->attempts()->latest()->first();
+                $this->booking->markBookingFailedAndRefund(
+                    $booking,
+                    $attempt,
+                    $payload,
+                    'SVP payment was not confirmed.'
+                );
+
+                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. The reserved portal fee has been refunded to the main wallet balance.');
             }
 
             $booking->update(['booking_status' => 'booked']);

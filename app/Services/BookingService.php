@@ -778,21 +778,57 @@ class BookingService
      */
     protected function handleBookingFailure(Booking $booking, ?BookingAttempt $attempt, mixed $response, ?string $error = null): array
     {
-        $this->releasePortalBookingFee($booking);
-        $booking->update(['booking_status' => 'failed']);
-        $this->logEvent($booking, 'booking_failed', ['response' => $response]);
-
-        if ($booking->user_id) {
-            $this->notifications->send(
-                $booking->user_id,
-                'Booking failed',
-                'Your booking could not be completed. Any reserved amount has been refunded.'
-            );
-        }
-
-        $this->audit->log((int) $booking->agency_id, 'booking', ['booking_id' => $booking->id, 'action' => 'failed']);
+        $this->markBookingFailedAndRefund($booking, $attempt, $response, $error ?? 'Booking failed.');
 
         return ['booking' => $booking, 'success' => false, 'error' => $error ?? 'Booking failed.'];
+    }
+
+    /**
+     * Mark a booking as failed and immediately return any portal-fee hold to
+     * the agency wallet's available balance. This is used by live SVP booking,
+     * reschedule, and card-payment failure paths so failed bookings never leave
+     * money stuck in reserved balance.
+     */
+    public function markBookingFailedAndRefund(Booking $booking, ?BookingAttempt $attempt = null, mixed $response = null, ?string $error = null): void
+    {
+        DB::transaction(function () use ($booking, $attempt, $response, $error): void {
+            $releasedAmount = $this->releasePortalBookingFee($booking);
+
+            $booking->update(['booking_status' => 'failed']);
+
+            if ($attempt) {
+                $providerResponse = (array) ($attempt->provider_response ?? []);
+                if ($response !== null) {
+                    $providerResponse['failure_response'] = $response;
+                }
+
+                $attempt->update([
+                    'status' => 'failed',
+                    'provider_response' => $providerResponse,
+                    'error_message' => $error,
+                ]);
+            }
+
+            $this->recordAutomaticRefundRequest($booking, $releasedAmount, $error ?: 'Automatic refund for failed booking.');
+            $this->logEvent($booking, 'booking_failed', [
+                'response' => $response,
+                'portal_fee_refunded' => $releasedAmount,
+            ]);
+
+            if ($booking->user_id) {
+                $this->notifications->send(
+                    $booking->user_id,
+                    'Booking failed',
+                    'Your booking could not be completed. Any reserved amount has been refunded to your main wallet balance.'
+                );
+            }
+
+            $this->audit->log((int) $booking->agency_id, 'booking', [
+                'booking_id' => $booking->id,
+                'action' => 'failed',
+                'portal_fee_refunded' => $releasedAmount,
+            ]);
+        });
     }
 
     /**
@@ -860,17 +896,45 @@ class BookingService
         ]);
     }
 
-    public function releasePortalBookingFee(Booking $booking): void
+    public function releasePortalBookingFee(Booking $booking): float
     {
         $reference = $this->portalFeeReference($booking);
         $hold = $this->walletTransaction($booking, 'booking_hold', $reference);
         if (! $hold || $this->walletTransaction($booking, 'refund', $reference)) {
+            return 0.0;
+        }
+
+        $amount = (float) $hold->amount;
+        $this->wallet->releaseHold((int) $booking->agency_id, $amount, $reference, [
+            'booking_id' => $booking->id,
+            'purpose' => 'portal_booking_fee_release',
+        ]);
+
+        return $amount;
+    }
+
+    protected function recordAutomaticRefundRequest(Booking $booking, float $amount, string $reason): void
+    {
+        if ($amount <= 0) {
             return;
         }
 
-        $this->wallet->releaseHold((int) $booking->agency_id, (float) $hold->amount, $reference, [
-            'booking_id' => $booking->id,
-            'purpose' => 'portal_booking_fee_release',
+        $existing = $booking->refundRequests()
+            ->where('status', 'processed')
+            ->where('reason', $reason)
+            ->latest('id')
+            ->first();
+
+        if ($existing) {
+            return;
+        }
+
+        $booking->refundRequests()->create([
+            'agency_id' => $booking->agency_id,
+            'amount' => $amount,
+            'reason' => $reason,
+            'status' => 'processed',
+            'processed_at' => now(),
         ]);
     }
 
