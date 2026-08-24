@@ -9,8 +9,6 @@
   "deploy": {
     "runtime": "V2",
     "startCommand": "exec sh railway/start.sh",
-    "healthcheckPath": "/login",
-    "healthcheckTimeout": 300,
     "numReplicas": 1,
     "preDeployCommand": [
       "chmod +x ./railway/init-app.sh && sh ./railway/init-app.sh"
