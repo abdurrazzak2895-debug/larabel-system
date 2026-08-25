@@ -337,6 +337,7 @@ class UserPanelTest extends TestCase
             ->assertSee('Occupation and category stay fixed')
             ->assertSee('Available Sessions — date-first PACC reschedule')
             ->assertSee('Only live Portal Availability dates')
+            ->assertSee("const sessionSummary = document.getElementById('session-summary');", false)
             ->assertSee('lookup/dates', false)
             ->assertSee('lookup/test-centers', false)
             ->assertSee('lookup/sessions', false)

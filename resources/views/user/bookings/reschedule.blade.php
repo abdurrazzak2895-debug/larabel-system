@@ -196,6 +196,7 @@
     const centerName = document.getElementById('test_center_name');
     const centerSection = document.getElementById('test-center-section');
     const centerSummary = document.getElementById('center-summary');
+    const sessionSummary = document.getElementById('session-summary');
     const availableDate = document.getElementById('available_session_date');
     const session = document.getElementById('exam_session_id');
     const sessionName = document.getElementById('exam_session_name');
