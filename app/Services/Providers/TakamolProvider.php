@@ -1283,9 +1283,15 @@ class TakamolProvider implements BookingProviderInterface
     {
         $resourcePath = trim($resourcePath);
 
-        // HyperPay returns a relative resourcePath. Never allow a callback to
-        // turn this proxy into an arbitrary URL fetcher.
-        if ($resourcePath === '' || ! str_starts_with($resourcePath, '/') || str_starts_with($resourcePath, '//') || filter_var($resourcePath, FILTER_VALIDATE_URL)) {
+        // HyperPay commonly returns `/v1/...`, while this provider already
+        // prefixes every SVP request with `/api/v1`. Strip only those known
+        // provider prefixes so the live callback becomes `/api/v1/...` rather
+        // than the invalid `/api/v1/v1/...`. Never allow a callback to turn
+        // this proxy into an arbitrary URL fetcher.
+        $resourcePath = preg_replace('#^/api/v1(?=/|$)#i', '', $resourcePath) ?? $resourcePath;
+        $resourcePath = preg_replace('#^/v1(?=/|$)#i', '', $resourcePath) ?? $resourcePath;
+
+        if ($resourcePath === '' || $resourcePath === '/' || ! str_starts_with($resourcePath, '/') || str_starts_with($resourcePath, '//') || filter_var($resourcePath, FILTER_VALIDATE_URL)) {
             return response()->json(['message' => 'Invalid payment resource path.'], 422);
         }
 

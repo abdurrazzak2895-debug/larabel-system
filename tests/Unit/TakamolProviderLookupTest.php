@@ -60,6 +60,28 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
+    public function test_payment_status_normalizes_hyperpay_v1_resource_path_without_double_prefix(): void
+    {
+        Http::fake([
+            'https://svp.test/*' => Http::response([
+                'result' => ['code' => '000.100.110', 'description' => 'Request successfully processed'],
+            ], 200),
+        ]);
+
+        $response = (new TakamolProvider())
+            ->withToken('test-token')
+            ->getPaymentStatus('/v1/checkouts/TEST-NDC/payment');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('000.100.110', data_get($response->getData(true), 'result.code'));
+
+        Http::assertSent(function ($request): bool {
+            return $request->method() === 'GET'
+                && parse_url($request->url(), PHP_URL_PATH) === '/api/v1/checkouts/TEST-NDC/payment'
+                && $request->hasHeader('Authorization', 'Bearer test-token');
+        });
+    }
+
     public function test_sessions_are_filtered_by_category_and_exact_test_center(): void
     {
         Http::fake([
