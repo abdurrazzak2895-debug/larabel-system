@@ -9,12 +9,9 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">Deposits</h1>
-            <p class="text-sm text-slate-500 mt-1">Add funds to your personal booking wallet. Your agency wallet is not used.</p>
+            <p class="text-sm text-slate-500 mt-1">View your personal booking-wallet deposit history. New deposits are created by an administrator.</p>
         </div>
-        <a href="{{ route('user.deposits.create') }}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            New Deposit
-        </a>
+        <span class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-semibold">Deposits managed by Admin</span>
     </div>
 
     {{-- ===================== Summary cards ===================== --}}
@@ -109,7 +106,7 @@
                             </div>
                             <p class="text-sm font-medium text-slate-600">No deposits yet</p>
                             <p class="text-xs text-slate-400 mt-1">Your deposit history will appear here.</p>
-                            <a href="{{ route('user.deposits.create') }}" class="inline-block mt-4 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-fuchsia-600 transition">Make a Deposit</a>
+                            <p class="mt-4 text-xs font-medium text-slate-500">Ask your administrator to create a deposit for your account.</p>
                         </td>
                     </tr>
                     @endforelse

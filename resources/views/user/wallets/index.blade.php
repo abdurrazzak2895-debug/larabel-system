@@ -12,9 +12,9 @@
             <h1 class="text-2xl font-bold text-slate-900">Wallet</h1>
             <p class="text-sm text-slate-500 mt-1">Your personal booking balance and transaction history. The agency wallet is not used.</p>
         </div>
-        <a href="{{ route('user.deposits.create') }}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
+        <a href="{{ route('user.deposits.index') }}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Deposit Funds
+            Deposit History
         </a>
     </div>
 
@@ -125,7 +125,7 @@
                             </div>
                             <p class="text-sm font-medium text-slate-600">No transactions yet</p>
                             <p class="text-xs text-slate-400 mt-1">Your wallet activity will appear here.</p>
-                            <a href="{{ route('user.deposits.create') }}" class="inline-block mt-4 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-fuchsia-600 transition">Make a Deposit</a>
+                            <a href="{{ route('user.deposits.index') }}" class="inline-block mt-4 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-fuchsia-600 transition">View Deposit History</a>
                         </td>
                     </tr>
                     @endforelse

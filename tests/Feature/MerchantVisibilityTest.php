@@ -21,23 +21,22 @@ class MerchantVisibilityTest extends TestCase
         $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
     }
 
-    public function test_user_deposit_screen_shows_merchant_name_but_not_personal_numbers(): void
+    public function test_user_deposit_history_hides_private_numbers_and_admin_payment_details(): void
     {
         $agency = Agency::factory()->create();
         $user = User::factory()->create(['agency_id' => $agency->id]);
-        Setting::create(['key' => 'portal_merchant_name', 'value' => 'Example Merchant']);
         config(['payments.merchant_numbers' => [
             'bkash' => '01711111111',
             'nagad' => '01822222222',
         ]]);
         Auth::guard('web')->login($user);
 
-        $this->get(route('user.deposits.create'))
+        $this->get(route('user.deposits.index'))
             ->assertOk()
-            ->assertSee('Example Merchant')
+            ->assertSee('Deposits managed by Admin')
             ->assertDontSee('01711111111')
             ->assertDontSee('01822222222')
-            ->assertDontSee('Payment numbers');
+            ->assertDontSee('Merchant Control');
     }
 
     public function test_admin_can_update_merchant_name_and_private_numbers(): void
@@ -60,6 +59,26 @@ class MerchantVisibilityTest extends TestCase
         $this->assertDatabaseHas('settings', ['key' => 'portal_merchant_name', 'value' => 'Updated Merchant']);
         $this->assertDatabaseHas('settings', ['key' => 'bkash_merchant_number', 'value' => '01712345678']);
         $this->assertDatabaseHas('settings', ['key' => 'nagad_merchant_number', 'value' => '01812345678']);
+    }
+
+    public function test_only_admin_can_open_user_deposit_creation(): void
+    {
+        $agency = Agency::factory()->create();
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        $admin = Admin::factory()->create();
+        $admin->assignRole('Super Admin');
+
+        Auth::guard('admin')->login($admin);
+        $this->get(route('admin.deposits.create'))
+            ->assertOk()
+            ->assertSee('Create User Deposit')
+            ->assertSee('bKash')
+            ->assertSee('Nagad');
+
+        Auth::guard('admin')->logout();
+        Auth::guard('web')->login($user);
+        $this->get('/user/deposits/create')->assertNotFound();
+        $this->get('/agency/deposits')->assertNotFound();
     }
 
     public function test_agency_deposit_approval_routes_are_not_registered(): void

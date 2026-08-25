@@ -126,11 +126,6 @@
             <h1 class="text-base sm:text-lg font-bold text-slate-900 truncate">{{ trim(View::getSection('page-title')) !== '' ? trim(View::getSection('page-title')) : (trim(View::getSection('title')) !== '' ? trim(View::getSection('title')) : 'Dashboard') }}</h1>
         </div>
 
-        <a href="{{ route('user.deposits.create') }}" class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 transition">
-            {!! $__icons['plus'] !!}
-            Add Funds
-        </a>
-
         <a href="{{ route('user.notifications.index') }}" class="relative p-2.5 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition" title="Notifications">
             {!! $__icons['bell'] !!}
             @if ($__unread > 0)

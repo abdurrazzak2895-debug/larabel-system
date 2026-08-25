@@ -85,6 +85,8 @@ Route::middleware('web')->group(function () {
     // Deposits
     Route::prefix('deposits')->name('deposits.')->group(function () {
         Route::get('/', [AdminDepositController::class, 'index'])->name('index');
+        Route::get('/create', [AdminDepositController::class, 'create'])->name('create');
+        Route::post('/', [AdminDepositController::class, 'store'])->name('store');
         Route::post('/{deposit}/approve', [AdminDepositController::class, 'approve'])->name('approve');
         Route::post('/{deposit}/reject', [AdminDepositController::class, 'reject'])->name('reject');
     });
@@ -262,8 +264,6 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
     // Deposits
     Route::prefix('deposits')->name('deposits.')->group(function () {
         Route::get('/', [UserDepositController::class, 'index'])->name('index');
-        Route::get('/create', [UserDepositController::class, 'create'])->name('create');
-        Route::post('/', [UserDepositController::class, 'store'])->name('store');
     });
 
     // Refunds

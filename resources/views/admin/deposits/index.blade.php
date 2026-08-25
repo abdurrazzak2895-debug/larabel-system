@@ -4,9 +4,12 @@
 @section('page-title', 'Deposit Requests')
 
 @section('content')
-<div class="mb-6">
-    <h2 class="text-xl font-bold text-slate-900">Deposit Requests</h2>
-    <p class="text-sm text-slate-500 mt-0.5">{{ $merchantName }} · Review manual bKash/Nagad deposits and approve or reject user wallet credits.</p>
+<div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+        <h2 class="text-xl font-bold text-slate-900">Deposit Requests</h2>
+        <p class="text-sm text-slate-500 mt-0.5">{{ $merchantName }} · Review manual bKash/Nagad deposits and approve or reject user wallet credits.</p>
+    </div>
+    <a href="{{ route('admin.deposits.create') }}" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 text-white text-sm font-semibold shadow-lg shadow-indigo-500/20 hover:from-indigo-600 hover:to-fuchsia-600 transition">Create User Deposit</a>
 </div>
 
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -48,7 +51,7 @@
                         </td>
                         <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($deposit->amount, 2) }} <span class="text-xs font-medium text-slate-400">BDT</span></td>
                         <td class="px-6 py-4 text-slate-600">
-                            <div class="font-medium">{{ ucfirst($deposit->payment_method) }}</div>
+                            <div class="font-medium">{{ $deposit->payment_method === 'bkash' ? 'bKash' : 'Nagad' }}</div>
                             @if ($deposit->mfs_transaction_id)
                                 <div class="text-xs text-slate-500">Txn: <span class="font-mono">{{ $deposit->mfs_transaction_id }}</span></div>
                                 <div class="text-xs text-slate-500">Sender: {{ $deposit->mfs_sender_phone }}</div>
