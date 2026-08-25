@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * @property int $id
  * @property int $agency_id
+ * @property int|null $user_id
  * @property string $amount
  * @property string $payment_method
  * @property string|null $receipt_path
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class DepositRequest extends Model
 {
     /** @var array<int, string> */
-    protected $fillable = ['agency_id', 'amount', 'payment_method', 'receipt_path', 'status', 'processed_at'];
+    protected $fillable = ['agency_id', 'user_id', 'amount', 'payment_method', 'receipt_path', 'status', 'processed_at'];
 
     /** @var array<string, string> */
     protected $casts = [
@@ -31,5 +32,11 @@ class DepositRequest extends Model
     public function agency(): BelongsTo
     {
         return $this->belongsTo(Agency::class);
+    }
+
+    /** @return BelongsTo<User, static> */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

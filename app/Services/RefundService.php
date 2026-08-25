@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Booking;
 use App\Models\RefundRequest;
 use App\Models\WalletTransaction;
+use App\Models\UserWalletTransaction;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -16,6 +17,7 @@ class RefundService
 {
     public function __construct(
         private WalletService $wallet,
+        private UserWalletService $userWallet,
         private NotificationService $notifications,
         private AuditService $audit
     ) {}
@@ -61,16 +63,25 @@ class RefundService
                 'processed_at' => now(),
             ]);
 
-            $this->wallet->refund(
-                (int) $refund->agency_id,
-                (float) $refund->amount,
-                "refund-request-{$refund->id}",
-                ['refund_id' => $refund->id, 'booking_id' => $refund->booking_id]
-            );
+            $booking = $refund->booking;
+            if ($booking?->user_id) {
+                $this->userWallet->refund(
+                    (int) $booking->user_id,
+                    (float) $refund->amount,
+                    "refund-request-{$refund->id}",
+                    ['refund_id' => $refund->id, 'booking_id' => $refund->booking_id]
+                );
+            } else {
+                $this->wallet->refund(
+                    (int) $refund->agency_id,
+                    (float) $refund->amount,
+                    "refund-request-{$refund->id}",
+                    ['refund_id' => $refund->id, 'booking_id' => $refund->booking_id]
+                );
+            }
 
             $refund->update(['status' => 'processed']);
 
-            $booking = $refund->booking;
             if ($booking) {
                 $booking->update(['booking_status' => 'refunded']);
             }
@@ -120,30 +131,58 @@ class RefundService
                     }
 
                     $reference = 'portal-booking-fee-'.$booking->id;
-                    $hold = WalletTransaction::query()
-                        ->where('type', 'booking_hold')
-                        ->where('reference', $reference)
-                        ->whereHas('wallet', fn ($query) => $query->where('agency_id', $booking->agency_id))
-                        ->latest('id')
-                        ->first();
+                    if ($booking->user_id) {
+                        $hold = UserWalletTransaction::query()
+                            ->where('type', 'booking_hold')
+                            ->where('reference', $reference)
+                            ->whereHas('wallet', fn ($query) => $query->where('user_id', $booking->user_id))
+                            ->latest('id')
+                            ->first();
 
-                    $alreadyReleased = $hold !== null && WalletTransaction::query()
-                        ->where('wallet_id', $hold->wallet_id)
-                        ->where('type', 'refund')
-                        ->where('reference', $reference)
-                        ->exists();
+                        $alreadyReleased = $hold !== null && UserWalletTransaction::query()
+                            ->where('user_wallet_id', $hold->user_wallet_id)
+                            ->where('type', 'refund')
+                            ->where('reference', $reference)
+                            ->exists();
+                    } else {
+                        $hold = WalletTransaction::query()
+                            ->where('type', 'booking_hold')
+                            ->where('reference', $reference)
+                            ->whereHas('wallet', fn ($query) => $query->where('agency_id', $booking->agency_id))
+                            ->latest('id')
+                            ->first();
+
+                        $alreadyReleased = $hold !== null && WalletTransaction::query()
+                            ->where('wallet_id', $hold->wallet_id)
+                            ->where('type', 'refund')
+                            ->where('reference', $reference)
+                            ->exists();
+                    }
 
                     if ($hold && ! $alreadyReleased) {
-                        $this->wallet->releaseHold(
-                            (int) $booking->agency_id,
-                            (float) $hold->amount,
-                            $reference,
-                            [
-                                'booking_id' => $booking->id,
-                                'purpose' => 'automatic_pending_booking_refund',
-                                'timeout_minutes' => $minutes,
-                            ]
-                        );
+                        if ($booking->user_id) {
+                            $this->userWallet->releaseHold(
+                                (int) $booking->user_id,
+                                (float) $hold->amount,
+                                $reference,
+                                [
+                                    'booking_id' => $booking->id,
+                                    'purpose' => 'automatic_pending_booking_refund',
+                                    'timeout_minutes' => $minutes,
+                                ]
+                            );
+                        } else {
+                            $this->wallet->releaseHold(
+                                (int) $booking->agency_id,
+                                (float) $hold->amount,
+                                $reference,
+                                [
+                                    'booking_id' => $booking->id,
+                                    'purpose' => 'automatic_pending_booking_refund',
+                                    'timeout_minutes' => $minutes,
+                                ]
+                            );
+                        }
                     }
 
                     $reason = 'Automatic refund: pending booking exceeded the payment timeout.';

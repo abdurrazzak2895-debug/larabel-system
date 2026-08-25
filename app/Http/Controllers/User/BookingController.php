@@ -9,7 +9,7 @@ use App\Models\Candidate;
 use App\Services\BookingService;
 use App\Services\SvpReservationCreditService;
 use App\Services\SvpTemporaryHoldService;
-use App\Services\WalletService;
+use App\Services\UserWalletService;
 use App\Services\PortalAvailabilityService;
 use App\Services\SvpDirectAvailabilityService;
 use Illuminate\Http\Request;
@@ -24,7 +24,7 @@ class BookingController extends Controller
         private BookingService $booking,
         private SvpReservationCreditService $credits,
         private SvpTemporaryHoldService $holds,
-        private WalletService $wallet,
+        private UserWalletService $userWallet,
         private PortalAvailabilityService $portalAvailability,
         private SvpDirectAvailabilityService $directAvailability
     ) {
@@ -511,7 +511,7 @@ class BookingController extends Controller
                 'reservation' => $reservation,
                 'reservationData' => $reservationData,
                 'context' => $context,
-                'wallet' => $this->wallet->getWallet($agencyId),
+                'wallet' => $this->userWallet->getWallet((int) Auth::id()),
                 'candidates' => $candidates,
                 'selectedCandidateId' => $selectedCandidateId,
                 'svpToken' => $token,
@@ -647,7 +647,7 @@ class BookingController extends Controller
         $token = $this->ensureSvpToken($request);
 
         // Wallet + candidates synced from SVP profile after login.
-        $wallet = $this->wallet->getWallet($agencyId);
+        $wallet = $this->userWallet->getWallet((int) Auth::id());
         $candidates = Candidate::where('user_id', Auth::id())->latest()->get();
 
         $occupations = [];
@@ -1131,7 +1131,7 @@ class BookingController extends Controller
                     'SVP payment was not confirmed.'
                 );
 
-                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. The portal fee has been refunded to the main wallet balance.');
+                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. The portal fee has been refunded to your personal wallet balance.');
             }
 
             $booking->update(['booking_status' => 'booked']);

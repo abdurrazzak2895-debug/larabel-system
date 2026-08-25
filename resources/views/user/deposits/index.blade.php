@@ -9,7 +9,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">Deposits</h1>
-            <p class="text-sm text-slate-500 mt-1">Track and manage your deposit requests.</p>
+            <p class="text-sm text-slate-500 mt-1">Add funds to your personal booking wallet. Your agency wallet is not used.</p>
         </div>
         <a href="{{ route('user.deposits.create') }}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -61,7 +61,7 @@
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-100">
             <h3 class="text-sm font-semibold text-slate-800">Deposit History</h3>
-            <p class="text-xs text-slate-400 mt-0.5">Current wallet balance: <span class="font-semibold text-slate-700">{{ number_format($walletBalance, 2) }} BDT</span></p>
+            <p class="text-xs text-slate-400 mt-0.5">Your wallet balance: <span class="font-semibold text-slate-700">{{ number_format($walletBalance, 2) }} BDT</span></p>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">

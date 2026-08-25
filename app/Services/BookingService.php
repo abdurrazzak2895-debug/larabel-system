@@ -26,7 +26,8 @@ class BookingService
         private SvpReservationCreditService $credits,
         private NotificationService $notifications,
         private AuditService $audit,
-        private WalletService $wallet
+        private WalletService $wallet,
+        private UserWalletService $userWallet
     ) {}
 
     // -----------------------------------------------------------------
@@ -95,10 +96,15 @@ class BookingService
     public function completeBooking(string $token, array $data, ?Booking $booking = null): array
     {
         $agencyId = (int) $data['agency_id'];
+        $bookingUserId = isset($data['user_id']) && $data['user_id'] !== null ? (int) $data['user_id'] : null;
+
+        if ($bookingUserId !== null && ! \App\Models\User::query()->whereKey($bookingUserId)->where('agency_id', $agencyId)->exists()) {
+            throw new \InvalidArgumentException('The booking user does not belong to the selected agency.');
+        }
 
         $booking = $booking ?? Booking::create([
             'agency_id'        => $agencyId,
-            'user_id'          => $data['user_id'] ?? null,
+            'user_id'          => $bookingUserId,
             'credential_id'    => $data['credential_id'] ?? null,
             'occupation_id'    => $data['occupation_id'] ?? null,
             'category_id'      => $data['category_id'] ?? null,
@@ -111,6 +117,7 @@ class BookingService
             'temporary_hold_expires_at' => $data['temporary_hold_expires_at'] ?? null,
             'notes'            => $data['notes'] ?? null,
             'booking_status'   => 'processing',
+            'portal_booking_fee' => $this->portalBookingFee($bookingUserId, $agencyId),
             'booking_reference' => Str::uuid()->toString(),
         ]);
 
@@ -271,9 +278,15 @@ class BookingService
     public function completeReschedule(string $token, string $reservationId, array $data): array
     {
         $agencyId = (int) $data['agency_id'];
+        $bookingUserId = isset($data['user_id']) && $data['user_id'] !== null ? (int) $data['user_id'] : null;
+
+        if ($bookingUserId !== null && ! \App\Models\User::query()->whereKey($bookingUserId)->where('agency_id', $agencyId)->exists()) {
+            throw new \InvalidArgumentException('The booking user does not belong to the selected agency.');
+        }
+
         $booking = Booking::create([
             'agency_id'        => $agencyId,
-            'user_id'          => $data['user_id'] ?? null,
+            'user_id'          => $bookingUserId,
             'credential_id'    => $data['credential_id'] ?? null,
             'occupation_id'    => $data['occupation_id'] ?? null,
             'category_id'      => $data['category_id'] ?? null,
@@ -287,6 +300,7 @@ class BookingService
             'reservation_id'   => $reservationId,
             'notes'            => $data['notes'] ?? null,
             'booking_status'   => 'processing',
+            'portal_booking_fee' => $this->portalBookingFee($bookingUserId, $agencyId),
             'booking_reference' => Str::uuid()->toString(),
         ]);
 
@@ -819,7 +833,7 @@ class BookingService
                 $this->notifications->send(
                     $booking->user_id,
                     'Booking failed',
-                    'Your booking could not be completed. The portal fee has been refunded to your main wallet balance.'
+                    'Your booking could not be completed. The portal fee has been refunded to your personal wallet balance.'
                 );
             }
 
@@ -836,8 +850,16 @@ class BookingService
      * falling back to the global admin setting and finally to the documented
      * zero-fee default. This is not the SVP reservation amount.
      */
-    public function portalBookingFee(int $agencyId): float
+    public function portalBookingFee(?int $userId, int $agencyId): float
     {
+        $userValue = $userId !== null
+            ? \App\Models\User::query()->whereKey($userId)->value('portal_booking_fee')
+            : null;
+
+        if ($userValue !== null && is_numeric($userValue)) {
+            return max(0.0, round((float) $userValue, 2));
+        }
+
         $agencyValue = Setting::query()
             ->where('key', 'booking_price')
             ->where('agency_id', $agencyId)
@@ -865,9 +887,15 @@ class BookingService
      */
     protected function ensurePortalBookingFeeHeld(Booking $booking, string $purpose = 'portal_booking_fee', array $meta = []): void
     {
-        $fee = $this->portalBookingFee((int) $booking->agency_id);
+        $fee = $booking->portal_booking_fee !== null
+            ? (float) $booking->portal_booking_fee
+            : $this->portalBookingFee($booking->user_id ? (int) $booking->user_id : null, (int) $booking->agency_id);
         if ($fee <= 0) {
             return;
+        }
+
+        if ($booking->portal_booking_fee === null) {
+            $booking->update(['portal_booking_fee' => $fee]);
         }
 
         $reference = $this->portalFeeReference($booking);
@@ -876,10 +904,16 @@ class BookingService
             return;
         }
 
-        $this->wallet->hold((int) $booking->agency_id, $fee, $reference, array_merge([
+        $meta = array_merge([
             'booking_id' => $booking->id,
             'purpose' => $purpose,
-        ], $meta));
+        ], $meta);
+
+        if ($booking->user_id) {
+            $this->userWallet->hold((int) $booking->user_id, $fee, $reference, $meta);
+        } else {
+            $this->wallet->hold((int) $booking->agency_id, $fee, $reference, $meta);
+        }
     }
 
     public function finalizePortalBookingFee(Booking $booking): void
@@ -890,10 +924,16 @@ class BookingService
             return;
         }
 
-        $this->wallet->debit((int) $booking->agency_id, (float) $hold->amount, $reference, [
+        $meta = [
             'booking_id' => $booking->id,
             'purpose' => 'portal_booking_fee',
-        ]);
+        ];
+
+        if ($booking->user_id) {
+            $this->userWallet->debit((int) $booking->user_id, (float) $hold->amount, $reference, $meta);
+        } else {
+            $this->wallet->debit((int) $booking->agency_id, (float) $hold->amount, $reference, $meta);
+        }
     }
 
     public function releasePortalBookingFee(Booking $booking): float
@@ -905,10 +945,16 @@ class BookingService
         }
 
         $amount = (float) $hold->amount;
-        $this->wallet->releaseHold((int) $booking->agency_id, $amount, $reference, [
+        $meta = [
             'booking_id' => $booking->id,
             'purpose' => 'portal_booking_fee_release',
-        ]);
+        ];
+
+        if ($booking->user_id) {
+            $this->userWallet->releaseHold((int) $booking->user_id, $amount, $reference, $meta);
+        } else {
+            $this->wallet->releaseHold((int) $booking->agency_id, $amount, $reference, $meta);
+        }
 
         return $amount;
     }
@@ -943,11 +989,17 @@ class BookingService
         return 'portal-booking-fee-'.$booking->id;
     }
 
-    protected function walletTransaction(Booking $booking, string $type, string $reference): ?\App\Models\WalletTransaction
+    protected function walletTransaction(Booking $booking, string $type, string $reference): \App\Models\WalletTransaction|\App\Models\UserWalletTransaction|null
     {
-        $wallet = $this->wallet->getWallet((int) $booking->agency_id);
+        if ($booking->user_id) {
+            return $this->userWallet->getWallet((int) $booking->user_id)->transactions()
+                ->where('type', $type)
+                ->where('reference', $reference)
+                ->latest('id')
+                ->first();
+        }
 
-        return $wallet->transactions()
+        return $this->wallet->getWallet((int) $booking->agency_id)->transactions()
             ->where('type', $type)
             ->where('reference', $reference)
             ->latest('id')
@@ -962,9 +1014,15 @@ class BookingService
         return DB::transaction(function () use ($booking, $amount, $reason) {
             $booking->update(['booking_status' => 'cancelled']);
 
-            $this->wallet->refund((int) $booking->agency_id, $amount, $booking->booking_reference, [
-                'booking_id' => $booking->id,
-            ]);
+            if ($booking->user_id) {
+                $this->userWallet->refund((int) $booking->user_id, $amount, $booking->booking_reference, [
+                    'booking_id' => $booking->id,
+                ]);
+            } else {
+                $this->wallet->refund((int) $booking->agency_id, $amount, $booking->booking_reference, [
+                    'booking_id' => $booking->id,
+                ]);
+            }
 
             $this->logEvent($booking, 'booking_cancelled', ['reason' => $reason]);
             $this->audit->log((int) $booking->agency_id, 'refund', ['booking_id' => $booking->id, 'action' => 'cancelled']);

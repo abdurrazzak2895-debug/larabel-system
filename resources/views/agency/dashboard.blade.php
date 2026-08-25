@@ -10,15 +10,15 @@
     <div class="absolute -bottom-24 -left-16 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl"></div>
     <div class="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
         <div>
-            <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Wallet Balance</p>
+            <p class="text-xs font-semibold uppercase tracking-widest text-indigo-300 mb-2">Managed User Wallets</p>
             <p class="text-4xl sm:text-5xl font-black tracking-tight">
-                {{ number_format($availableWallet, 2) }}
+                {{ number_format($managedUserBalance, 2) }}
                 <span class="text-lg sm:text-xl font-bold text-indigo-300">BDT</span>
             </p>
             <div class="flex flex-wrap gap-4 mt-4 text-sm">
                 <span class="inline-flex items-center gap-1.5 text-slate-300">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    Credit Limit {{ number_format($creditRemaining, 2) }}
+                    Total available balance across user wallets
                 </span>
             </div>
         </div>
@@ -28,10 +28,12 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 New Booking
             </a>
-            <a href="{{ route('agency.wallets.index') }}"
-               class="inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/15 backdrop-blur text-white text-sm font-medium rounded-xl border border-white/10 transition">
-                View Wallet
-            </a>
+            @if (auth()->user()?->hasPermission('manage agency users'))
+                <a href="{{ route('agency.users.index') }}"
+                   class="inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/15 backdrop-blur text-white text-sm font-medium rounded-xl border border-white/10 transition">
+                    Manage Users
+                </a>
+            @endif
         </div>
     </div>
 </div>

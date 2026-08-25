@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
-use App\Models\Agency;
 use App\Models\DepositRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,16 +16,16 @@ class DepositController extends Controller
 
     public function index()
     {
-        $agencyId = Auth::user()->agency_id;
+        $userId = (int) Auth::id();
 
-        $deposits = DepositRequest::where('agency_id', $agencyId)->latest()->paginate(10);
+        $deposits = DepositRequest::where('user_id', $userId)->latest()->paginate(10);
 
         return view('user.deposits.index', [
             'deposits'          => $deposits,
-            'totalDeposited'    => DepositRequest::where('agency_id', $agencyId)->where('status', 'approved')->sum('amount'),
-            'pendingCount'      => DepositRequest::where('agency_id', $agencyId)->where('status', 'pending')->count(),
-            'approvedCount'     => DepositRequest::where('agency_id', $agencyId)->where('status', 'approved')->count(),
-            'rejectedCount'     => DepositRequest::where('agency_id', $agencyId)->where('status', 'rejected')->count(),
+            'totalDeposited'    => DepositRequest::where('user_id', $userId)->where('status', 'approved')->sum('amount'),
+            'pendingCount'      => DepositRequest::where('user_id', $userId)->where('status', 'pending')->count(),
+            'approvedCount'     => DepositRequest::where('user_id', $userId)->where('status', 'approved')->count(),
+            'rejectedCount'     => DepositRequest::where('user_id', $userId)->where('status', 'rejected')->count(),
             'walletBalance'     => (float) (Auth::user()->wallet->available_balance ?? 0),
         ]);
     }
@@ -55,6 +54,7 @@ class DepositController extends Controller
         ]);
 
         $data['agency_id'] = (int) $agencyId;
+        $data['user_id'] = (int) Auth::id();
 
         app(\App\Services\DepositService::class)->submit($data);
 

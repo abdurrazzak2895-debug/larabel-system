@@ -8,7 +8,6 @@ use App\Models\Candidate;
 use App\Services\BookingService;
 use App\Services\SvpReservationCreditService;
 use App\Services\SvpTemporaryHoldService;
-use App\Services\WalletService;
 use App\Services\PortalAvailabilityService;
 use App\Services\SvpDirectAvailabilityService;
 use Illuminate\Http\Request;
@@ -30,7 +29,6 @@ class BookingController extends Controller
         private BookingService $booking,
         private SvpReservationCreditService $credits,
         private SvpTemporaryHoldService $holds,
-        private WalletService $wallet,
         private PortalAvailabilityService $portalAvailability,
         private SvpDirectAvailabilityService $directAvailability
     ) {
@@ -153,10 +151,9 @@ class BookingController extends Controller
         $token = $this->ensureSvpToken($request);
         $agencyId = (int) Auth::user()->agency_id;
 
-        // Profile / wallet / lookup data for the wizard.
-        $wallet = $this->wallet->getWallet($agencyId);
-
-        // Candidates synced from SVP profile after login.
+        // Candidates synced from SVP profile after login. The selected
+        // candidate owns the wallet charged for this booking; the agency
+        // wallet is never used for new bookings.
         $candidates = Candidate::where('agency_id', $agencyId)->latest()->get();
 
         $occupations = [];
@@ -183,7 +180,7 @@ class BookingController extends Controller
         }
 
         return view('agency.booking-create', [
-            'wallet'      => $wallet,
+            'wallet'      => null,
             'candidates'  => $candidates,
             'occupations' => $occupations,
             'cities'      => $cities,
@@ -515,7 +512,7 @@ class BookingController extends Controller
 
         $result = $this->booking->completeBooking($token, [
             'agency_id'       => $agencyId,
-            'user_id'         => Auth::id(),
+            'user_id'         => (int) $candidate->user_id,
             'credential_id'   => $candidate->id,
             'svp_user_id'     => $candidate->svp_user_id,
             'occupation_id'    => $data['occupation_id'],
@@ -665,7 +662,7 @@ class BookingController extends Controller
                     'SVP payment was not confirmed.'
                 );
 
-                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. The portal fee has been refunded to the main wallet balance.');
+                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. The selected user’s portal fee has been refunded to their personal wallet balance.');
             }
 
             $booking->update(['booking_status' => 'booked']);

@@ -168,7 +168,7 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::post('/bookings/{booking}/cancel', [\App\Http\Controllers\Agency\BookingController::class, 'cancel'])->whereNumber('booking')->name('bookings.cancel');
 
     // Users
-    Route::prefix('users')->name('users.')->group(function () {
+    Route::prefix('users')->name('users.')->middleware('CheckPermission:manage agency users')->group(function () {
         Route::get('/', [AgencyUserController::class, 'index'])->name('index');
         Route::get('/create', [AgencyUserController::class, 'create'])->name('create');
         Route::post('/', [AgencyUserController::class, 'store'])->name('store');
@@ -176,6 +176,9 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
         Route::put('/{user}', [AgencyUserController::class, 'update'])->name('update');
         Route::post('/{user}/disable', [AgencyUserController::class, 'disable'])->name('disable');
         Route::post('/{user}/reset-password', [AgencyUserController::class, 'resetPassword'])->name('reset-password');
+        Route::post('/{user}/wallet/adjust', [AgencyUserController::class, 'adjustWallet'])
+            ->middleware('CheckPermission:manage user wallets')
+            ->name('wallet.adjust');
     });
 
     // Wallet
@@ -185,10 +188,16 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     });
 
     // Deposits
-    Route::prefix('deposits')->name('deposits.')->group(function () {
+    Route::prefix('deposits')->name('deposits.')->middleware('CheckPermission:manage user wallets')->group(function () {
         Route::get('/', [AgencyDepositController::class, 'index'])->name('index');
         Route::get('/create', [AgencyDepositController::class, 'create'])->name('create');
         Route::post('/', [AgencyDepositController::class, 'store'])->name('store');
+        Route::post('/{deposit}/approve', [AgencyDepositController::class, 'approve'])
+            ->middleware('CheckPermission:approve user deposits')
+            ->name('approve');
+        Route::post('/{deposit}/reject', [AgencyDepositController::class, 'reject'])
+            ->middleware('CheckPermission:approve user deposits')
+            ->name('reject');
     });
 
     // Refunds

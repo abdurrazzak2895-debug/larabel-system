@@ -184,7 +184,7 @@ class CoreServicesTest extends TestCase
             'svp_user_id' => 'SVP-FEE-USER',
         ]);
 
-        app(WalletService::class)->deposit($this->agency->id, 100.00);
+        app(\App\Services\UserWalletService::class)->deposit($user->id, 100.00);
 
         $result = app(BookingService::class)->completeBooking('fee-token', [
             'agency_id' => $this->agency->id,
@@ -197,18 +197,18 @@ class CoreServicesTest extends TestCase
 
         $this->assertTrue($result['success']);
         $this->assertSame('booked', $result['booking']->booking_status);
-        $this->assertDatabaseHas('wallet_transactions', [
+        $this->assertDatabaseHas('user_wallet_transactions', [
             'type' => 'booking_hold',
             'amount' => 25.00,
             'reference' => 'portal-booking-fee-'.$result['booking']->id,
         ]);
-        $this->assertDatabaseHas('wallet_transactions', [
+        $this->assertDatabaseHas('user_wallet_transactions', [
             'type' => 'booking_debit',
             'amount' => 25.00,
             'reference' => 'portal-booking-fee-'.$result['booking']->id,
         ]);
-        $this->assertDatabaseHas('agency_wallets', [
-            'agency_id' => $this->agency->id,
+        $this->assertDatabaseHas('user_wallets', [
+            'user_id' => $user->id,
             'available_balance' => 75.00,
             'reserved_balance' => 0.00,
         ]);

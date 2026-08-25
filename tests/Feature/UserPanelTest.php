@@ -9,7 +9,7 @@ use App\Models\Setting;
 use App\Models\PortalAvailabilityCredential;
 use App\Models\TestCenter;
 use App\Models\User;
-use App\Services\WalletService;
+use App\Services\UserWalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -56,7 +56,7 @@ class UserPanelTest extends TestCase
             'password' => 'password',
         ]);
 
-        $response->assertRedirect(route('agency.dashboard'));
+        $response->assertRedirect(route('user.dashboard'));
         $this->assertAuthenticatedAs($user, 'web');
     }
 
@@ -95,12 +95,9 @@ class UserPanelTest extends TestCase
             route('user.dashboard'),
             route('user.wallets.index'),
             route('user.bookings.create'),
-            route('agency.dashboard'),
-            route('agency.wallets.index'),
-            route('agency.bookings.create'),
         ] as $url) {
             $response = $this->get($url)->assertOk();
-            $response->assertSee('Wallet Balance')
+            $response->assertSee($url === route('user.wallets.index') ? 'Personal Wallet Balance' : 'Wallet Balance')
                 ->assertDontSee('Reserved Balance')
                 ->assertDontSee('Reserved:');
         }
@@ -114,10 +111,10 @@ class UserPanelTest extends TestCase
         $user = $this->loginAgencyUser();
         Setting::create(['key' => 'booking_price', 'value' => '100.00', 'agency_id' => null]);
 
-        $walletBefore = app(WalletService::class)->getWallet($user->agency_id)->fresh();
+        $walletBefore = app(UserWalletService::class)->getWallet($user->id)->fresh();
         $availableBefore = (float) $walletBefore->available_balance;
         $reservedBefore = (float) $walletBefore->reserved_balance;
-        app(WalletService::class)->deposit($user->agency_id, 200.00, 'PAYMENT-FAILURE-DEPOSIT');
+        app(UserWalletService::class)->deposit($user->id, 200.00, 'PAYMENT-FAILURE-DEPOSIT');
 
         $booking = Booking::create([
             'agency_id' => $user->agency_id,
@@ -131,12 +128,12 @@ class UserPanelTest extends TestCase
             'status' => 'payment_required',
             'request_payload' => ['booking_id' => $booking->id],
         ]);
-        app(WalletService::class)->hold($user->agency_id, 100.00, 'portal-booking-fee-'.$booking->id, [
+        app(UserWalletService::class)->hold($user->id, 100.00, 'portal-booking-fee-'.$booking->id, [
             'booking_id' => $booking->id,
             'purpose' => 'portal_booking_fee',
         ]);
 
-        $walletAfterHold = app(WalletService::class)->getWallet($user->agency_id)->fresh();
+        $walletAfterHold = app(UserWalletService::class)->getWallet($user->id)->fresh();
         $this->assertSame($availableBefore + 100.00, (float) $walletAfterHold->available_balance);
         $this->assertSame($reservedBefore + 100.00, (float) $walletAfterHold->reserved_balance);
 
@@ -153,13 +150,13 @@ class UserPanelTest extends TestCase
             ]));
 
         $response->assertRedirect(route('user.bookings.show', $booking));
-        $response->assertSessionHas('error', 'SVP payment was not confirmed. The portal fee has been refunded to the main wallet balance.');
+        $response->assertSessionHas('error', 'SVP payment was not confirmed. The portal fee has been refunded to your personal wallet balance.');
 
         $this->assertDatabaseHas('bookings', [
             'id' => $booking->id,
             'booking_status' => 'failed',
         ]);
-        $this->assertDatabaseHas('wallet_transactions', [
+        $this->assertDatabaseHas('user_wallet_transactions', [
             'type' => 'refund',
             'amount' => 100.00,
             'reference' => 'portal-booking-fee-'.$booking->id,
@@ -170,7 +167,7 @@ class UserPanelTest extends TestCase
             'amount' => 100.00,
             'status' => 'processed',
         ]);
-        $walletAfterRefund = app(WalletService::class)->getWallet($user->agency_id)->fresh();
+        $walletAfterRefund = app(UserWalletService::class)->getWallet($user->id)->fresh();
         $this->assertSame($availableBefore + 200.00, (float) $walletAfterRefund->available_balance);
         $this->assertSame($reservedBefore, (float) $walletAfterRefund->reserved_balance);
     }
@@ -285,10 +282,10 @@ class UserPanelTest extends TestCase
 
         $user = $this->loginAgencyUser();
         Setting::create(['key' => 'booking_price', 'value' => '100.00', 'agency_id' => null]);
-        $walletBefore = app(WalletService::class)->getWallet($user->agency_id);
+        $walletBefore = app(UserWalletService::class)->getWallet($user->id);
         $availableBefore = (float) $walletBefore->available_balance;
         $reservedBefore = (float) $walletBefore->reserved_balance;
-        app(WalletService::class)->deposit($user->agency_id, 250.00, 'RESCHEDULE-TEST-DEPOSIT');
+        app(UserWalletService::class)->deposit($user->id, 250.00, 'RESCHEDULE-TEST-DEPOSIT');
 
         $candidate = Candidate::create([
             'user_id' => $user->id,
@@ -431,18 +428,18 @@ class UserPanelTest extends TestCase
             'booking_status' => 'booked',
         ]);
         $booking = Booking::where('reservation_id', '5370112')->latest('id')->firstOrFail();
-        $this->assertDatabaseHas('wallet_transactions', [
+        $this->assertDatabaseHas('user_wallet_transactions', [
             'type' => 'booking_hold',
             'amount' => 100.00,
             'reference' => 'portal-booking-fee-'.$booking->id,
         ]);
-        $this->assertDatabaseHas('wallet_transactions', [
+        $this->assertDatabaseHas('user_wallet_transactions', [
             'type' => 'booking_debit',
             'amount' => 100.00,
             'reference' => 'portal-booking-fee-'.$booking->id,
         ]);
-        $this->assertDatabaseHas('agency_wallets', [
-            'agency_id' => $user->agency_id,
+        $this->assertDatabaseHas('user_wallets', [
+            'user_id' => $user->id,
             'available_balance' => $availableBefore + 150.00,
             'reserved_balance' => $reservedBefore,
         ]);

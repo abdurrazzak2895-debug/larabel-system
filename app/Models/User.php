@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOneThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
 /**
@@ -27,7 +27,7 @@ class User extends Authenticatable
     use HasRoles;
 
     /** @var array<int, string> */
-    protected $fillable = ['agency_id', 'name', 'username', 'email', 'password', 'status'];
+    protected $fillable = ['agency_id', 'name', 'username', 'email', 'password', 'status', 'portal_booking_fee'];
 
     /** @var array<int, string> */
     protected $hidden = ['password', 'remember_token'];
@@ -36,6 +36,7 @@ class User extends Authenticatable
     protected $casts = [
         'status'   => 'boolean',
         'password' => 'hashed',
+        'portal_booking_fee' => 'decimal:2',
     ];
 
     /** @return BelongsTo<Agency, static> */
@@ -56,9 +57,9 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class);
     }
 
-    /** @return HasOneThrough<AgencyWallet> */
-    public function wallet(): HasOneThrough
+    /** @return HasOne<UserWallet, static> */
+    public function wallet(): HasOne
     {
-        return $this->hasOneThrough(AgencyWallet::class, Agency::class, 'id', 'agency_id', 'agency_id', 'id');
+        return $this->hasOne(UserWallet::class);
     }
 }

@@ -47,6 +47,13 @@
                 </div>
             </div>
 
+            <div>
+                <label for="portal_booking_fee" class="block text-sm font-medium text-slate-700 mb-1">Portal booking fee <span class="text-slate-400">(BDT per booking)</span></label>
+                <input type="number" name="portal_booking_fee" id="portal_booking_fee" min="0" step="0.01" value="{{ old('portal_booking_fee') }}" placeholder="Leave blank for agency default"
+                    class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                @error('portal_booking_fee')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            </div>
+
             <label class="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" name="status" value="1" checked class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                 <span class="text-sm text-slate-700">Active immediately</span>

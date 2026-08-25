@@ -7,6 +7,8 @@ use App\Models\DepositRequest;
 use App\Models\RefundRequest;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use App\Models\UserWallet;
+use App\Models\UserWalletTransaction;
 use Illuminate\Support\Facades\DB;
 
 class ReportService
@@ -17,20 +19,30 @@ class ReportService
             'total_agencies'    => \App\Models\Agency::count(),
             'active_agencies'   => \App\Models\Agency::where('status', true)->count(),
             'total_users'       => User::count(),
-            'total_wallet_balance' => WalletTransaction::sum('amount'),
+            'total_wallet_balance' => WalletTransaction::sum('amount') + UserWalletTransaction::sum('amount'),
         ];
     }
 
     public function revenueOverview(int $days = 30): array
     {
-        return WalletTransaction::where('type', 'booking_debit')
+        $agency = WalletTransaction::where('type', 'booking_debit')
             ->where('created_at', '>=', now()->subDays($days))
             ->selectRaw('DATE(created_at) as date, SUM(amount) as total')
             ->groupBy('date')
             ->orderBy('date')
             ->get()
-            ->map(fn ($row) => ['date' => $row->date, 'total' => (float) $row->total])
-            ->values()
+            ->keyBy('date');
+
+        $users = UserWalletTransaction::where('type', 'booking_debit')
+            ->where('created_at', '>=', now()->subDays($days))
+            ->selectRaw('DATE(created_at) as date, SUM(amount) as total')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()
+            ->keyBy('date');
+
+        return $agency->keys()->merge($users->keys())->unique()->sort()->values()
+            ->map(fn ($date) => ['date' => $date, 'total' => (float) ($agency->get($date)?->total ?? 0) + (float) ($users->get($date)?->total ?? 0)])
             ->all();
     }
 
@@ -70,20 +82,23 @@ class ReportService
     public function walletSummary(): array
     {
         return [
-            'total_available'    => DB::table('agency_wallets')->sum('available_balance'),
-            'total_credit_limit' => DB::table('agency_wallets')->sum('credit_limit'),
+            'total_available'    => DB::table('agency_wallets')->sum('available_balance') + DB::table('user_wallets')->sum('available_balance'),
+            'total_credit_limit' => DB::table('agency_wallets')->sum('credit_limit') + DB::table('user_wallets')->sum('credit_limit'),
         ];
     }
 
     public function apiActivity(int $days = 30): array
     {
-        return WalletTransaction::where('created_at', '>=', now()->subDays($days))
+        $rows = WalletTransaction::where('created_at', '>=', now()->subDays($days))
             ->selectRaw('type, COUNT(*) as count, SUM(amount) as total')
-            ->groupBy('type')
-            ->get()
-            ->map(fn ($row) => ['type' => $row->type, 'count' => $row->count, 'total' => (float) $row->total])
-            ->values()
-            ->all();
+            ->groupBy('type')->get();
+        $userRows = UserWalletTransaction::where('created_at', '>=', now()->subDays($days))
+            ->selectRaw('type, COUNT(*) as count, SUM(amount) as total')
+            ->groupBy('type')->get();
+
+        return $rows->concat($userRows)->groupBy('type')
+            ->map(fn ($items, $type) => ['type' => $type, 'count' => $items->sum('count'), 'total' => (float) $items->sum('total')])
+            ->values()->all();
     }
 
     public function agencyDailyBookings(int $agencyId, int $days = 30): array
@@ -99,9 +114,12 @@ class ReportService
 
     public function agencyWalletStatement(int $agencyId): array
     {
-        return WalletTransaction::where('wallet_id', function ($q) use ($agencyId) {
+        $agencyEntries = WalletTransaction::where('wallet_id', function ($q) use ($agencyId) {
             $q->select('id')->from('agency_wallets')->where('agency_id', $agencyId);
-        })->orderBy('created_at')->get()->all();
+        })->get();
+        $userEntries = UserWalletTransaction::whereHas('wallet.user', fn ($q) => $q->where('agency_id', $agencyId))->get();
+
+        return $agencyEntries->concat($userEntries)->sortBy('created_at')->values()->all();
     }
 
     public function agencyUserActivity(int $agencyId, int $days = 30): array

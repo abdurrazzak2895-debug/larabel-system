@@ -56,11 +56,11 @@ class LoginController extends Controller
 
             $user = Auth::guard('web')->user();
 
-            if ($user && $user->agency_id !== null) {
+            if ($user && $user->agency_id !== null && $user->hasPermission('manage agency users')) {
                 return redirect()->intended(route('agency.dashboard'));
             }
 
-            // Standalone / individual users don't need an agency code.
+            // Regular agency members and standalone users use the user panel.
             // They can access their dashboard immediately; the booking
             // flow will prompt for SVP login only when they try to book.
             return redirect()->intended(route('user.dashboard'));

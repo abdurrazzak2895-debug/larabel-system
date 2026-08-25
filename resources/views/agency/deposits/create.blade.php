@@ -11,13 +11,24 @@
         </a>
         <div>
             <h2 class="text-xl font-bold text-slate-900">Submit Deposit</h2>
-            <p class="text-sm text-slate-500 mt-0.5">Add funds to your agency wallet. An admin will review and approve the request.</p>
+            <p class="text-sm text-slate-500 mt-0.5">Submit a deposit for a user wallet. The agency wallet is not used for user bookings.</p>
         </div>
     </div>
 
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <form method="POST" action="{{ route('agency.deposits.store') }}" enctype="multipart/form-data" class="space-y-5">
             @csrf
+
+            <div>
+                <label for="user_id" class="block text-sm font-medium text-slate-700 mb-1">User</label>
+                <select name="user_id" id="user_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                    <option value="">Select user…</option>
+                    @foreach ($users as $user)
+                        <option value="{{ $user->id }}" @selected(old('user_id') == $user->id)>{{ $user->name }} — {{ $user->email }}</option>
+                    @endforeach
+                </select>
+                @error('user_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            </div>
 
             <div>
                 <label for="amount" class="block text-sm font-medium text-slate-700 mb-1">Amount <span class="text-slate-400">(BDT)</span></label>

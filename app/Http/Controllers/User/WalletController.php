@@ -4,18 +4,19 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Pagination\LengthAwarePaginator;
+use App\Services\UserWalletService;
 use Illuminate\Support\Facades\Auth;
 
 class WalletController extends Controller
 {
-    public function __construct()
+    public function __construct(private UserWalletService $userWallet)
     {
         $this->middleware('auth.multi');
     }
 
     public function index()
     {
-        $wallet = Auth::user()->wallet;
+        $wallet = $this->userWallet->getWallet((int) Auth::id());
 
         $transactions = $wallet
             ? $wallet->transactions()->latest()->paginate(20)

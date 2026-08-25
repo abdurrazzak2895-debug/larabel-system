@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $temporary_hold_expires_at
  * @property string|null $reservation_id
  * @property string $booking_status // pending | processing | booked | failed | cancelled | refunded
+ * @property string|null $portal_booking_fee
  * @property string|null $booking_reference
  * @property string|null $notes
  * @property \Illuminate\Support\Carbon|null $created_at
@@ -49,6 +50,7 @@ class Booking extends Model
         'temporary_hold_expires_at',
         'reservation_id',
         'booking_status',
+        'portal_booking_fee',
         'booking_reference',
         'notes',
     ];
@@ -59,6 +61,7 @@ class Booking extends Model
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
         'exam_date' => 'date',
+        'portal_booking_fee' => 'decimal:2',
     ];
 
     /** @return BelongsTo<Agency, static> */

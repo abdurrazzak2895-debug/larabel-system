@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Agency;
 use App\Models\User;
+use App\Models\Role;
+use App\Services\UserWalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -21,6 +23,7 @@ class UserController extends Controller
     {
         return view('admin.users.create', [
             'agencies' => Agency::where('status', true)->get(),
+            'roles' => Role::whereIn('slug', ['agency-manager', 'agency-user', 'agency-accountant'])->orderBy('name')->get(),
         ]);
     }
 
@@ -32,15 +35,21 @@ class UserController extends Controller
             'email'     => ['required', 'email', 'unique:users,email'],
             'password'  => ['required', 'string', 'min:8', 'confirmed'],
             'status'    => ['boolean'],
+            'role_id'   => ['required', 'integer', 'exists:roles,id'],
+            'portal_booking_fee' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        User::create([
+        $user = User::create([
             'agency_id' => $data['agency_id'],
             'name'      => $data['name'],
             'email'     => $data['email'],
             'password'  => Hash::make($data['password']),
             'status'    => $data['status'] ?? true,
+            'portal_booking_fee' => $data['portal_booking_fee'] ?? null,
         ]);
+
+        $user->assignRole(Role::findOrFail($data['role_id'])->name);
+        app(UserWalletService::class)->getWallet((int) $user->id);
 
         return redirect()->route('admin.users.index')->with('success', 'User created.');
     }
@@ -48,8 +57,9 @@ class UserController extends Controller
     public function edit(User $user)
     {
         return view('admin.users.edit', [
-            'user'     => $user,
+            'user' => $user->load('roles'),
             'agencies' => Agency::where('status', true)->get(),
+            'roles' => Role::whereIn('slug', ['agency-manager', 'agency-user', 'agency-accountant'])->orderBy('name')->get(),
         ]);
     }
 
@@ -59,10 +69,14 @@ class UserController extends Controller
             'agency_id' => ['required', 'exists:agencies,id'],
             'name'      => ['required', 'string', 'max:255'],
             'email'     => ['required', 'email', "unique:users,email,{$user->id}"],
-            'status'    => ['boolean'],
+                        'status' => ['boolean'],
+            'role_id' => ['required', 'integer', 'exists:roles,id'],
+            'portal_booking_fee' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $user->update($data);
+        $user->update(collect($data)->except('role_id')->all());
+        $user->roles()->sync([Role::findOrFail($data['role_id'])->id]);
+
 
         return back()->with('success', 'User updated.');
     }

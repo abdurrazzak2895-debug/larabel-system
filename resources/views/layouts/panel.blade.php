@@ -135,11 +135,14 @@
                 <div class="space-y-1">
                     {!! $__navLink('Agency Dashboard', 'agency.dashboard', str_starts_with((string) $__routeName, 'agency.dashboard'), 'home') !!}
                     {!! $__navLink('Bookings', 'agency.bookings.index', str_starts_with((string) $__routeName, 'agency.bookings'), 'calendar') !!}
-                    {!! $__navLink('Wallet', 'agency.wallets.index', str_starts_with((string) $__routeName, 'agency.wallets'), 'wallet') !!}
-                    {!! $__navLink('Deposits', 'agency.deposits.index', str_starts_with((string) $__routeName, 'agency.deposits'), 'banknotes') !!}
+                    @if ($__user->hasPermission('manage user wallets'))
+                        {!! $__navLink('User Deposits', 'agency.deposits.index', str_starts_with((string) $__routeName, 'agency.deposits'), 'banknotes') !!}
+                    @endif
                     {!! $__navLink('Refunds', 'agency.refunds.index', str_starts_with((string) $__routeName, 'agency.refunds'), 'rotate') !!}
                     {!! $__navLink('Reports', 'agency.reports.daily-bookings', str_starts_with((string) $__routeName, 'agency.reports'), 'chart') !!}
-                    {!! $__navLink('Users', 'agency.users.index', str_starts_with((string) $__routeName, 'agency.users'), 'users') !!}
+                    @if ($__user->hasPermission('manage agency users'))
+                        {!! $__navLink('Users & Wallets', 'agency.users.index', str_starts_with((string) $__routeName, 'agency.users'), 'users') !!}
+                    @endif
                     {!! $__navLink('Notifications', 'agency.notifications.index', str_starts_with((string) $__routeName, 'agency.notifications'), 'bell') !!}
                 </div>
             </div>

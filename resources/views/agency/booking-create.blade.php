@@ -29,11 +29,11 @@
         {{-- Wallet + candidate row --}}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="bg-white rounded-xl border border-slate-200 p-4">
-                <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Wallet Balance</p>
-                <p class="text-2xl font-bold text-slate-900">{{ number_format($wallet?->available_balance ?? 0, 2) }} <span class="text-sm font-medium text-slate-500">BDT</span></p>
+                <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Selected User Wallet</p>
+                <p class="text-sm font-semibold text-slate-700">The selected user’s personal wallet will be charged.</p>
             </div>
             <div class="bg-white rounded-xl border border-slate-200 p-4">
-                <label for="candidate_id" class="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Candidate</label>
+                <label for="candidate_id" class="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Candidate / User</label>
                 <select name="candidate_id" id="candidate_id" required
                     class="w-full rounded-lg border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
                     <option value="">Select candidate…</option>

@@ -27,6 +27,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'view audit logs',
             'manage roles',
             'view reports',
+            'manage agency users',
+            'manage user wallets',
+            'manage user pricing',
+            'approve user deposits',
         ];
 
         foreach ($permissions as $name) {
@@ -37,8 +41,9 @@ class RolesAndPermissionsSeeder extends Seeder
         RolesTableSeeder::ensure([
             'super-admin'      => ['name' => 'Super Admin', 'permissions' => $permissions],
             'support-agent'    => ['name' => 'Support Agent', 'permissions' => ['view bookings', 'refund bookings', 'view audit logs']],
-            'agency-manager'   => ['name' => 'Agency Manager', 'permissions' => ['view bookings', 'create bookings']],
-            'agency-accountant'=> ['name' => 'Agency Accountant', 'permissions' => ['view bookings', 'view reports']],
+            'agency-manager'   => ['name' => 'Agency Manager', 'permissions' => ['view bookings', 'create bookings', 'manage agency users', 'manage user wallets', 'manage user pricing', 'approve user deposits', 'view reports']],
+            'agency-accountant'=> ['name' => 'Agency Accountant', 'permissions' => ['view bookings', 'view reports', 'manage user wallets', 'approve user deposits']],
+            'agency-user'      => ['name' => 'Agency User', 'permissions' => ['view bookings', 'create bookings']],
         ]);
 
         // ---- Platform admin ----

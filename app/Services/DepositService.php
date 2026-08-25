@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Models\DepositRequest;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Handles agency wallet deposit requests.
+ * Handles user wallet deposit requests, with a legacy agency-wallet fallback
+ * for historical requests that have no user target.
  *
  * Flow: submit (with receipt) → admin approve → credit wallet → audit + notify
  */
@@ -16,6 +18,7 @@ class DepositService
 {
     public function __construct(
         private WalletService $wallet,
+        private UserWalletService $userWallet,
         private NotificationService $notifications,
         private AuditService $audit
     ) {}
@@ -23,13 +26,21 @@ class DepositService
     /**
      * Create a new deposit request.
      *
-     * @param  array{agency_id: int, amount: float, payment_method: string, receipt?: UploadedFile|null}  $data
+     * @param  array{agency_id: int, user_id?: int|null, amount: float, payment_method: string, receipt?: UploadedFile|null}  $data
      */
     public function submit(array $data): DepositRequest
     {
         return DB::transaction(function () use ($data) {
+            $userId = isset($data['user_id']) && $data['user_id'] !== null ? (int) $data['user_id'] : null;
+            $agencyId = (int) $data['agency_id'];
+
+            if ($userId !== null && ! User::query()->whereKey($userId)->where('agency_id', $agencyId)->exists()) {
+                throw new \InvalidArgumentException('The deposit user does not belong to the selected agency.');
+            }
+
             $deposit = DepositRequest::create([
-                'agency_id'      => $data['agency_id'],
+                'agency_id'      => $agencyId,
+                'user_id'        => $userId,
                 'amount'         => $data['amount'],
                 'payment_method' => $data['payment_method'],
                 'status'         => 'pending',
@@ -51,7 +62,7 @@ class DepositService
     }
 
     /**
-     * Approve a pending deposit and credit the agency wallet.
+     * Approve a pending deposit and credit the targeted user wallet.
      */
     public function approve(DepositRequest $deposit): DepositRequest
     {
@@ -65,13 +76,23 @@ class DepositService
                 'processed_at'   => now(),
             ]);
 
-            // Credit wallet via immutable ledger
-            $this->wallet->deposit(
-                (int) $deposit->agency_id,
-                (float) $deposit->amount,
-                "deposit-request-{$deposit->id}",
-                ['deposit_id' => $deposit->id]
-            );
+            // New requests credit the user wallet. Legacy agency-only requests
+            // remain supported so historical balances are not stranded.
+            if ($deposit->user_id) {
+                $this->userWallet->deposit(
+                    (int) $deposit->user_id,
+                    (float) $deposit->amount,
+                    "deposit-request-{$deposit->id}",
+                    ['deposit_id' => $deposit->id, 'agency_id' => $deposit->agency_id]
+                );
+            } else {
+                $this->wallet->deposit(
+                    (int) $deposit->agency_id,
+                    (float) $deposit->amount,
+                    "deposit-request-{$deposit->id}",
+                    ['deposit_id' => $deposit->id]
+                );
+            }
 
             $this->audit->log(
                 (int) $deposit->agency_id,
@@ -115,9 +136,17 @@ class DepositService
      */
     public function listForAgency(int $agencyId, ?string $status = null)
     {
-        return DepositRequest::where('agency_id', $agencyId)
+        return DepositRequest::with('user')
+            ->where('agency_id', $agencyId)
             ->when($status, fn ($q) => $q->where('status', $status))
             ->latest()
             ->get();
+    }
+
+    public function listForUser(int $userId, ?string $status = null)
+    {
+        return DepositRequest::where('user_id', $userId)
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->latest();
     }
 }

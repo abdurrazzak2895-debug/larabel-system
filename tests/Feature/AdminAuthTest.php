@@ -186,6 +186,7 @@ class AdminAuthTest extends TestCase
     public function test_agency_user_can_open_all_agency_panel_pages(): void
     {
         $agencyUser = \App\Models\User::whereNotNull('agency_id')->first();
+        $agencyUser->assignRole('Agency Manager');
         Auth::guard('web')->login($agencyUser);
 
         $pages = [

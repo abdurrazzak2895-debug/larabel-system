@@ -34,6 +34,14 @@
                 @error('email')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
 
+            <div>
+                <label for="portal_booking_fee" class="block text-sm font-medium text-slate-700 mb-1">Portal booking fee <span class="text-slate-400">(BDT per booking)</span></label>
+                <input type="number" name="portal_booking_fee" id="portal_booking_fee" min="0" step="0.01" value="{{ old('portal_booking_fee', $user->portal_booking_fee) }}" placeholder="Leave blank for agency default"
+                    class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                <p class="text-xs text-slate-400 mt-1">This user-specific value overrides the agency/global booking price.</p>
+                @error('portal_booking_fee')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            </div>
+
             <label class="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" name="status" value="1" @checked(old('status', $user->status)) class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                 <span class="text-sm text-slate-700">Active</span>
@@ -49,6 +57,25 @@
                     Cancel
                 </a>
             </div>
+        </form>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+        <h3 class="text-sm font-semibold text-slate-700 mb-1">User Wallet</h3>
+        <p class="text-xs text-slate-400 mb-4">Current available balance: <span class="font-semibold text-slate-700">{{ number_format($user->wallet?->available_balance ?? 0, 2) }} BDT</span>. Positive values credit the user; negative values debit the user.</p>
+        <form method="POST" action="{{ route('agency.users.wallet.adjust', $user) }}" class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+            @csrf
+            <div>
+                <label for="wallet_amount" class="block text-sm font-medium text-slate-700 mb-1">Adjustment</label>
+                <input type="number" name="amount" id="wallet_amount" step="0.01" required placeholder="e.g. 100 or -25"
+                    class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+            </div>
+            <div>
+                <label for="wallet_reference" class="block text-sm font-medium text-slate-700 mb-1">Reference</label>
+                <input type="text" name="reference" id="wallet_reference" maxlength="255" placeholder="Optional reference"
+                    class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+            </div>
+            <button type="submit" class="inline-flex justify-center px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-xl transition">Update Wallet</button>
         </form>
     </div>
 
