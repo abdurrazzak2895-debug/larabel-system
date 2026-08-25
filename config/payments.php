@@ -12,6 +12,8 @@ return [
     */
     'portal_deposit_methods' => ['bkash', 'nagad'],
 
+    'merchant_name' => env('PORTAL_MERCHANT_NAME', 'Portal Wallet'),
+
     'merchant_numbers' => [
         'bkash' => env('BKASH_MERCHANT_NUMBER', ''),
         'nagad' => env('NAGAD_MERCHANT_NUMBER', ''),

@@ -24,7 +24,10 @@ class SettingController extends Controller
             'redis_config'     => ['nullable', 'array'],
             'maintenance_mode' => ['boolean'],
             'timezone'         => ['required', 'string'],
-            'currency'         => ['required', 'string'],
+            'currency'              => ['required', 'string'],
+            'portal_merchant_name'   => ['required', 'string', 'max:120'],
+            'bkash_merchant_number'  => ['nullable', 'string', 'max:32'],
+            'nagad_merchant_number'  => ['nullable', 'string', 'max:32'],
         ]);
 
         foreach ($data as $key => $value) {

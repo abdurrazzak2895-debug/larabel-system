@@ -35,6 +35,38 @@
                 @error('timezone')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
 
+            <div class="pt-4 border-t border-slate-100">
+                <h3 class="text-sm font-semibold text-slate-800">Portal Manual MFS Payment</h3>
+                <p class="text-xs text-slate-400 mt-1">These merchant details are visible only to administrators. Agency and user panels never display the personal numbers.</p>
+            </div>
+
+            <div>
+                <label for="portal_merchant_name" class="block text-sm font-medium text-slate-700 mb-1">Merchant name</label>
+                <input type="text" name="portal_merchant_name" id="portal_merchant_name" required maxlength="120"
+                    value="{{ old('portal_merchant_name', $settings['portal_merchant_name']?->value ?? config('payments.merchant_name', 'Portal Wallet')) }}"
+                    placeholder="e.g. My Portal Payments"
+                    class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                @error('portal_merchant_name')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            </div>
+
+            <div>
+                <label for="bkash_merchant_number" class="block text-sm font-medium text-slate-700 mb-1">bKash personal/merchant number</label>
+                <input type="text" name="bkash_merchant_number" id="bkash_merchant_number" maxlength="32"
+                    value="{{ old('bkash_merchant_number', $settings['bkash_merchant_number']?->value ?? config('payments.merchant_numbers.bkash')) }}"
+                    placeholder="Only admins can see this"
+                    class="w-full rounded-xl border-slate-200 text-sm font-mono focus:border-brand-500 focus:ring-brand-500">
+                @error('bkash_merchant_number')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            </div>
+
+            <div>
+                <label for="nagad_merchant_number" class="block text-sm font-medium text-slate-700 mb-1">Nagad personal/merchant number</label>
+                <input type="text" name="nagad_merchant_number" id="nagad_merchant_number" maxlength="32"
+                    value="{{ old('nagad_merchant_number', $settings['nagad_merchant_number']?->value ?? config('payments.merchant_numbers.nagad')) }}"
+                    placeholder="Only admins can see this"
+                    class="w-full rounded-xl border-slate-200 text-sm font-mono focus:border-brand-500 focus:ring-brand-500">
+                @error('nagad_merchant_number')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            </div>
+
             <div>
                 <label for="currency" class="block text-sm font-medium text-slate-700 mb-1">Currency</label>
                 <input type="text" name="currency" id="currency" required maxlength="3"

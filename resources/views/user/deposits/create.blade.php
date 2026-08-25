@@ -30,7 +30,7 @@
     {{-- ===================== Deposit form ===================== --}}
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
         <h2 class="text-lg font-bold text-slate-900 mb-1">New Deposit Request</h2>
-        <p class="text-sm text-slate-500 mb-6">Send the amount to the selected bKash or Nagad merchant number, then submit the transaction details. An admin will verify and approve your deposit.</p>
+        <p class="text-sm text-slate-500 mb-6">Send the amount to {{ $merchantName }} using the selected bKash or Nagad method, then submit the transaction details. An admin will verify and approve your deposit.</p>
 
         <form method="POST" action="{{ route('user.deposits.store') }}" enctype="multipart/form-data" class="space-y-5">
             @csrf
@@ -51,7 +51,7 @@
                     <option value="{{ $method }}" {{ old('payment_method') === $method ? 'selected' : '' }}>{{ ucfirst($method) }}</option>
                     @endforeach
                 </select>
-                <p class="mt-1.5 text-xs text-slate-400">Merchant numbers: bKash {{ $merchantNumbers['bkash'] ?: 'not configured' }} · Nagad {{ $merchantNumbers['nagad'] ?: 'not configured' }}</p>
+                <p class="mt-1.5 text-xs text-slate-400">Merchant: {{ $merchantName }}. Payment numbers are provided and managed privately by the administrator.</p>
                 @error('payment_method') <p class="mt-1.5 text-xs text-red-600">{{ $message }}</p> @enderror
             </div>
 

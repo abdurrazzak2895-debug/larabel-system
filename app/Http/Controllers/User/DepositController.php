@@ -5,6 +5,7 @@ namespace App\Http\Controllers\User;
 use App\Http\Controllers\Controller;
 use App\Models\Agency;
 use App\Models\DepositRequest;
+use App\Models\Setting;
 use App\Services\UserWalletService;
 use Illuminate\Validation\Rule;
 use Illuminate\Http\Request;
@@ -38,7 +39,7 @@ class DepositController extends Controller
         return view('user.deposits.create', [
             'walletBalance' => (float) $this->userWallet->getWallet((int) Auth::id())->available_balance,
             'paymentMethods' => config('payments.portal_deposit_methods', ['bkash', 'nagad']),
-            'merchantNumbers' => config('payments.merchant_numbers', []),
+            'merchantName' => Setting::where('key', 'portal_merchant_name')->value('value') ?: config('payments.merchant_name', 'Portal Wallet'),
         ]);
     }
 

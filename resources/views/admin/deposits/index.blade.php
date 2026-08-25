@@ -6,7 +6,7 @@
 @section('content')
 <div class="mb-6">
     <h2 class="text-xl font-bold text-slate-900">Deposit Requests</h2>
-    <p class="text-sm text-slate-500 mt-0.5">Review manual bKash/Nagad deposits and approve or reject user wallet credits.</p>
+    <p class="text-sm text-slate-500 mt-0.5">{{ $merchantName }} · Review manual bKash/Nagad deposits and approve or reject user wallet credits.</p>
 </div>
 
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

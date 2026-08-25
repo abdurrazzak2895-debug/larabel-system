@@ -51,7 +51,7 @@ class UserController extends Controller
         $user->assignRole(Role::findOrFail($data['role_id'])->name);
         app(UserWalletService::class)->getWallet((int) $user->id);
 
-        return redirect()->route('admin.users.index')->with('success', 'User created.');
+        return redirect()->route('admin.dashboard')->with('success', "User account '{$user->name}' created successfully.");
     }
 
     public function edit(User $user)

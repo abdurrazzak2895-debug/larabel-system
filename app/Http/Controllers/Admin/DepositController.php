@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\DepositRequest;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 
 class DepositController extends Controller
@@ -12,6 +13,7 @@ class DepositController extends Controller
     {
         return view('admin.deposits.index', [
             'deposits' => DepositRequest::with(['agency', 'user'])->latest()->paginate(20),
+            'merchantName' => Setting::where('key', 'portal_merchant_name')->value('value') ?: config('payments.merchant_name', 'Portal Wallet'),
         ]);
     }
 
