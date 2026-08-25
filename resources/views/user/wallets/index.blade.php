@@ -12,9 +12,9 @@
             <h1 class="text-2xl font-bold text-slate-900">Wallet</h1>
             <p class="text-sm text-slate-500 mt-1">Your personal booking balance and transaction history. The agency wallet is not used.</p>
         </div>
-        <a href="{{ route('user.deposits.index') }}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Deposit History
+        <a href="{{ auth()->user()->canCreateSelfServiceDeposit() ? route('user.deposits.create') : route('user.deposits.index') }}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            {{ auth()->user()->canCreateSelfServiceDeposit() ? 'Add Funds' : 'Deposit History' }}
         </a>
     </div>
 

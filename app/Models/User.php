@@ -13,6 +13,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 /**
  * @property int $id
  * @property int|null $agency_id
+ * @property string $account_source
  * @property string $name
  * @property string|null $username
  * @property string|null $email
@@ -23,11 +24,13 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
  */
 class User extends Authenticatable
 {
+    public const SELF_SERVICE_DEPOSIT_SOURCES = ['public_registration', 'admin_control'];
+
     use HasFactory;
     use HasRoles;
 
     /** @var array<int, string> */
-    protected $fillable = ['agency_id', 'name', 'username', 'email', 'password', 'status', 'portal_booking_fee'];
+    protected $fillable = ['agency_id', 'account_source', 'name', 'username', 'email', 'password', 'status', 'portal_booking_fee'];
 
     /** @var array<int, string> */
     protected $hidden = ['password', 'remember_token'];
@@ -38,6 +41,11 @@ class User extends Authenticatable
         'password' => 'hashed',
         'portal_booking_fee' => 'decimal:2',
     ];
+
+    public function canCreateSelfServiceDeposit(): bool
+    {
+        return in_array($this->account_source, self::SELF_SERVICE_DEPOSIT_SOURCES, true);
+    }
 
     /** @return BelongsTo<Agency, static> */
     public function agency(): BelongsTo

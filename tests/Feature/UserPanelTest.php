@@ -71,7 +71,6 @@ class UserPanelTest extends TestCase
             route('user.bookings.index'),
             route('user.wallets.index'),
             route('user.deposits.index'),
-            route('user.deposits.index'),
             route('user.refunds.index'),
             route('user.refunds.create'),
             route('user.notifications.index'),

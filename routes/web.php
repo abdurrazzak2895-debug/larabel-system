@@ -264,6 +264,8 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
     // Deposits
     Route::prefix('deposits')->name('deposits.')->group(function () {
         Route::get('/', [UserDepositController::class, 'index'])->name('index');
+        Route::get('/create', [UserDepositController::class, 'create'])->name('create');
+        Route::post('/', [UserDepositController::class, 'store'])->name('store');
     });
 
     // Refunds

@@ -9,9 +9,13 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">Deposits</h1>
-            <p class="text-sm text-slate-500 mt-1">View your personal booking-wallet deposit history. New deposits are created by an administrator.</p>
+            <p class="text-sm text-slate-500 mt-1">View your personal booking-wallet deposit history and track your payment requests.</p>
         </div>
-        <span class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-semibold">Deposits managed by Admin</span>
+        @if (auth()->user()?->canCreateSelfServiceDeposit())
+            <a href="{{ route('user.deposits.create') }}" class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 text-white text-sm font-semibold shadow-lg shadow-indigo-500/20 hover:from-indigo-600 hover:to-fuchsia-600 transition">Add Funds</a>
+        @else
+            <span class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-semibold">Deposits managed by Admin</span>
+        @endif
     </div>
 
     {{-- ===================== Summary cards ===================== --}}
@@ -106,7 +110,11 @@
                             </div>
                             <p class="text-sm font-medium text-slate-600">No deposits yet</p>
                             <p class="text-xs text-slate-400 mt-1">Your deposit history will appear here.</p>
-                            <p class="mt-4 text-xs font-medium text-slate-500">Ask your administrator to create a deposit for your account.</p>
+                            @if (auth()->user()?->canCreateSelfServiceDeposit())
+                                <a href="{{ route('user.deposits.create') }}" class="inline-flex items-center justify-center mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Create your first deposit request</a>
+                            @else
+                                <p class="mt-4 text-xs font-medium text-slate-500">Ask your administrator to create a deposit for your account.</p>
+                            @endif
                         </td>
                     </tr>
                     @endforelse

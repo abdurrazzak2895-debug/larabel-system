@@ -41,6 +41,7 @@ class UserController extends Controller
 
         $user = User::create([
             'agency_id' => $data['agency_id'],
+            'account_source' => 'admin_control',
             'name'      => $data['name'],
             'email'     => $data['email'],
             'password'  => Hash::make($data['password']),

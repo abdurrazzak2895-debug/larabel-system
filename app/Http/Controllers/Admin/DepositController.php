@@ -25,7 +25,12 @@ class DepositController extends Controller
     {
         return view('admin.deposits.create', [
             'agencies' => Agency::where('status', true)->orderBy('name')->get(),
-            'users' => User::with('agency')->where('status', true)->whereNotNull('agency_id')->orderBy('name')->get(),
+            'users' => User::with('agency')
+                ->where('status', true)
+                ->whereNotNull('agency_id')
+                ->whereIn('account_source', User::SELF_SERVICE_DEPOSIT_SOURCES)
+                ->orderBy('name')
+                ->get(),
             'paymentMethods' => config('payments.portal_deposit_methods', ['bkash', 'nagad']),
             'merchantName' => $this->merchantName(),
             'merchantNumbers' => [
@@ -43,7 +48,8 @@ class DepositController extends Controller
                 'required', 'integer',
                 Rule::exists('users', 'id')->where(fn ($query) => $query
                     ->where('agency_id', $request->input('agency_id'))
-                    ->where('status', true)),
+                    ->where('status', true)
+                    ->whereIn('account_source', User::SELF_SERVICE_DEPOSIT_SOURCES)),
             ],
             'amount' => ['required', 'numeric', 'min:1'],
             'payment_method' => ['required', Rule::in(config('payments.portal_deposit_methods', ['bkash', 'nagad']))],

@@ -44,6 +44,7 @@ class RegisterController extends Controller
 
         $user = User::create([
             'agency_id' => $agency->id,
+            'account_source' => 'public_registration',
             'name' => $data['name'],
             'username' => $data['username'],
             'email' => $data['email'],
