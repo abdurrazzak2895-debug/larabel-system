@@ -51,7 +51,7 @@
                     <option value="{{ $method }}" {{ old('payment_method') === $method ? 'selected' : '' }}>{{ ucfirst($method) }}</option>
                     @endforeach
                 </select>
-                <p class="mt-1.5 text-xs text-slate-400">Merchant: {{ $merchantName }}. Payment numbers are provided and managed privately by the administrator.</p>
+                <p class="mt-1.5 text-xs text-slate-400">Merchant: {{ $merchantName }}. Your deposit remains pending until an administrator verifies it.</p>
                 @error('payment_method') <p class="mt-1.5 text-xs text-red-600">{{ $message }}</p> @enderror
             </div>
 

@@ -36,7 +36,8 @@ class MerchantVisibilityTest extends TestCase
             ->assertOk()
             ->assertSee('Example Merchant')
             ->assertDontSee('01711111111')
-            ->assertDontSee('01822222222');
+            ->assertDontSee('01822222222')
+            ->assertDontSee('Payment numbers');
     }
 
     public function test_admin_can_update_merchant_name_and_private_numbers(): void
