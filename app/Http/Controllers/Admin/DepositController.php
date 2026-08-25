@@ -11,7 +11,7 @@ class DepositController extends Controller
     public function index()
     {
         return view('admin.deposits.index', [
-            'deposits' => DepositRequest::with('agency')->latest()->paginate(20),
+            'deposits' => DepositRequest::with(['agency', 'user'])->latest()->paginate(20),
         ]);
     }
 

@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $amount
  * @property string $payment_method
  * @property string|null $receipt_path
+ * @property string|null $mfs_sender_phone
+ * @property string|null $mfs_transaction_id
  * @property string $status
  * @property \Illuminate\Support\Carbon|null $processed_at
  * @property \Illuminate\Support\Carbon|null $created_at
@@ -20,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class DepositRequest extends Model
 {
     /** @var array<int, string> */
-    protected $fillable = ['agency_id', 'user_id', 'amount', 'payment_method', 'receipt_path', 'status', 'processed_at'];
+    protected $fillable = ['agency_id', 'user_id', 'amount', 'payment_method', 'receipt_path', 'mfs_sender_phone', 'mfs_transaction_id', 'status', 'processed_at'];
 
     /** @var array<string, string> */
     protected $casts = [

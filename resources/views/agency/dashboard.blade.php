@@ -67,7 +67,7 @@
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <h3 class="text-sm font-semibold text-slate-700">Recent Deposits</h3>
-            <a href="{{ route('agency.deposits.index') }}" class="text-xs font-medium text-brand-600 hover:text-brand-700 transition">View all</a>
+            <span class="text-xs text-slate-400">Admin approval only</span>
         </div>
         <div class="divide-y divide-slate-100">
             @forelse ($deposits as $deposit)

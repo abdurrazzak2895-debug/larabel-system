@@ -47,7 +47,9 @@ class AgencyUserWalletTest extends TestCase
             'agency_id' => $agency->id,
             'user_id' => $user->id,
             'amount' => 250.00,
-            'payment_method' => 'cash',
+            'payment_method' => 'bkash',
+            'mfs_sender_phone' => '01712345678',
+            'mfs_transaction_id' => 'BKASH-TEST-001',
         ]);
         $service->approve($deposit);
 

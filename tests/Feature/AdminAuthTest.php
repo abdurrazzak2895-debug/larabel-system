@@ -192,7 +192,6 @@ class AdminAuthTest extends TestCase
         $pages = [
             route('agency.bookings.index'),
             route('agency.wallets.index'),
-            route('agency.deposits.index'),
             route('agency.refunds.index'),
             route('agency.reports.daily-bookings'),
             route('agency.reports.wallet-statement'),

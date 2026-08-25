@@ -6,7 +6,7 @@
 @section('content')
 <div class="mb-6">
     <h2 class="text-xl font-bold text-slate-900">Deposit Requests</h2>
-    <p class="text-sm text-slate-500 mt-0.5">Review and approve agency wallet top-ups.</p>
+    <p class="text-sm text-slate-500 mt-0.5">Review manual bKash/Nagad deposits and approve or reject user wallet credits.</p>
 </div>
 
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -22,9 +22,9 @@
             <thead class="bg-slate-50 text-left">
                 <tr>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
-                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Agency</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Agency / User</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
-                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Method</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">MFS Details</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Receipt</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
@@ -42,9 +42,20 @@
                     @endphp
                     <tr class="hover:bg-slate-50/50 transition">
                         <td class="px-6 py-4 font-mono text-xs text-slate-500">#{{ $deposit->id }}</td>
-                        <td class="px-6 py-4 font-medium text-slate-700">{{ $deposit->agency?->name ?? 'N/A' }}</td>
+                        <td class="px-6 py-4 text-slate-700">
+                            <div class="font-medium">{{ $deposit->agency?->name ?? 'N/A' }}</div>
+                            <div class="text-xs text-slate-400">{{ $deposit->user?->name ?? 'Legacy agency wallet' }}</div>
+                        </td>
                         <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($deposit->amount, 2) }} <span class="text-xs font-medium text-slate-400">BDT</span></td>
-                        <td class="px-6 py-4 text-slate-600">{{ $deposit->payment_method }}</td>
+                        <td class="px-6 py-4 text-slate-600">
+                            <div class="font-medium">{{ ucfirst($deposit->payment_method) }}</div>
+                            @if ($deposit->mfs_transaction_id)
+                                <div class="text-xs text-slate-500">Txn: <span class="font-mono">{{ $deposit->mfs_transaction_id }}</span></div>
+                                <div class="text-xs text-slate-500">Sender: {{ $deposit->mfs_sender_phone }}</div>
+                            @else
+                                <div class="text-xs text-slate-400">Legacy payment record</div>
+                            @endif
+                        </td>
                         <td class="px-6 py-4">
                             @if ($deposit->receipt_path)
                                 <a href="{{ asset('storage/' . $deposit->receipt_path) }}" target="_blank" class="text-xs font-medium text-brand-600 hover:text-brand-700">View Receipt</a>

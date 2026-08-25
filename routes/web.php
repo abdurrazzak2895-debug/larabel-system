@@ -14,7 +14,6 @@ use App\Http\Controllers\Admin\AgencyController;
 use App\Http\Controllers\Admin\TestCenterController;
 use App\Http\Controllers\Admin\PortalAvailabilityController;
 use App\Http\Controllers\Agency\DashboardController as AgencyDashboardController;
-use App\Http\Controllers\Agency\DepositController as AgencyDepositController;
 use App\Http\Controllers\Agency\NotificationController as AgencyNotificationController;
 use App\Http\Controllers\Agency\RefundController as AgencyRefundController;
 use App\Http\Controllers\Agency\ReportController as AgencyReportController;
@@ -187,18 +186,6 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
         Route::get('/ledger', [AgencyWalletController::class, 'ledger'])->name('ledger');
     });
 
-    // Deposits
-    Route::prefix('deposits')->name('deposits.')->middleware('CheckPermission:manage user wallets')->group(function () {
-        Route::get('/', [AgencyDepositController::class, 'index'])->name('index');
-        Route::get('/create', [AgencyDepositController::class, 'create'])->name('create');
-        Route::post('/', [AgencyDepositController::class, 'store'])->name('store');
-        Route::post('/{deposit}/approve', [AgencyDepositController::class, 'approve'])
-            ->middleware('CheckPermission:approve user deposits')
-            ->name('approve');
-        Route::post('/{deposit}/reject', [AgencyDepositController::class, 'reject'])
-            ->middleware('CheckPermission:approve user deposits')
-            ->name('reject');
-    });
 
     // Refunds
     Route::prefix('refunds')->name('refunds.')->group(function () {

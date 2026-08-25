@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\Agency;
 use App\Models\DepositRequest;
+use App\Services\UserWalletService;
+use Illuminate\Validation\Rule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class DepositController extends Controller
 {
-    public function __construct()
+    public function __construct(private UserWalletService $userWallet)
     {
         $this->middleware('auth.multi');
     }
@@ -26,14 +29,16 @@ class DepositController extends Controller
             'pendingCount'      => DepositRequest::where('user_id', $userId)->where('status', 'pending')->count(),
             'approvedCount'     => DepositRequest::where('user_id', $userId)->where('status', 'approved')->count(),
             'rejectedCount'     => DepositRequest::where('user_id', $userId)->where('status', 'rejected')->count(),
-            'walletBalance'     => (float) (Auth::user()->wallet->available_balance ?? 0),
+            'walletBalance'     => (float) $this->userWallet->getWallet($userId)->available_balance,
         ]);
     }
 
     public function create()
     {
         return view('user.deposits.create', [
-            'walletBalance' => (float) (Auth::user()->wallet->available_balance ?? 0),
+            'walletBalance' => (float) $this->userWallet->getWallet((int) Auth::id())->available_balance,
+            'paymentMethods' => config('payments.portal_deposit_methods', ['bkash', 'nagad']),
+            'merchantNumbers' => config('payments.merchant_numbers', []),
         ]);
     }
 
@@ -48,13 +53,19 @@ class DepositController extends Controller
         }
 
         $data = $request->validate([
-            'amount'         => ['required', 'numeric', 'min:1'],
-            'payment_method' => ['required', 'string'],
-            'receipt'        => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+            'amount'             => ['required', 'numeric', 'min:1'],
+            'payment_method'     => ['required', Rule::in(config('payments.portal_deposit_methods', ['bkash', 'nagad']))],
+            'mfs_sender_phone'   => ['required', 'string', 'max:32', 'regex:/^(?:01[3-9][0-9]{8}|\+?8801[3-9][0-9]{8})$/'],
+            'mfs_transaction_id' => [
+                'required', 'string', 'max:128', 'regex:/^[A-Za-z0-9_-]+$/',
+                Rule::unique('deposit_requests', 'mfs_transaction_id')->where(fn ($query) => $query->where('payment_method', $request->input('payment_method'))),
+            ],
+            'receipt'            => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
         ]);
 
         $data['agency_id'] = (int) $agencyId;
         $data['user_id'] = (int) Auth::id();
+        $data['payment_method'] = strtolower((string) $data['payment_method']);
 
         app(\App\Services\DepositService::class)->submit($data);
 

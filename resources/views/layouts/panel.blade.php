@@ -135,9 +135,6 @@
                 <div class="space-y-1">
                     {!! $__navLink('Agency Dashboard', 'agency.dashboard', str_starts_with((string) $__routeName, 'agency.dashboard'), 'home') !!}
                     {!! $__navLink('Bookings', 'agency.bookings.index', str_starts_with((string) $__routeName, 'agency.bookings'), 'calendar') !!}
-                    @if ($__user->hasPermission('manage user wallets'))
-                        {!! $__navLink('User Deposits', 'agency.deposits.index', str_starts_with((string) $__routeName, 'agency.deposits'), 'banknotes') !!}
-                    @endif
                     {!! $__navLink('Refunds', 'agency.refunds.index', str_starts_with((string) $__routeName, 'agency.refunds'), 'rotate') !!}
                     {!! $__navLink('Reports', 'agency.reports.daily-bookings', str_starts_with((string) $__routeName, 'agency.reports'), 'chart') !!}
                     @if ($__user->hasPermission('manage agency users'))

@@ -33,8 +33,17 @@ class DepositService
         return DB::transaction(function () use ($data) {
             $userId = isset($data['user_id']) && $data['user_id'] !== null ? (int) $data['user_id'] : null;
             $agencyId = (int) $data['agency_id'];
+            $paymentMethod = strtolower(trim((string) ($data['payment_method'] ?? '')));
 
-            if ($userId !== null && ! User::query()->whereKey($userId)->where('agency_id', $agencyId)->exists()) {
+            if (! in_array($paymentMethod, config('payments.portal_deposit_methods', ['bkash', 'nagad']), true)) {
+                throw new \InvalidArgumentException('Only bKash and Nagad manual deposits are accepted.');
+            }
+
+            if ($userId === null) {
+                throw new \InvalidArgumentException('A manual MFS deposit must target a user wallet.');
+            }
+
+            if (! User::query()->whereKey($userId)->where('agency_id', $agencyId)->exists()) {
                 throw new \InvalidArgumentException('The deposit user does not belong to the selected agency.');
             }
 
@@ -42,8 +51,10 @@ class DepositService
                 'agency_id'      => $agencyId,
                 'user_id'        => $userId,
                 'amount'         => $data['amount'],
-                'payment_method' => $data['payment_method'],
+                'payment_method' => $paymentMethod,
                 'status'         => 'pending',
+                'mfs_sender_phone' => $data['mfs_sender_phone'] ?? null,
+                'mfs_transaction_id' => $data['mfs_transaction_id'] ?? null,
             ]);
 
             if (isset($data['receipt']) && $data['receipt'] instanceof UploadedFile) {
