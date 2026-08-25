@@ -162,6 +162,9 @@
                 </form>
 
                 <div class="mt-8 pt-6 border-t border-white/10 text-center space-y-3">
+                    <p class="text-sm text-slate-400">New to the portal?
+                        <a href="{{ route('register') }}" class="text-fuchsia-300 hover:text-fuchsia-200 font-semibold transition">Create a new account</a>
+                    </p>
                     <a href="{{ route('svp.login.form') }}" class="block text-sm text-indigo-300 hover:text-indigo-200 transition">
                         Login with real SVP / Takamol account →
                     </a>
