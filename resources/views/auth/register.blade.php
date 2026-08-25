@@ -60,9 +60,11 @@
                 </div>
 
                 <div>
-                    <label for="agency_code" class="block text-sm font-medium text-slate-300 mb-2">Agency code</label>
-                    <input type="text" id="agency_code" name="agency_code" value="{{ old('agency_code') }}" required autocomplete="organization" class="input-glass w-full rounded-xl px-4 py-3.5 text-white placeholder-slate-500 text-sm" placeholder="Enter the code provided by your agency">
-                    <p class="mt-2 text-xs text-slate-400">Use the active agency code supplied by your agency administrator.</p>
+                    <label for="agency_code" class="block text-sm font-medium text-slate-300 mb-2">Agency</label>
+                    <input type="hidden" id="agency_code" name="agency_code" value="SVP-7474">
+                    <div class="input-glass w-full rounded-xl px-4 py-3.5 text-white text-sm">SVP-7474</div>
+                    <p class="mt-2 text-xs text-slate-400">All new portal accounts are registered under the SVP-7474 agency.</p>
+                    @error('agency_code') <p class="mt-1.5 text-xs text-red-200">{{ $message }}</p> @enderror
                 </div>
 
                 <div class="grid sm:grid-cols-2 gap-5">

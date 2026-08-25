@@ -13,6 +13,8 @@ use Illuminate\Validation\Rule;
 
 class RegisterController extends Controller
 {
+    private const FIXED_AGENCY_CODE = 'SVP-7474';
+
     public function __construct(private UserWalletService $userWallet)
     {
     }
@@ -30,13 +32,13 @@ class RegisterController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'agency_code' => [
                 'required', 'string', 'max:64',
-                Rule::exists('agencies', 'code')->where(fn ($query) => $query->where('status', true)),
+                Rule::in([self::FIXED_AGENCY_CODE]),
             ],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
         $agency = Agency::query()
-            ->where('code', $data['agency_code'])
+            ->where('code', self::FIXED_AGENCY_CODE)
             ->where('status', true)
             ->firstOrFail();
 

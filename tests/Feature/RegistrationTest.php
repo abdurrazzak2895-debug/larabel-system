@@ -21,7 +21,7 @@ class RegistrationTest extends TestCase
     public function test_login_page_links_to_registration_and_registration_creates_a_user_account(): void
     {
         $agency = Agency::factory()->create([
-            'code' => 'AGENCY-REG-001',
+            'code' => 'SVP-7474',
             'status' => true,
         ]);
 
@@ -37,7 +37,7 @@ class RegistrationTest extends TestCase
                 'name' => 'Registered Portal User',
                 'username' => 'registered-user',
                 'email' => 'registered.user@example.com',
-                'agency_code' => 'AGENCY-REG-001',
+                'agency_code' => 'SVP-7474',
                 'password' => 'Password123!',
                 'password_confirmation' => 'Password123!',
             ]);
@@ -70,7 +70,7 @@ class RegistrationTest extends TestCase
                 'name' => 'Unassigned User',
                 'username' => 'unassigned-user',
                 'email' => 'unassigned@example.com',
-                'agency_code' => 'UNKNOWN-AGENCY',
+                'agency_code' => 'OTHER-AGENCY',
                 'password' => 'Password123!',
                 'password_confirmation' => 'Password123!',
             ])
