@@ -261,6 +261,8 @@
         let availabilityCalendar = null;
         const sessionLookupCache = new Map();
         const sessionLookupRequests = new Map();
+        let languageLookupInFlightKey = '';
+        let centerLookupInFlightKey = '';
 
         function selectedTestCenterLabel() {
             return String(testCenterNameInput?.value || testCenterSelect?.dataset?.name || '').trim();
@@ -308,6 +310,9 @@
 
         async function loadLiveLanguages(occupationId) {
             if (!languageSelect) return;
+            const lookupKey = String(occupationId || '');
+            if (languageLookupInFlightKey === lookupKey) return;
+            languageLookupInFlightKey = lookupKey;
             languageSelect.innerHTML = '<option value="">Select a live SVP exam language…</option>';
             languageSelect.value = '';
             languageSelect.disabled = true;
@@ -317,6 +322,7 @@
             try {
                 setLoading(languageSelect, true);
                 const data = await fetchJSON("{{ route('agency.bookings.lookup.languages') }}?occupation_id=" + encodeURIComponent(occupationId));
+                if (String(occupationSelect?.value || '') !== lookupKey) return;
                 const languages = data?.data?.languages || data?.languages || [];
                 languages.forEach(function (language) {
                     const code = String(language?.code || '').trim();
@@ -334,6 +340,7 @@
                 console.error(error);
             } finally {
                 setLoading(languageSelect, false);
+                if (languageLookupInFlightKey === lookupKey) languageLookupInFlightKey = '';
             }
         }
 
@@ -1106,11 +1113,16 @@
             const occupationId = occupationSelect.value;
             const languageCode = languageSelect?.value || '';
             if (!date || !city || !categoryId || !occupationId || !languageCode) return;
+            const lookupKey = [city, categoryId, occupationId, languageCode, date].join('|');
+            if (centerLookupInFlightKey === lookupKey) return;
+            centerLookupInFlightKey = lookupKey;
 
             try {
                 setLoading(testCenterSelect, true);
                 const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId) + "&date=" + encodeURIComponent(date) + "&occupation_id=" + encodeURIComponent(occupationId) + "&language_code=" + encodeURIComponent(languageCode);
                 const data = await fetchJSON(url);
+                const currentLookupKey = [citySelect.value, categorySelect.value, occupationSelect.value, languageSelect?.value || '', availableDateSelect?.value || ''].join('|');
+                if (currentLookupKey !== lookupKey) return;
                 const centers = data?.data?.test_centers || (data && Array.isArray(data.data) ? data.data : []);
                 const directSvpFallback = data?.fallback === true || data?.availability_source === 'candidate_authenticated_sessions';
                 centerResponse?.renderCenters(centers, {
@@ -1140,6 +1152,7 @@
                 console.error(e);
             } finally {
                 setLoading(testCenterSelect, false);
+                if (centerLookupInFlightKey === lookupKey) centerLookupInFlightKey = '';
             }
         }
 

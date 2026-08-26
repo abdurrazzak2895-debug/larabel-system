@@ -298,7 +298,7 @@ final class PortalAvailabilityService
                 $items[$key]['languages'] = collect($items[$key]['languages'] ?? [])
                     ->concat($item['languages'] ?? [])
                     ->filter(fn ($language): bool => is_array($language))
-                    ->unique(fn (array $language): string => (string) ($language['code'] ?? $language['name'] ?? ''))
+                    ->unique(fn (array $language): string => strtoupper((string) ($language['code'] ?? $language['name'] ?? '')))
                     ->values()
                     ->all();
                 $items[$key]['category_name'] = ($items[$key]['category_name'] ?? '') ?: ($item['category_name'] ?? '');
@@ -331,7 +331,7 @@ final class PortalAvailabilityService
         return collect($occupation['languages'] ?? [])
             ->filter(static fn ($language): bool => is_array($language))
             ->map(static fn (array $language): array => [
-                'code' => trim((string) ($language['code'] ?? '')),
+                'code' => strtoupper(trim((string) ($language['code'] ?? ''))),
                 'name' => trim((string) ($language['name'] ?? $language['english_name'] ?? $language['title'] ?? $language['code'] ?? '')),
             ])
             ->filter(static fn (array $language): bool => $language['code'] !== '' && $language['name'] !== '')
