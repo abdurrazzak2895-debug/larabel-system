@@ -9,9 +9,11 @@ use App\Models\Setting;
 use App\Models\PortalAvailabilityCredential;
 use App\Models\TestCenter;
 use App\Models\User;
+use App\Contracts\PortalAvailabilityProviderInterface;
 use App\Services\UserWalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -723,6 +725,90 @@ class UserPanelTest extends TestCase
         $response->assertRedirect(route('user.bookings.create'))
             ->assertSessionHasErrors(['temporary_hold_id'])
             ->assertSessionDoesntHaveErrors(['language_code']);
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/exam_reservations'));
+    }
+
+    public function test_user_booking_with_stale_inactive_candidate_redirects_instead_of_404(): void
+    {
+        Cache::flush();
+
+        PortalAvailabilityCredential::create([
+            'name' => 'Stale candidate validation portal session',
+            'portal_account_id' => 'stale-candidate-portal-account',
+            'session_cookie' => 'session=stale-candidate-authorized',
+            'active' => true,
+        ]);
+
+        Http::fake([
+            'https://svp-international.xyz/api/occupations' => Http::response([
+                [
+                    'name' => 'Kitchen Worker',
+                    'occupation_id' => 99062,
+                    'languages' => [['code' => 'STALE-LANG', 'name' => 'English']],
+                ],
+            ], 200),
+        ]);
+
+        $user = $this->loginAgencyUser();
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $user->agency_id,
+            'full_name' => 'Stale Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-STALE-CANDIDATE',
+            'is_active' => false,
+        ]);
+        $provider = new class implements PortalAvailabilityProviderInterface
+        {
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                return [[
+                    'name' => 'Kitchen Worker',
+                    'occupation_id' => 99062,
+                    'category_id' => 1,
+                    'languages' => [['code' => 'STALE-LANG', 'name' => 'English']],
+                ]];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => []];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                return ['centers' => []];
+            }
+        };
+        $this->app->instance(PortalAvailabilityProviderInterface::class, $provider);
+        $bookingCount = Booking::where('user_id', $user->id)->count();
+        $csrfToken = 'stale-candidate-csrf';
+
+        $response = $this->from(route('user.bookings.create'))
+            ->withSession(['_token' => $csrfToken, 'svp_token' => 'candidate-svp-token'])
+            ->post(route('user.bookings.store'), [
+                '_token' => $csrfToken,
+                'candidate_id' => $candidate->id,
+                'occupation_id' => '99062',
+                'category_id' => '1',
+                'city' => 'Dhaka',
+                'test_center_id' => '17',
+                'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+                'exam_session_id' => 'session-stale-candidate',
+                'exam_date' => '2026-09-01',
+                'temporary_hold_id' => 'hold-stale-candidate',
+                'language_code' => 'STALE-LANG',
+                'methodology' => 'in_person',
+            ]);
+
+        $response->assertRedirect(route('user.bookings.create'))
+            ->assertSessionHasErrors(['candidate_id']);
+        $this->assertSame($bookingCount, Booking::where('user_id', $user->id)->count());
         Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/exam_reservations'));
     }
 

@@ -650,9 +650,13 @@ class BookingController extends Controller
 
         $token = $this->ensureSvpToken($request);
 
-        // Wallet + candidates synced from SVP profile after login.
+        // Wallet + currently active candidates synced from SVP profile after login.
         $wallet = $this->userWallet->getWallet((int) Auth::id());
-        $candidates = Candidate::where('user_id', Auth::id())->latest()->get();
+        $candidates = Candidate::where('user_id', Auth::id())
+            ->where('agency_id', $agencyId)
+            ->where('is_active', true)
+            ->latest()
+            ->get();
 
         $occupations = [];
         $categories  = [];
@@ -983,8 +987,15 @@ class BookingController extends Controller
         }
 
         $candidate = Candidate::where('user_id', Auth::id())
+            ->where('agency_id', $agencyId)
             ->where('is_active', true)
-            ->findOrFail($data['candidate_id']);
+            ->find($data['candidate_id']);
+
+        if (! $candidate) {
+            return back()
+                ->withInput()
+                ->withErrors(['candidate_id' => 'The selected SVP candidate is no longer active. Refresh the page and select the current candidate before confirming.']);
+        }
 
         $hold = $this->holds->consumeMatching($request, $data);
         if ($hold === null) {
