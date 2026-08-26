@@ -1052,7 +1052,7 @@ class UserPanelTest extends TestCase
         $this->assertSame('fallback-181-1', $agencyRows[4]['exam_session_id']);
         $this->assertSame(1, $agencyRows[4]['session_count']);
 
-        Http::assertSentCount(5);
+        Http::assertSentCount(8);
     }
 
     public function test_booking_create_renders_read_only_lookups_without_candidate_token(): void

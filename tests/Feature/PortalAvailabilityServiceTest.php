@@ -109,6 +109,67 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertArrayNotHasKey('session_cookie', $credential->fresh()->toArray());
     }
 
+    public function test_transient_empty_center_response_is_retried_and_not_cached(): void
+    {
+        config(['portal.empty_retry_delay_ms' => 0]);
+
+        $credential = PortalAvailabilityCredential::query()->create([
+            'name' => 'Transient Empty Portal Session',
+            'portal_account_id' => 'portal-account-transient',
+            'session_cookie' => 'session=transient',
+            'active' => true,
+        ]);
+        $calls = 0;
+        $provider = new class($calls) implements PortalAvailabilityProviderInterface
+        {
+            public function __construct(private int &$calls)
+            {
+            }
+
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                return [];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => []];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                $this->calls++;
+
+                return $this->calls <= 2
+                    ? ['centers' => []]
+                    : ['centers' => [[
+                        'test_center_name' => 'Jashore TTC',
+                        'test_center_id' => 171,
+                        'test_time' => '10:00 AM',
+                        'available_seats' => 4,
+                        'exam_session_id' => 'recovered-session',
+                    ]]];
+            }
+        };
+
+        $service = new PortalAvailabilityService($provider);
+        $empty = $service->centers($credential->id, 159, 'Khulna', '2026-08-31', 2061, 'LOABB');
+
+        $this->assertSame([], $empty['data']['centers']);
+        $this->assertSame(2, $calls);
+
+        $result = $service->centers($credential->id, 159, 'Khulna', '2026-08-31', 2061, 'LOABB');
+
+        $this->assertCount(1, $result['data']['centers']);
+        $this->assertSame('recovered-session', $result['data']['centers'][0]['exam_session_id']);
+        $this->assertSame(3, $calls);
+    }
+
     public function test_service_preserves_portal_session_identity_and_per_center_count(): void
     {
         $credential = PortalAvailabilityCredential::query()->create([
@@ -460,7 +521,7 @@ class PortalAvailabilityServiceTest extends TestCase
         ], $languages);
 
         $centers = $service->bookingCentersForDate('159', 'Dhaka', '2030-09-02', '2061', 'EN', $languages[0]['codes']);
-        $this->assertSame(['EN', 'EN-ALT'], $provider->centerLanguageCodes);
+        $this->assertSame(['EN', 'EN', 'EN-ALT'], $provider->centerLanguageCodes);
         $this->assertSame('Dhaka TTC', $centers[0]['name']);
     }
 

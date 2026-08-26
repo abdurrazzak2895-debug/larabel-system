@@ -130,7 +130,7 @@ final class PortalAvailabilityService
     public function occupations(?int $credentialId = null): array
     {
         $credential = $this->credential($credentialId);
-        $cacheKey = 'portal:availability:occupations:v1:'.$credential->id;
+        $cacheKey = 'portal:availability:occupations:v2:'.$credential->id.':'.sha1((string) $credential->session_cookie);
 
         return $this->remember($cacheKey, function () use ($credential): array {
             $data = $this->provider->occupations((string) $credential->session_cookie);
@@ -145,7 +145,7 @@ final class PortalAvailabilityService
                 'data' => $this->normalizeOccupations($data),
                 'fetched_at' => now()->toIso8601String(),
             ];
-        }, $credential);
+        }, $credential, static fn (array $result): bool => ($result['data'] ?? []) !== []);
     }
 
     /** @return array{credential: array<string, mixed>, data: array<string, mixed>, fetched_at: string} */
@@ -161,8 +161,9 @@ final class PortalAvailabilityService
             throw new RuntimeException('A valid category and start date are required.');
         }
 
-        $cacheKey = 'portal:availability:dates:v1:'.sha1(json_encode([
+        $cacheKey = 'portal:availability:dates:v2:'.sha1(json_encode([
             'credential_id' => $credential->id,
+            'session_fingerprint' => sha1((string) $credential->session_cookie),
             'category_id' => $categoryId,
             'start_from' => $startFrom,
         ]));
@@ -185,7 +186,7 @@ final class PortalAvailabilityService
                 'data' => $this->normalizeDates($data),
                 'fetched_at' => now()->toIso8601String(),
             ];
-        }, $credential);
+        }, $credential, static fn (array $result): bool => ! empty($result['data']['dates'] ?? []));
     }
 
     /** @return array{credential: array<string, mixed>, data: array<string, mixed>, fetched_at: string} */
@@ -207,8 +208,9 @@ final class PortalAvailabilityService
             throw new RuntimeException('Category, city, date, occupation, and language are required.');
         }
 
-        $cacheKey = 'portal:availability:centers:v1:'.sha1(json_encode([
+        $cacheKey = 'portal:availability:centers:v2:'.sha1(json_encode([
             'credential_id' => $credential->id,
+            'session_fingerprint' => sha1((string) $credential->session_cookie),
             'category_id' => $categoryId,
             'city' => Str::lower($city),
             'date' => $date,
@@ -237,7 +239,7 @@ final class PortalAvailabilityService
                 'data' => $this->normalizeCenters($data),
                 'fetched_at' => now()->toIso8601String(),
             ];
-        }, $credential);
+        }, $credential, static fn (array $result): bool => ! empty($result['data']['centers'] ?? []));
     }
 
     /**
@@ -552,14 +554,40 @@ final class PortalAvailabilityService
         return ['test_centers' => array_values($centers)];
     }
 
-    private function remember(string $key, callable $callback, PortalAvailabilityCredential $credential): array
+    private function remember(string $key, callable $callback, PortalAvailabilityCredential $credential, ?callable $hasData = null): array
     {
         try {
-            return Cache::remember(
-                $key,
-                now()->addSeconds(max(1, (int) config('portal.cache_ttl', 30))),
-                $callback,
-            );
+            if (Cache::has($key)) {
+                $cached = Cache::get($key);
+                if (is_array($cached) && ($hasData === null || $hasData($cached))) {
+                    return $cached;
+                }
+
+                // Never let a transient empty upstream response become the
+                // answer for every lookup during the normal cache window.
+                Cache::forget($key);
+            }
+
+            $attempts = max(0, min(2, (int) config('portal.empty_retry_attempts', 1)));
+            $result = [];
+            for ($attempt = 0; $attempt <= $attempts; $attempt++) {
+                if ($attempt > 0) {
+                    usleep(max(0, (int) config('portal.empty_retry_delay_ms', 150)) * 1000);
+                }
+
+                $result = $callback();
+                if ($hasData === null || $hasData($result) || $attempt === $attempts) {
+                    break;
+                }
+            }
+
+            // Positive availability is cached; empty availability stays
+            // uncached so a later refresh can recover without waiting 30s.
+            if ($hasData === null || $hasData($result)) {
+                Cache::put($key, $result, now()->addSeconds(max(1, (int) config('portal.cache_ttl', 30))));
+            }
+
+            return $result;
         } catch (\Throwable $exception) {
             $credential->forceFill([
                 'last_checked_at' => now(),
