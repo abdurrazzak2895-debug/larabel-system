@@ -424,6 +424,17 @@ final class PortalAvailabilityService
             ->all();
     }
 
+    private function centerSlotKey(array $row, string $fallbackDate = ''): string
+    {
+        $center = trim((string) ($row['test_center_id'] ?? $row['test_center_name'] ?? $row['center_id'] ?? $row['center_name'] ?? ''));
+        $date = trim((string) ($row['date'] ?? $row['exam_date'] ?? $row['test_date'] ?? $fallbackDate));
+        $time = trim((string) ($row['test_time'] ?? $row['start_time'] ?? $row['time'] ?? $row['start_at'] ?? ''));
+        $session = trim((string) ($row['exam_session_id'] ?? $row['session_id'] ?? ''));
+        $slot = $time !== '' ? $time : $session;
+
+        return Str::lower((string) preg_replace('/\\s+/', ' ', $center.'|'.$date.'|'.$slot));
+    }
+
     /** @return array<int, string> */
     private function normalizedLanguageCodes(string $primaryCode, array $aliasCodes = []): array
     {
@@ -472,17 +483,19 @@ final class PortalAvailabilityService
                     continue;
                 }
 
-                $centerKey = (string) ($row['test_center_id'] ?? $row['test_center_name'] ?? '');
-                $slotKey = (string) ($row['exam_session_id'] ?? $row['session_id'] ?? $row['test_time'] ?? '');
-                $key = $centerKey.'|'.$slotKey;
+                $centerKey = trim((string) ($row['test_center_id'] ?? $row['test_center_name'] ?? ''));
+                $key = $this->centerSlotKey($row, $date);
                 if ($centerKey === '') {
                     continue;
                 }
 
+                $sessionId = trim((string) ($row['exam_session_id'] ?? $row['session_id'] ?? ''));
                 $normalized = array_merge($row, [
                     'id' => $row['test_center_id'] ?? null,
                     'name' => $row['test_center_name'] ?? null,
                     'date' => trim($date),
+                    'session_ids' => $sessionId !== '' ? [$sessionId] : [],
+                    'session_count' => $sessionId !== '' ? 1 : 0,
                 ]);
                 if (! isset($merged[$key])) {
                     $merged[$key] = $normalized;
@@ -493,6 +506,11 @@ final class PortalAvailabilityService
                     (int) ($merged[$key]['available_seats'] ?? 0),
                     (int) ($normalized['available_seats'] ?? 0),
                 );
+                $merged[$key]['session_ids'] = array_values(array_unique(array_merge(
+                    (array) ($merged[$key]['session_ids'] ?? []),
+                    (array) ($normalized['session_ids'] ?? []),
+                )));
+                $merged[$key]['session_count'] = count($merged[$key]['session_ids']);
             }
         }
 

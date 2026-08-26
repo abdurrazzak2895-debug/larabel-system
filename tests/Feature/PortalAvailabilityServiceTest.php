@@ -271,6 +271,13 @@ class PortalAvailabilityServiceTest extends TestCase
                         'available_seats' => 7,
                         'exam_session_id' => 'portal-session-3',
                     ],
+                    [
+                        'test_center_name' => 'Jashore TTC',
+                        'test_center_id' => 171,
+                        'test_time' => '09:30 AM',
+                        'available_seats' => 5,
+                        'exam_session_id' => 'portal-session-4',
+                    ],
                 ]];
             }
         };
@@ -293,14 +300,16 @@ class PortalAvailabilityServiceTest extends TestCase
         $slots = $service->bookingCentersForDate('159', 'Khulna', '2030-09-01', '2061', 'LOABB');
         $this->assertCount(2, $slots);
         $this->assertSame('09:30 AM', $slots[0]['test_time']);
+        $this->assertSame(5, $slots[0]['available_seats']);
+        $this->assertSame(['portal-session-2', 'portal-session-4'], $slots[0]['session_ids']);
         $this->assertSame(7, $slots[1]['available_seats']);
         $this->assertSame(['portal-session-2', 'portal-session-3'], array_column($slots, 'exam_session_id'));
-        $this->assertSame([2, 2], array_column($slots, 'session_count'));
+        $this->assertSame([2, 1], array_column($slots, 'session_count'));
         $centers = $service->bookingCenters('159', 'Khulna', '2061', 'LOABB')['test_centers'];
         $this->assertCount(1, $centers);
         $this->assertSame('171', (string) $centers[0]['id']);
         $this->assertSame('Jashore TTC', $centers[0]['name']);
-        $this->assertSame(3, $centers[0]['available_seats']);
+        $this->assertSame(5, $centers[0]['available_seats']);
     }
 
     public function test_booking_lookup_aggregates_multiple_portal_accounts(): void
