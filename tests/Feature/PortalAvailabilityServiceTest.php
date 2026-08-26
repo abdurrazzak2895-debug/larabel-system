@@ -303,6 +303,91 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertSame(3, $centers[0]['available_seats']);
     }
 
+    public function test_booking_lookup_aggregates_multiple_portal_accounts(): void
+    {
+        PortalAvailabilityCredential::query()->create([
+            'name' => 'Booking account one',
+            'portal_account_id' => 'account-one',
+            'session_cookie' => 'session=one',
+            'active' => true,
+        ]);
+        PortalAvailabilityCredential::query()->create([
+            'name' => 'Booking account two',
+            'portal_account_id' => 'account-two',
+            'session_cookie' => 'session=two',
+            'active' => true,
+        ]);
+
+        $provider = new class implements PortalAvailabilityProviderInterface
+        {
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                return $sessionCookie === 'session=one'
+                    ? [[
+                        'name' => 'Load Worker',
+                        'occupation_id' => 2061,
+                        'category_id' => 159,
+                        'category_name' => 'Load Category',
+                        'languages' => [['code' => 'LOABB', 'english_name' => 'Bengali']],
+                    ]]
+                    : [[
+                        'name' => 'Machine Operator',
+                        'occupation_id' => 2062,
+                        'category_id' => 160,
+                        'category_name' => 'Machine Category',
+                        'languages' => [['code' => 'EN', 'english_name' => 'English']],
+                    ]];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return $accountId === 'account-one'
+                    ? ['dates' => [['city' => 'Khulna', 'date' => '2030-09-01']]]
+                    : ['dates' => [['city' => 'Dhaka', 'date' => '2030-09-02']]];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                if ($accountId !== 'account-two') {
+                    return ['centers' => []];
+                }
+
+                return ['centers' => [[
+                    'test_center_name' => 'Dhaka TTC',
+                    'test_center_id' => 172,
+                    'test_time' => '10:00 AM',
+                    'available_seats' => 8,
+                    'exam_session_id' => 'account-two-session',
+                ]]];
+            }
+        };
+
+        $service = new PortalAvailabilityService($provider);
+
+        $this->assertSame(['Load Worker', 'Machine Operator'], array_column($service->bookingOccupations(), 'name'));
+        $this->assertSame([
+            ['id' => '160', 'name' => 'Machine Category'],
+        ], $service->bookingCategories('2062'));
+        $this->assertSame([
+            ['code' => 'EN', 'name' => 'English'],
+        ], $service->bookingLanguages('2062'));
+        $this->assertSame([
+            ['name' => 'Khulna'],
+            ['name' => 'Dhaka'],
+        ], $service->bookingCities('159'));
+        $this->assertSame([
+            ['city' => 'Dhaka', 'date' => '2030-09-02'],
+        ], $service->bookingDates('160', 'Dhaka'));
+        $centers = $service->bookingCentersForDate('160', 'Dhaka', '2030-09-02', '2062', 'EN');
+        $this->assertSame('Dhaka TTC', $centers[0]['name']);
+        $this->assertSame(8, $centers[0]['available_seats']);
+    }
+
     public function test_admin_can_load_occupations_without_exposing_the_session_cookie(): void
     {
         $permission = Permission::query()->create(['name' => 'manage agencies', 'slug' => 'manage-agencies']);

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\PortalAvailabilityCredential;
 use App\Contracts\PortalAvailabilityProviderInterface;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -239,17 +240,77 @@ final class PortalAvailabilityService
         }, $credential);
     }
 
+    /**
+     * Run a read-only availability lookup against every usable saved account.
+     * A failed account is recorded and skipped so another account can still
+     * supply live booking data.
+     *
+     * @return array<int, mixed>
+     */
+    private function forEachUsableCredential(callable $callback): array
+    {
+        $results = [];
+        $credentials = PortalAvailabilityCredential::query()
+            ->usable()
+            ->orderBy('last_used_at')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($credentials as $credential) {
+            try {
+                $results[] = $callback($credential);
+            } catch (\Throwable $exception) {
+                $credential->forceFill([
+                    'last_checked_at' => now(),
+                    'last_error' => Str::limit($exception->getMessage(), 500),
+                ])->saveQuietly();
+                Log::warning('Portal availability account lookup failed', [
+                    'credential_id' => $credential->id,
+                    'portal_account_id' => $credential->portal_account_id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return $results;
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function bookingOccupations(?string $search = null): array
     {
-        $items = $this->occupations()['data'] ?? [];
-        $term = Str::lower(trim((string) $search));
+        $items = [];
+        foreach ($this->forEachUsableCredential(fn (PortalAvailabilityCredential $credential): array => $this->occupations((int) $credential->id)['data'] ?? []) as $credentialItems) {
+            foreach ($credentialItems as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
 
-        if ($term === '') {
-            return array_values($items);
+                $key = (string) ($item['occupation_id'] ?? $item['name'] ?? '');
+                if ($key === '') {
+                    continue;
+                }
+
+                if (! isset($items[$key])) {
+                    $items[$key] = $item;
+                    continue;
+                }
+
+                $items[$key]['languages'] = collect($items[$key]['languages'] ?? [])
+                    ->concat($item['languages'] ?? [])
+                    ->filter(fn ($language): bool => is_array($language))
+                    ->unique(fn (array $language): string => (string) ($language['code'] ?? $language['name'] ?? ''))
+                    ->values()
+                    ->all();
+                $items[$key]['category_name'] = ($items[$key]['category_name'] ?? '') ?: ($item['category_name'] ?? '');
+            }
         }
 
-        return array_values(array_filter($items, static fn (array $item): bool => Str::contains(Str::lower((string) ($item['name'] ?? '')), $term)));
+        $term = Str::lower(trim((string) $search));
+        if ($term !== '') {
+            $items = array_filter($items, static fn (array $item): bool => Str::contains(Str::lower((string) ($item['name'] ?? '')), $term));
+        }
+
+        return array_values($items);
     }
 
     /** @return array<int, array{code: string, name: string}> */
@@ -260,7 +321,7 @@ final class PortalAvailabilityService
             return [];
         }
 
-        $occupation = collect($this->occupations()['data'] ?? [])
+        $occupation = collect($this->bookingOccupations())
             ->first(static fn (array $item): bool => (string) ($item['occupation_id'] ?? '') === $occupationId);
 
         if (! is_array($occupation)) {
@@ -287,7 +348,7 @@ final class PortalAvailabilityService
             return [];
         }
 
-        $occupation = collect($this->occupations()['data'] ?? [])
+        $occupation = collect($this->bookingOccupations())
             ->first(static fn (array $item): bool => (string) ($item['occupation_id'] ?? '') === $occupationId);
         $categoryId = is_array($occupation) ? trim((string) ($occupation['category_id'] ?? '')) : '';
 
@@ -297,11 +358,38 @@ final class PortalAvailabilityService
         ]];
     }
 
+    /** @return array<int, array{city: string, date: string}> */
+    private function bookingDateRows(int|string $categoryId): array
+    {
+        $rows = [];
+        foreach ($this->forEachUsableCredential(fn (PortalAvailabilityCredential $credential): array => $this->searchDates(
+            (int) $credential->id,
+            $categoryId,
+            now()->toDateString(),
+        )['data']['dates'] ?? []) as $credentialRows) {
+            foreach ($credentialRows as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+
+                $city = trim((string) ($row['city'] ?? ''));
+                $date = trim((string) ($row['date'] ?? ''));
+                if ($city === '' || preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date) !== 1) {
+                    continue;
+                }
+
+                $key = Str::lower($city).'|'.$date;
+                $rows[$key] = ['city' => $city, 'date' => $date];
+            }
+        }
+
+        return array_values($rows);
+    }
+
     /** @return array<int, array{name: string}> */
     public function bookingCities(int|string $categoryId): array
     {
-        $dates = $this->searchDates(null, $categoryId, now()->toDateString())['data']['dates'] ?? [];
-        return collect($dates)
+        return collect($this->bookingDateRows($categoryId))
             ->pluck('city')
             ->filter(static fn ($city): bool => is_string($city) && trim($city) !== '')
             ->map(static fn (string $city): array => ['name' => trim($city)])
@@ -318,11 +406,8 @@ final class PortalAvailabilityService
             return [];
         }
 
-        $dates = $this->searchDates(null, $categoryId, now()->toDateString())['data']['dates'] ?? [];
-
-        return collect($dates)
+        return collect($this->bookingDateRows($categoryId))
             ->filter(static fn (array $item): bool => strcasecmp(trim((string) ($item['city'] ?? '')), $city) === 0)
-            ->filter(static fn (array $item): bool => preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', (string) ($item['date'] ?? '')) === 1)
             ->map(static fn (array $item): array => ['city' => $city, 'date' => trim((string) $item['date'])])
             ->unique('date')
             ->sortBy('date')
@@ -338,16 +423,45 @@ final class PortalAvailabilityService
         int|string $occupationId,
         string $languageCode,
     ): array {
-        $rows = $this->centers(null, $categoryId, trim($city), trim($date), $occupationId, trim($languageCode))['data']['centers'] ?? [];
+        $merged = [];
+        foreach ($this->forEachUsableCredential(fn (PortalAvailabilityCredential $credential): array => $this->centers(
+            (int) $credential->id,
+            $categoryId,
+            trim($city),
+            trim($date),
+            $occupationId,
+            trim($languageCode),
+        )['data']['centers'] ?? []) as $rows) {
+            foreach ($rows as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
 
-        return collect($rows)
-            ->map(static fn (array $row): array => array_merge($row, [
-                'id' => $row['test_center_id'] ?? null,
-                'name' => $row['test_center_name'] ?? null,
-                'date' => trim($date),
-            ]))
-            ->values()
-            ->all();
+                $centerKey = (string) ($row['test_center_id'] ?? $row['test_center_name'] ?? '');
+                $slotKey = (string) ($row['exam_session_id'] ?? $row['session_id'] ?? $row['test_time'] ?? '');
+                $key = $centerKey.'|'.$slotKey;
+                if ($centerKey === '') {
+                    continue;
+                }
+
+                $normalized = array_merge($row, [
+                    'id' => $row['test_center_id'] ?? null,
+                    'name' => $row['test_center_name'] ?? null,
+                    'date' => trim($date),
+                ]);
+                if (! isset($merged[$key])) {
+                    $merged[$key] = $normalized;
+                    continue;
+                }
+
+                $merged[$key]['available_seats'] = max(
+                    (int) ($merged[$key]['available_seats'] ?? 0),
+                    (int) ($normalized['available_seats'] ?? 0),
+                );
+            }
+        }
+
+        return array_values($merged);
     }
 
     /** @return array{test_centers: array<int, array<string, mixed>>} */
@@ -358,7 +472,7 @@ final class PortalAvailabilityService
         string $languageCode,
     ): array {
         $city = trim($city);
-        $dates = $this->searchDates(null, $categoryId, now()->toDateString())['data']['dates'] ?? [];
+        $dates = $this->bookingDateRows($categoryId);
         $dates = collect($dates)
             ->filter(static fn (array $item): bool => strcasecmp(trim((string) ($item['city'] ?? '')), $city) === 0)
             ->pluck('date')
