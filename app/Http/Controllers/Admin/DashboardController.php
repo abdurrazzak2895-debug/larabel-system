@@ -30,6 +30,23 @@ class DashboardController extends Controller
             'todaysRefunds'     => RefundRequest::where('status', 'approved')->whereDate('processed_at', today())->count(),
             'apiHealth'         => ['status' => 'healthy', 'last_check' => now()],
             'revenueOverview'   => $this->reportService->revenueOverview(),
+            'bookingSummary'    => [
+                'total' => Booking::count(),
+                'amount' => (float) Booking::sum('portal_booking_fee'),
+                'booked' => Booking::where('booking_status', 'booked')->count(),
+                'pending' => Booking::whereIn('booking_status', ['pending', 'processing'])->count(),
+                'failed' => Booking::where('booking_status', 'failed')->count(),
+            ],
+            'agencyBookingSummary' => Agency::query()
+                ->withCount([
+                    'users as user_count',
+                    'bookings as booking_count',
+                    'bookings as booked_count' => fn ($query) => $query->where('booking_status', 'booked'),
+                    'bookings as failed_count' => fn ($query) => $query->where('booking_status', 'failed'),
+                ])
+                ->withSum('bookings', 'portal_booking_fee')
+                ->orderBy('name')
+                ->get(),
             'liveBookingLogs'   => BookingLog::with(['booking.agency', 'booking.user'])
                 ->latest()
                 ->limit(25)

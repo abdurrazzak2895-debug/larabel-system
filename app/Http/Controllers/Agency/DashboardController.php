@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Agency;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\BookingLog;
 use App\Models\DepositRequest;
 use App\Models\RefundRequest;
 use App\Models\User;
@@ -38,6 +39,28 @@ class DashboardController extends Controller
             'deposits'        => DepositRequest::with('user')->where('agency_id', $agencyId)->whereNotNull('user_id')->latest()->take(5)->get(),
             'refunds'         => RefundRequest::where('agency_id', $agencyId)->latest()->take(5)->get(),
             'activeUsers'     => User::where('agency_id', $agencyId)->where('status', true)->count(),
+            'bookingSummary'  => [
+                'total' => Booking::where('agency_id', $agencyId)->count(),
+                'amount' => (float) Booking::where('agency_id', $agencyId)->sum('portal_booking_fee'),
+                'booked' => Booking::where('agency_id', $agencyId)->where('booking_status', 'booked')->count(),
+                'pending' => Booking::where('agency_id', $agencyId)->whereIn('booking_status', ['pending', 'processing'])->count(),
+                'failed' => Booking::where('agency_id', $agencyId)->where('booking_status', 'failed')->count(),
+            ],
+            'userBookingSummary' => User::where('agency_id', $agencyId)
+                ->withCount([
+                    'bookings as booking_count',
+                    'bookings as booked_count' => fn ($query) => $query->where('booking_status', 'booked'),
+                    'bookings as pending_count' => fn ($query) => $query->whereIn('booking_status', ['pending', 'processing']),
+                    'bookings as failed_count' => fn ($query) => $query->where('booking_status', 'failed'),
+                ])
+                ->withSum('bookings', 'portal_booking_fee')
+                ->orderBy('name')
+                ->get(),
+            'liveBookingLogs' => BookingLog::with(['booking.user'])
+                ->whereHas('booking', fn ($query) => $query->where('agency_id', $agencyId))
+                ->latest()
+                ->limit(25)
+                ->get(),
         ]);
     }
 

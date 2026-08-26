@@ -114,6 +114,8 @@ class AdminAuthTest extends TestCase
         $this->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('Live Booking Activity')
+            ->assertSee('Agency Booking Summary')
+            ->assertSee('Total Booking Amount')
             ->assertSee($booking->agency->name)
             ->assertSee($booking->user->name)
             ->assertSee('Admin Dashboard Live Event');
@@ -203,6 +205,41 @@ class AdminAuthTest extends TestCase
         Auth::guard('web')->login($agencyUser);
 
         $this->get(route('agency.dashboard'))->assertOk();
+    }
+
+    public function test_agency_dashboard_shows_own_user_summary_and_hides_other_agency_logs(): void
+    {
+        $agencyUser = \App\Models\User::whereNotNull('agency_id')->firstOrFail();
+        $ownBooking = Booking::where('agency_id', $agencyUser->agency_id)
+            ->whereNotNull('user_id')
+            ->firstOrFail();
+        $otherAgency = \App\Models\Agency::factory()->create();
+        $otherUser = \App\Models\User::factory()->create(['agency_id' => $otherAgency->id]);
+        $otherBooking = Booking::create([
+            'agency_id' => $otherAgency->id,
+            'user_id' => $otherUser->id,
+            'booking_status' => 'pending',
+            'booking_reference' => 'OTHER-AGENCY-DASHBOARD-BOOKING',
+            'portal_booking_fee' => 777.00,
+        ]);
+        BookingLog::create([
+            'booking_id' => $ownBooking->id,
+            'event_type' => 'agency_dashboard_own_live_event',
+        ]);
+        BookingLog::create([
+            'booking_id' => $otherBooking->id,
+            'event_type' => 'agency_dashboard_other_live_event',
+        ]);
+
+        Auth::guard('web')->login($agencyUser);
+
+        $this->get(route('agency.dashboard'))
+            ->assertOk()
+            ->assertSee('User Booking Summary')
+            ->assertSee('Fresh Booking Logs')
+            ->assertSee('Agency Dashboard Own Live Event')
+            ->assertDontSee('Agency Dashboard Other Live Event')
+            ->assertDontSee($otherUser->name);
     }
 
     public function test_agency_user_can_open_all_agency_panel_pages(): void

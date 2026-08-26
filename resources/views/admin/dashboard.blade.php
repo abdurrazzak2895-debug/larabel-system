@@ -63,6 +63,60 @@
     @endforeach
 </div>
 
+{{-- Booking summary --}}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+    @php
+        $bookingStats = [
+            ['label' => 'Total Bookings', 'value' => number_format($bookingSummary['total']), 'color' => 'text-indigo-700 bg-indigo-50'],
+            ['label' => 'Total Booking Amount', 'value' => number_format($bookingSummary['amount'], 2) . ' BDT', 'color' => 'text-emerald-700 bg-emerald-50'],
+            ['label' => 'Booked', 'value' => number_format($bookingSummary['booked']), 'color' => 'text-blue-700 bg-blue-50'],
+            ['label' => 'Pending / Processing', 'value' => number_format($bookingSummary['pending']), 'color' => 'text-amber-700 bg-amber-50'],
+            ['label' => 'Failed', 'value' => number_format($bookingSummary['failed']), 'color' => 'text-rose-700 bg-rose-50'],
+        ];
+    @endphp
+    @foreach ($bookingStats as $stat)
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $stat['label'] }}</p>
+            <p class="text-xl font-bold mt-2 {{ $stat['color'] }} inline-block px-2.5 py-1 rounded-lg">{{ $stat['value'] }}</p>
+        </div>
+    @endforeach
+</div>
+
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+    <div class="px-6 py-4 border-b border-slate-100">
+        <h3 class="text-sm font-semibold text-slate-700">Agency Booking Summary</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Booking totals and status counts for every agency and its users</p>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-left">
+                <tr>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Agency</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Users</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Bookings</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Booked</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Failed</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @forelse ($agencyBookingSummary as $agency)
+                    <tr class="hover:bg-slate-50/60 transition">
+                        <td class="px-6 py-4"><span class="font-medium text-slate-700">{{ $agency->name }}</span><span class="block text-xs text-slate-400">{{ $agency->code }}</span></td>
+                        <td class="px-6 py-4 text-slate-600">{{ number_format($agency->user_count) }}</td>
+                        <td class="px-6 py-4 font-semibold text-slate-700">{{ number_format($agency->booking_count) }}</td>
+                        <td class="px-6 py-4 text-emerald-700">{{ number_format($agency->booked_count) }}</td>
+                        <td class="px-6 py-4 text-rose-700">{{ number_format($agency->failed_count) }}</td>
+                        <td class="px-6 py-4 font-semibold text-slate-700">{{ number_format((float) ($agency->bookings_sum_portal_booking_fee ?? 0), 2) }} BDT</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="6" class="px-6 py-10 text-center text-sm text-slate-400">No agency booking data yet.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+
 {{-- Revenue overview --}}
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">

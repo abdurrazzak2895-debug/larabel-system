@@ -42,7 +42,9 @@
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
     @php
         $stats = [
-            ['label' => "Today's Bookings", 'value' => $todayBookings, 'icon' => 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', 'color' => 'from-indigo-500 to-blue-500'],
+            ['label' => "Today's Bookings", 'value' => $todayBookings, 'icon' => 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2v12a2 2 0 002 2z', 'color' => 'from-indigo-500 to-blue-500'],
+            ['label' => 'Total Bookings', 'value' => $bookingSummary['total'], 'icon' => 'M4 6h16M4 12h16M4 18h16', 'color' => 'from-blue-500 to-cyan-500'],
+            ['label' => 'Total Booking Amount', 'value' => number_format($bookingSummary['amount'], 2) . ' BDT', 'icon' => 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', 'color' => 'from-emerald-500 to-teal-500'],
             ['label' => 'Failed Today', 'value' => $failedBookings, 'icon' => 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', 'color' => 'from-rose-500 to-red-500'],
             ['label' => 'Deposits', 'value' => $deposits->count(), 'icon' => 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', 'color' => 'from-emerald-500 to-teal-500'],
             ['label' => 'Active Users', 'value' => $activeUsers, 'icon' => 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', 'color' => 'from-fuchsia-500 to-purple-500'],
@@ -59,6 +61,94 @@
             </div>
         </div>
     @endforeach
+</div>
+
+{{-- User booking summary --}}
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+    <div class="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+            <h3 class="text-sm font-semibold text-slate-700">User Booking Summary</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Booking totals for users belonging to your agency</p>
+        </div>
+        @if (auth()->user()?->hasPermission('manage agency users'))
+            <a href="{{ route('agency.users.index') }}" class="text-xs font-medium text-brand-600 hover:text-brand-700">Manage users</a>
+        @endif
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-left">
+                <tr>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">User</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Bookings</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Booked</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Pending</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Failed</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @forelse ($userBookingSummary as $managedUser)
+                    <tr class="hover:bg-slate-50/60 transition">
+                        <td class="px-6 py-4"><span class="font-medium text-slate-700">{{ $managedUser->name }}</span><span class="block text-xs text-slate-400">{{ $managedUser->email }}</span></td>
+                        <td class="px-6 py-4 font-semibold text-slate-700">{{ number_format($managedUser->booking_count) }}</td>
+                        <td class="px-6 py-4 text-emerald-700">{{ number_format($managedUser->booked_count) }}</td>
+                        <td class="px-6 py-4 text-amber-700">{{ number_format($managedUser->pending_count) }}</td>
+                        <td class="px-6 py-4 text-rose-700">{{ number_format($managedUser->failed_count) }}</td>
+                        <td class="px-6 py-4 font-semibold text-slate-700">{{ number_format((float) ($managedUser->bookings_sum_portal_booking_fee ?? 0), 2) }} BDT</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="6" class="px-6 py-10 text-center text-sm text-slate-400">No users are assigned to this agency.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{{-- Fresh agency booking logs --}}
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+    <div class="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+            <h3 class="text-sm font-semibold text-slate-700">Fresh Booking Logs</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Latest booking events from your agency and its users</p>
+        </div>
+        <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Live logs</span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-left">
+                <tr>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">User</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Booking</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Event</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @forelse ($liveBookingLogs as $log)
+                    @php
+                        $booking = $log->booking;
+                        $status = $booking?->booking_status ?? 'unknown';
+                        $statusStyle = match ($status) {
+                            'booked' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                            'failed', 'cancelled', 'refunded' => 'bg-red-50 text-red-700 border-red-200',
+                            'processing' => 'bg-blue-50 text-blue-700 border-blue-200',
+                            default => 'bg-amber-50 text-amber-700 border-amber-200',
+                        };
+                    @endphp
+                    <tr class="hover:bg-slate-50/60 transition">
+                        <td class="px-6 py-4"><span class="font-medium text-slate-700">{{ $booking?->user?->name ?? 'Agency account' }}</span><span class="block text-xs text-slate-400">{{ $booking?->user?->email ?? '—' }}</span></td>
+                        <td class="px-6 py-4"><span class="font-mono text-xs font-semibold text-slate-700">#{{ $booking?->id ?? $log->booking_id }}</span><span class="block text-xs text-slate-400">{{ $booking?->booking_reference ?? 'No reference' }}</span></td>
+                        <td class="px-6 py-4 text-slate-700">{{ ucwords(str_replace('_', ' ', $log->event_type)) }}</td>
+                        <td class="px-6 py-4"><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border {{ $statusStyle }}">{{ ucfirst($status) }}</span></td>
+                        <td class="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">{{ $log->created_at?->format('M d, Y g:i A') }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5" class="px-6 py-12 text-center text-sm text-slate-400">No booking logs have been recorded for this agency yet.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 </div>
 
 {{-- Recent activity --}}
