@@ -86,6 +86,39 @@ class UserPanelTest extends TestCase
     }
 
 
+    public function test_booking_pages_show_only_the_current_accounts_active_candidate(): void
+    {
+        $user = $this->loginAgencyUser();
+        $sibling = User::factory()->create(['agency_id' => $user->agency_id]);
+
+        Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $user->agency_id,
+            'svp_user_id' => 'SVP-CURRENT-USER',
+            'full_name' => 'Current Account Candidate',
+            'email' => $user->email,
+            'is_active' => true,
+        ]);
+        Candidate::create([
+            'user_id' => $sibling->id,
+            'agency_id' => $sibling->agency_id,
+            'svp_user_id' => 'SVP-SIBLING-USER',
+            'full_name' => 'Sibling Account Candidate',
+            'email' => $sibling->email,
+            'is_active' => true,
+        ]);
+
+        $this->get(route('user.bookings.create'))
+            ->assertOk()
+            ->assertSee('Current Account Candidate')
+            ->assertDontSee('Sibling Account Candidate');
+
+        $this->get(route('agency.bookings.create'))
+            ->assertOk()
+            ->assertSee('Current Account Candidate')
+            ->assertDontSee('Sibling Account Candidate');
+    }
+
     public function test_wallet_pages_show_only_the_main_balance_not_reserved_balance(): void
     {
         $this->loginAgencyUser();

@@ -134,6 +134,69 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertSame('svp-otp-token', session('svp_token'));
     }
 
+    public function test_svp_logout_deactivates_candidates_without_deleting_admin_history(): void
+    {
+        $agency = Agency::create([
+            'name' => 'Logout Isolation Agency',
+            'code' => 'LOGOUT1',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-LOGOUT-USER',
+            'full_name' => 'Logout Candidate',
+            'email' => $user->email,
+            'is_active' => true,
+        ]);
+
+        $csrfToken = 'candidate-logout-csrf-token';
+        $response = $this->actingAs($user, 'web')
+            ->withSession(['_token' => $csrfToken])
+            ->post(route('logout'), ['_token' => $csrfToken]);
+
+        $response->assertRedirect(route('login'));
+        $candidate->refresh();
+        $this->assertFalse($candidate->is_active);
+        $this->assertDatabaseHas('candidates', ['id' => $candidate->id]);
+    }
+
+    public function test_fresh_svp_login_reactivates_only_current_candidate(): void
+    {
+        $agency = Agency::create([
+            'name' => 'Fresh Login Agency',
+            'code' => 'FRESH1',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        $oldCandidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-OLD-USER',
+            'full_name' => 'Old Candidate',
+            'email' => $user->email,
+            'is_active' => true,
+        ]);
+
+        $controller = app(SvpLoginController::class);
+        $sync = new ReflectionMethod($controller, 'syncCandidateFromProfile');
+        $sync->invoke($controller, $user, [
+            'id' => 'SVP-NEW-USER',
+            'full_name' => 'New Candidate',
+            'email' => $user->email,
+        ]);
+
+        $oldCandidate->refresh();
+        $newCandidate = Candidate::where('user_id', $user->id)
+            ->where('svp_user_id', 'SVP-NEW-USER')
+            ->firstOrFail();
+
+        $this->assertFalse($oldCandidate->is_active);
+        $this->assertTrue($newCandidate->is_active);
+        $this->assertSame(2, Candidate::where('user_id', $user->id)->count());
+    }
+
     public function test_profile_envelope_is_normalized_to_the_actual_user_record(): void
     {
         $controller = app(SvpLoginController::class);

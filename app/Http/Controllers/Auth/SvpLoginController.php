@@ -310,9 +310,15 @@ class SvpLoginController extends Controller
             ->first();
         $candidate ??= new Candidate(['user_id' => $user->id]);
 
+        // A portal account can have historical SVP candidate rows, but only
+        // the candidate from the currently connected SVP account is visible
+        // to User/Agency booking flows. Admin views keep every row.
+        Candidate::where('user_id', $user->id)->update(['is_active' => false]);
+
         $candidate->fill([
             'agency_id'   => $user->agency_id,
             'svp_user_id' => $svpUserId !== '' ? $svpUserId : $candidate->svp_user_id,
+            'is_active'   => true,
             'full_name'   => data_get($profile, 'full_name')
                 ?: trim((string) data_get($profile, 'first_name', '') . ' ' . (string) data_get($profile, 'last_name', ''))
                 ?: $user->name,

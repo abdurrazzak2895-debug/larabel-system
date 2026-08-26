@@ -343,6 +343,7 @@ class BookingController extends Controller
         $svpError = null;
         $svpToken = $this->ensureSvpToken($request);
         $svpUserId = Candidate::where('user_id', $userId)
+            ->where('is_active', true)
             ->whereNotNull('svp_user_id')
             ->latest()
             ->value('svp_user_id');
@@ -498,7 +499,10 @@ class BookingController extends Controller
             }
 
             $context = $this->rescheduleContext($reservationData);
-            $candidates = Candidate::where('user_id', Auth::id())->latest()->get();
+            $candidates = Candidate::where('user_id', Auth::id())
+                ->where('is_active', true)
+                ->latest()
+                ->get();
             $reservationName = $this->reservationValue($reservationData, [
                 'full_name', 'fullName', 'candidate.full_name', 'user.full_name', 'candidate.name', 'user.name',
             ]);
@@ -883,6 +887,7 @@ class BookingController extends Controller
         }
 
         $candidate = Candidate::where('user_id', Auth::id())
+            ->where('is_active', true)
             ->findOrFail($data['candidate_id']);
 
         try {
@@ -978,6 +983,7 @@ class BookingController extends Controller
         }
 
         $candidate = Candidate::where('user_id', Auth::id())
+            ->where('is_active', true)
             ->findOrFail($data['candidate_id']);
 
         $hold = $this->holds->consumeMatching($request, $data);

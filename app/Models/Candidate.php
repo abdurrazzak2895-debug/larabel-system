@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $user_id
  * @property int|null $agency_id
  * @property string|null $svp_user_id
+ * @property bool $is_active
  * @property string $full_name
  * @property string|null $national_id
  * @property string|null $phone
@@ -25,6 +26,7 @@ class Candidate extends Model
         'user_id',
         'agency_id',
         'svp_user_id',
+        'is_active',
         'full_name',
         'national_id',
         'phone',
@@ -34,6 +36,7 @@ class Candidate extends Model
 
     /** @var array<string, string> */
     protected $casts = [
+        'is_active' => 'boolean',
         'svp_data' => 'array',
     ];
 

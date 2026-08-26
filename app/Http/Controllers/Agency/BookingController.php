@@ -154,7 +154,11 @@ class BookingController extends Controller
         // Candidates synced from SVP profile after login. The selected
         // candidate owns the wallet charged for this booking; the agency
         // wallet is never used for new bookings.
-        $candidates = Candidate::where('agency_id', $agencyId)->latest()->get();
+        $candidates = Candidate::where('user_id', Auth::id())
+            ->where('agency_id', $agencyId)
+            ->where('is_active', true)
+            ->latest()
+            ->get();
 
         $occupations = [];
         $cities      = [];
@@ -210,7 +214,9 @@ class BookingController extends Controller
             return response()->json(['success' => false, 'error' => 'SVP session expired.'], 401);
         }
 
-        $candidate = Candidate::where('agency_id', (int) Auth::user()->agency_id)
+        $candidate = Candidate::where('user_id', Auth::id())
+            ->where('agency_id', (int) Auth::user()->agency_id)
+            ->where('is_active', true)
             ->findOrFail($data['candidate_id']);
 
         try {
@@ -507,8 +513,9 @@ class BookingController extends Controller
         }
 
         $agencyId = (int) Auth::user()->agency_id;
-        $candidate = Candidate::where('agency_id', $agencyId)
-
+        $candidate = Candidate::where('user_id', Auth::id())
+            ->where('agency_id', $agencyId)
+            ->where('is_active', true)
             ->findOrFail($data['candidate_id']);
 
         $hold = $this->holds->consumeMatching($request, $data);
