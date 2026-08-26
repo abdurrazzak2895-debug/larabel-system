@@ -95,4 +95,74 @@
         </table>
     </div>
 </div>
+
+{{-- Live booking logs --}}
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-6">
+    <div class="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+            <h3 class="text-sm font-semibold text-slate-700">Live Booking Activity</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Latest booking events across every agency and its users</p>
+        </div>
+        <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Live logs
+        </span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-left">
+                <tr>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Agency</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">User</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Booking</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Event</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @forelse ($liveBookingLogs as $log)
+                    @php
+                        $booking = $log->booking;
+                        $eventLabel = ucwords(str_replace('_', ' ', $log->event_type));
+                        $status = $booking?->booking_status ?? 'unknown';
+                        $statusStyle = match ($status) {
+                            'booked' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                            'failed', 'cancelled', 'refunded' => 'bg-red-50 text-red-700 border-red-200',
+                            'processing' => 'bg-blue-50 text-blue-700 border-blue-200',
+                            default => 'bg-amber-50 text-amber-700 border-amber-200',
+                        };
+                    @endphp
+                    <tr class="hover:bg-slate-50/60 transition">
+                        <td class="px-6 py-4 text-slate-700">
+                            <div class="font-medium">{{ $booking?->agency?->name ?? 'Unknown agency' }}</div>
+                            @if ($booking?->agency?->code)
+                                <div class="text-xs text-slate-400">{{ $booking->agency->code }}</div>
+                            @endif
+                        </td>
+                        <td class="px-6 py-4 text-slate-700">
+                            <div class="font-medium">{{ $booking?->user?->name ?? 'Agency account' }}</div>
+                            @if ($booking?->user?->email)
+                                <div class="text-xs text-slate-400">{{ $booking->user->email }}</div>
+                            @endif
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="font-mono text-xs font-semibold text-slate-700">#{{ $booking?->id ?? $log->booking_id }}</div>
+                            <div class="text-xs text-slate-400">{{ $booking?->booking_reference ?? 'No reference' }}</div>
+                        </td>
+                        <td class="px-6 py-4 text-slate-700">{{ $eventLabel }}</td>
+                        <td class="px-6 py-4">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border {{ $statusStyle }}">{{ ucfirst($status) }}</span>
+                        </td>
+                        <td class="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">{{ $log->created_at?->format('M d, Y g:i A') }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="6" class="px-6 py-12 text-center text-sm text-slate-400">No booking activity has been recorded yet.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
 @endsection

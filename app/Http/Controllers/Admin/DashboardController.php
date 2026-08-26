@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Agency;
 use App\Models\Booking;
+use App\Models\BookingLog;
 use App\Models\DepositRequest;
 use App\Models\RefundRequest;
 use App\Models\User;
@@ -29,6 +30,10 @@ class DashboardController extends Controller
             'todaysRefunds'     => RefundRequest::where('status', 'approved')->whereDate('processed_at', today())->count(),
             'apiHealth'         => ['status' => 'healthy', 'last_check' => now()],
             'revenueOverview'   => $this->reportService->revenueOverview(),
+            'liveBookingLogs'   => BookingLog::with(['booking.agency', 'booking.user'])
+                ->latest()
+                ->limit(25)
+                ->get(),
         ]);
     }
 }

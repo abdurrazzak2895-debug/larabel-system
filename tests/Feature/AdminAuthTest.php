@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Admin;
 use App\Models\Booking;
+use App\Models\BookingLog;
 use App\Models\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -95,6 +96,27 @@ class AdminAuthTest extends TestCase
         foreach ($pages as $url) {
             $this->get($url)->assertOk();
         }
+    }
+
+    public function test_admin_dashboard_shows_live_booking_logs_with_agency_and_user(): void
+    {
+        $admin = Admin::where('email', env('ADMIN_EMAIL', 'admin@takamol.example.com'))->firstOrFail();
+        $booking = Booking::with(['agency', 'user'])->whereNotNull('user_id')->firstOrFail();
+        $event = 'admin_dashboard_live_event';
+        BookingLog::create([
+            'booking_id' => $booking->id,
+            'event_type' => $event,
+            'payload' => ['source' => 'admin-dashboard-test'],
+        ]);
+
+        Auth::guard('admin')->login($admin);
+
+        $this->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Live Booking Activity')
+            ->assertSee($booking->agency->name)
+            ->assertSee($booking->user->name)
+            ->assertSee('Admin Dashboard Live Event');
     }
 
     public function test_admin_wallet_pages_show_main_balance_without_reserved_balance(): void
