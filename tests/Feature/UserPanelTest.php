@@ -812,6 +812,30 @@ class UserPanelTest extends TestCase
         Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/exam_reservations'));
     }
 
+    public function test_user_credit_status_with_inactive_candidate_returns_json_error(): void
+    {
+        $user = $this->loginAgencyUser();
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $user->agency_id,
+            'full_name' => 'Inactive Credit Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-INACTIVE-CREDIT-CANDIDATE',
+            'is_active' => false,
+        ]);
+
+        $response = $this->withSession(['svp_token' => 'candidate-svp-token'])
+            ->getJson(route('user.bookings.credit-status', [
+                'candidate_id' => $candidate->id,
+                'occupation_id' => '2062',
+                'methodology' => 'in_person',
+            ]));
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('error', 'The selected SVP candidate is no longer active. Refresh the booking page and select the current candidate.');
+    }
+
     public function test_user_occupation_lookup_uses_portal_session_not_candidate_token(): void
     {
         PortalAvailabilityCredential::create([

@@ -891,8 +891,16 @@ class BookingController extends Controller
         }
 
         $candidate = Candidate::where('user_id', Auth::id())
+            ->where('agency_id', $this->currentAgencyId())
             ->where('is_active', true)
-            ->findOrFail($data['candidate_id']);
+            ->find($data['candidate_id']);
+
+        if (! $candidate) {
+            return response()->json([
+                'success' => false,
+                'error' => 'The selected SVP candidate is no longer active. Refresh the booking page and select the current candidate.',
+            ], 422);
+        }
 
         try {
             $status = $this->credits->status(
