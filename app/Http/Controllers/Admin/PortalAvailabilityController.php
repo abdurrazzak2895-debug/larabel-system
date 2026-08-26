@@ -32,6 +32,24 @@ final class PortalAvailabilityController extends Controller
         ]);
     }
 
+    public function refreshAll(): RedirectResponse
+    {
+        $summary = $this->availability->refreshCredentials();
+        $message = sprintf(
+            'Portal Availability auto-refresh completed: %d account(s) refreshed, %d failed.',
+            $summary['refreshed'],
+            $summary['failed'],
+        );
+
+        if ($summary['failures'] !== []) {
+            $message .= ' Check the account cards below for details.';
+        }
+
+        return back()
+            ->with('success', $message)
+            ->with('refresh_summary', $summary);
+    }
+
     public function storeCredential(Request $request): RedirectResponse
     {
         $data = $request->validate([

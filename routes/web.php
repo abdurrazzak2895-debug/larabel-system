@@ -116,6 +116,7 @@ Route::middleware('web')->group(function () {
     // Portal availability adapter (read-only occupations, dates, and centers)
     Route::prefix('portal-availability')->name('portal-availability.')->group(function () {
         Route::get('/', [PortalAvailabilityController::class, 'index'])->name('index');
+        Route::post('/refresh-all', [PortalAvailabilityController::class, 'refreshAll'])->name('refresh-all');
         Route::post('/credentials', [PortalAvailabilityController::class, 'storeCredential'])->name('credentials.store');
         Route::put('/credentials/{credential}', [PortalAvailabilityController::class, 'updateCredential'])->name('credentials.update');
         Route::post('/credentials/{credential}/refresh', [PortalAvailabilityController::class, 'refreshCredential'])->name('credentials.refresh');

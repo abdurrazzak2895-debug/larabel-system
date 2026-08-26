@@ -122,7 +122,8 @@ Open the **Variables** tab of the `App` service and add every variable from
 | `PORTAL_AVAILABILITY_CONNECT_TIMEOUT` | `5` | Portal connection timeout in seconds |
 | `PORTAL_AVAILABILITY_CACHE_TTL` | `30` | Short live-availability cache in seconds |
 | `PORTAL_AVAILABILITY_CREDENTIAL_CACHE_TTL` | `60` | Credential-cache setting |
-| `PORTAL_AVAILABILITY_DELAY_MS` | `250` | Request pacing setting; no background poller is enabled |
+| `PORTAL_AVAILABILITY_DELAY_MS` | `250` | Delay between multi-account refresh requests |
+| `PORTAL_AVAILABILITY_REFRESH_INTERVAL_MINUTES` | `10` | Scheduler cadence for refreshing every active saved account |
 
 > 💡 **Tip:** add these once at the **Project → Environment → Variables** level so the
 > Worker and Cron services inherit them automatically.
@@ -181,7 +182,11 @@ notifications, PACC calls, and other queued jobs are processed here.
 5. Click **Deploy**.
 
 The cron service loops `php artisan schedule:run` every 60 seconds — the same as a
-`* * * * *` crontab entry. Any tasks registered in `routes/console.php`
+`* * * * *` crontab entry. The `portal:refresh-availability` task runs at the
+`PORTAL_AVAILABILITY_REFRESH_INTERVAL_MINUTES` cadence (10 minutes by default),
+refreshes every active saved Portal Availability account through
+`POST /api/accounts/{accountId}/refresh`, and records per-account success/failure
+status in the Admin Control page. Any tasks registered in `routes/console.php`
 (`Schedule::command(...)`) will fire here.
 
 ---

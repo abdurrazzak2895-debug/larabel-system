@@ -69,7 +69,11 @@ final class PortalAvailabilityService
         }
 
         $summary = ['refreshed' => 0, 'failed' => 0, 'failures' => []];
-        foreach ($query->orderBy('id')->get() as $credential) {
+        foreach ($query->orderBy('id')->get() as $index => $credential) {
+            if ($index > 0) {
+                usleep(max(0, (int) config('portal.rate_limit_delay_ms', 250)) * 1000);
+            }
+
             try {
                 $this->refreshCredential($credential);
                 $summary['refreshed']++;

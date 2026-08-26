@@ -49,6 +49,50 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertNotSame('session=new-cookie', DB::table('portal_availability_credentials')->whereKey($credential->id)->value('session_cookie'));
     }
 
+    public function test_batch_refreshes_multiple_active_accounts_and_isolates_failures(): void
+    {
+        $first = PortalAvailabilityCredential::query()->create([
+            'name' => 'First Portal Session',
+            'portal_account_id' => 'portal-account-first',
+            'session_cookie' => 'session=first',
+            'active' => true,
+        ]);
+        $second = PortalAvailabilityCredential::query()->create([
+            'name' => 'Second Portal Session',
+            'portal_account_id' => 'portal-account-second',
+            'session_cookie' => 'session=second',
+            'active' => true,
+        ]);
+        PortalAvailabilityCredential::query()->create([
+            'name' => 'Inactive Portal Session',
+            'portal_account_id' => 'portal-account-inactive',
+            'session_cookie' => 'session=inactive',
+            'active' => false,
+        ]);
+
+        $provider = $this->createMock(PortalAvailabilityProviderInterface::class);
+        $provider->expects($this->exactly(2))
+            ->method('refreshAccount')
+            ->willReturnCallback(function (string $cookie, string $accountId): array {
+                if ($accountId === 'portal-account-second') {
+                    throw new \RuntimeException('Second account is temporarily unavailable.');
+                }
+
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            });
+
+        $summary = (new PortalAvailabilityService($provider))->refreshCredentials();
+
+        $this->assertSame(['refreshed' => 1, 'failed' => 1], [
+            'refreshed' => $summary['refreshed'],
+            'failed' => $summary['failed'],
+        ]);
+        $this->assertSame($second->id, $summary['failures'][0]['id']);
+        $this->assertNotNull($first->fresh()->last_checked_at);
+        $this->assertNotNull($second->fresh()->last_checked_at);
+        $this->assertSame('Second account is temporarily unavailable.', $second->fresh()->last_error);
+    }
+
     public function test_session_cookie_is_encrypted_and_hidden_from_model_arrays(): void
     {
         $credential = PortalAvailabilityCredential::query()->create([
@@ -291,6 +335,43 @@ class PortalAvailabilityServiceTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_admin_can_refresh_all_active_portal_accounts_from_control(): void
+    {
+        $permission = Permission::query()->create(['name' => 'manage agencies', 'slug' => 'manage-agencies']);
+        $role = Role::query()->create(['name' => 'Portal Refresh Admin', 'slug' => 'portal-refresh-admin']);
+        $role->permissions()->attach($permission->id);
+        $admin = Admin::factory()->create();
+        $admin->assignRole($role->name);
+
+        $first = PortalAvailabilityCredential::query()->create([
+            'name' => 'First Portal Session',
+            'portal_account_id' => 'portal-account-first',
+            'session_cookie' => 'session=first',
+            'active' => true,
+        ]);
+        $second = PortalAvailabilityCredential::query()->create([
+            'name' => 'Second Portal Session',
+            'portal_account_id' => 'portal-account-second',
+            'session_cookie' => 'session=second',
+            'active' => true,
+        ]);
+        Http::fake([
+            'https://svp-international.xyz/api/accounts/*/refresh' => Http::response(['expires_at' => '2030-09-01 12:00:00'], 200),
+        ]);
+        Auth::guard('admin')->login($admin);
+        $csrfToken = 'portal-refresh-all-csrf-token';
+
+        $this->withSession(['_token' => $csrfToken])
+            ->post(route('admin.portal-availability.refresh-all'), ['_token' => $csrfToken])
+            ->assertRedirect()
+            ->assertSessionHas('refresh_summary.refreshed', 2)
+            ->assertSessionHas('refresh_summary.failed', 0);
+
+        $this->assertNotNull($first->fresh()->last_checked_at);
+        $this->assertNotNull($second->fresh()->last_checked_at);
+        Http::assertSentCount(2);
+    }
+
     public function test_admin_dashboard_renders_with_credential_and_api_key_data(): void
     {
         $permission = Permission::query()->create(['name' => 'manage agencies', 'slug' => 'manage-agencies']);
@@ -323,6 +404,8 @@ class PortalAvailabilityServiceTest extends TestCase
             ->assertSee('Partner website')
             ->assertSee('Active')
             ->assertSee('Refresh now')
+            ->assertSee('Refresh all accounts now')
+            ->assertSee('Server auto-refresh')
             ->assertDontSee('session=authorized');
     }
 

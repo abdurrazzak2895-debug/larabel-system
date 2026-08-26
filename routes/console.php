@@ -169,7 +169,9 @@ Artisan::command('portal:refresh-availability {--credential-id= : Refresh one lo
     return $summary['failed'] > 0 ? 1 : 0;
 })->purpose('Refresh active encrypted Portal Availability sessions without exposing cookies');
 
+$refreshInterval = max(1, min(60, (int) config('portal.refresh_interval_minutes', 10)));
+
 Schedule::command('portal:refresh-availability')
-    ->everyTenMinutes()
-    ->withoutOverlapping(9)
+    ->cron(sprintf('*/%d * * * *', $refreshInterval))
+    ->withoutOverlapping(max(1, $refreshInterval - 1))
     ->description('Refresh active Portal Availability sessions before they expire.');

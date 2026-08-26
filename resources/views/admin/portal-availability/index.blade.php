@@ -17,11 +17,19 @@
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">This dashboard calls only the authorized portal availability endpoints. It displays live availability and lets you select a center locally; it never creates a booking, hold, reservation, payment, OTP, or account change.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                    Server auto-refresh: every {{ max(1, min(60, (int) config('portal.refresh_interval_minutes', 10))) }} min
+                </span>
+                <form method="POST" action="{{ route('admin.portal-availability.refresh-all') }}">
+                    @csrf
+                    <button class="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Refresh all accounts now</button>
+                </form>
                 <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
                     <input id="portal-auto-refresh" type="checkbox" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
-                    Auto-refresh 60s
+                    Refresh live lookup 60s
                 </label>
-                <button type="button" id="portal-refresh" class="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Refresh now</button>
+                <button type="button" id="portal-refresh" class="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Refresh selected lookup</button>
             </div>
         </div>
     </section>
@@ -31,6 +39,11 @@
     @endif
     @if ($errors->any())
         <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">{{ $errors->first() }}</div>
+    @endif
+    @if (session('refresh_summary'))
+        <div class="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900">
+            <strong>Multi-account refresh result:</strong> {{ session('refresh_summary.refreshed') }} refreshed, {{ session('refresh_summary.failed') }} failed. Each account card below shows its latest check and any error.
+        </div>
     @endif
 
     <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
