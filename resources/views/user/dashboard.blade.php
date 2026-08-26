@@ -111,69 +111,6 @@
         <div class="lg:col-span-2 space-y-6">
 
 
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                    <div>
-                        <h3 class="text-sm font-semibold text-slate-800">Recent Bookings</h3>
-                        <p class="text-xs text-slate-400 mt-0.5">Your latest exam booking activity</p>
-                    </div>
-                    <a href="{{ route('user.bookings.index') }}" class="text-xs font-semibold text-brand-600 hover:text-brand-700 transition">View all →</a>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-slate-50/70">
-                            <tr class="text-left text-[11px] uppercase tracking-wide text-slate-500">
-                                <th class="px-6 py-3 font-medium">Reference</th>
-                                <th class="px-6 py-3 font-medium">Session</th>
-                                <th class="px-6 py-3 font-medium">Status</th>
-                                <th class="px-6 py-3 font-medium">Created</th>
-                                <th class="px-6 py-3 text-right font-medium">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @forelse ($recentActivity as $booking)
-                            @php
-                                $statusStyles = [
-                                    'pending'    => ['bg-amber-50 text-amber-700 border-amber-200'],
-                                    'processing' => ['bg-blue-50 text-blue-700 border-blue-200'],
-                                    'booked'     => ['bg-emerald-50 text-emerald-700 border-emerald-200'],
-                                    'failed'     => ['bg-red-50 text-red-700 border-red-200'],
-                                    'cancelled'  => ['bg-slate-100 text-slate-600 border-slate-200'],
-                                    'refunded'   => ['bg-purple-50 text-purple-700 border-purple-200'],
-                                ];
-                                $style = $statusStyles[$booking->booking_status] ?? ['bg-slate-50 text-slate-700 border-slate-200'];
-                            @endphp
-                            <tr class="hover:bg-slate-50/60 transition">
-                                <td class="px-6 py-4 font-mono text-xs text-slate-600">{{ $booking->booking_reference ?? ('#' . $booking->id) }}</td>
-                                <td class="px-6 py-4 text-xs text-slate-500">{{ $booking->exam_session_id ?? '—' }}</td>
-                                <td class="px-6 py-4">
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border {{ $style[0] }}">{{ ucfirst($booking->booking_status) }}</span>
-                                </td>
-                                <td class="px-6 py-4 text-xs text-slate-500">{{ $booking->created_at->diffForHumans() }}</td>
-                                <td class="px-6 py-4 text-right">
-                                    <a href="{{ route('user.bookings.show', $booking) }}" class="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 transition">
-                                        View
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                                    </a>
-                                </td>
-                            </tr>
-                            @empty
-                            <tr>
-                                <td colspan="5" class="px-6 py-12 text-center">
-                                    <div class="w-12 h-12 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                                    </div>
-                                    <p class="text-sm text-slate-400">No bookings yet.</p>
-                                    <a href="{{ route('user.bookings.create') }}" class="inline-block mt-3 text-xs font-semibold text-brand-600 hover:text-brand-700">Create your first booking →</a>
-                                </td>
-                            </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-
             {{-- Recent transactions --}}
             @if ($recentTransactions->isNotEmpty())
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

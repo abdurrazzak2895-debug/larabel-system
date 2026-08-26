@@ -25,8 +25,6 @@ class DashboardController extends Controller
             )
             : null;
 
-        $recentBookings = Booking::where('user_id', $userId)->latest()->take(6)->get();
-
         $counts = [
             'all'       => Booking::where('user_id', $userId)->count(),
             'booked'    => Booking::where('user_id', $userId)->where('booking_status', 'booked')->count(),
@@ -43,7 +41,6 @@ class DashboardController extends Controller
             'confirmedBookings'  => $counts['booked'],
             'pendingBookings'    => $counts['inProgress'],
             'failedBookings'     => $counts['failed'],
-            'latestBooking'      => $recentBookings->first(),
             'upcomingExam'       => Booking::where('user_id', $userId)
                 ->where('booking_status', 'booked')
                 ->latest()
@@ -53,7 +50,6 @@ class DashboardController extends Controller
             'latestDeposit'      => DepositRequest::where('agency_id', $agencyId)->latest()->first(),
             'pendingDeposits'    => DepositRequest::where('agency_id', $agencyId)
                 ->where('status', 'pending')->count(),
-            'recentActivity'     => $recentBookings,
             'recentTransactions' => $agencyId
                 ? WalletTransaction::whereHas('wallet', fn ($q) => $q->where('agency_id', $agencyId))
                     ->latest()->take(5)->get()
