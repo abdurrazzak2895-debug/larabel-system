@@ -482,14 +482,25 @@
 
     function requestSessionsForCenter(centerId, dateValue) {
         const key = sessionLookupKey(centerId, dateValue);
-        if (sessionLookupCache.has(key)) return Promise.resolve(sessionLookupCache.get(key));
+        if (sessionLookupCache.has(key)) {
+            const cached = sessionLookupCache.get(key);
+            if (Array.isArray(cached) && cached.length > 0) return Promise.resolve(cached);
+            // Never retain a transient empty response: the same date may become
+            // available again after the upstream session refresh completes.
+            sessionLookupCache.delete(key);
+        }
         if (sessionLookupRequests.has(key)) return sessionLookupRequests.get(key);
         const params = new URLSearchParams({city: citySelect.value, category_id: categorySelect.value, test_center_id: centerId, exam_date: dateValue});
         const request = fetchJSON("{{ route('user.bookings.lookup.sessions') }}?" + params.toString())
             .then(body => {
                 const sessions = Array.isArray(sessionRowsFromResponse(body)) ? sessionRowsFromResponse(body) : [];
-                sessionLookupCache.set(key, sessions);
+                if (sessions.length > 0) sessionLookupCache.set(key, sessions);
+                else sessionLookupCache.delete(key);
                 return sessions;
+            })
+            .catch(error => {
+                sessionLookupCache.delete(key);
+                throw error;
             })
             .finally(() => sessionLookupRequests.delete(key));
         sessionLookupRequests.set(key, request);
@@ -1143,6 +1154,7 @@
             if (testCenterNameInput) testCenterNameInput.value = '';
             if (sessionNameInput) sessionNameInput.value = '';
             sessionCatalog = [];
+            sessionLookupCache.clear();
             renderSessionsForDate('');
             testCenterSection.style.display = 'none';
             if (!date) return;
