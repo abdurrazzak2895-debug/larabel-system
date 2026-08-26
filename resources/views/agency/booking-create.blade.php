@@ -330,7 +330,8 @@
                     if (!code || !name) return;
                     const option = document.createElement('option');
                     option.value = code;
-                    option.textContent = name + ' (' + code + ')';
+                    option.dataset.codes = JSON.stringify(Array.isArray(language?.codes) && language.codes.length ? language.codes : [code]);
+                    option.textContent = name;
                     languageSelect.appendChild(option);
                 });
                 languageSelect.disabled = languages.length === 0;
@@ -1119,7 +1120,17 @@
 
             try {
                 setLoading(testCenterSelect, true);
-                const url = "{{ route('agency.bookings.lookup.test-centers') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId) + "&date=" + encodeURIComponent(date) + "&occupation_id=" + encodeURIComponent(occupationId) + "&language_code=" + encodeURIComponent(languageCode);
+                const selectedLanguage = languageSelect?.options[languageSelect.selectedIndex];
+                let languageCodes = [languageCode];
+                try {
+                    const mappedCodes = JSON.parse(selectedLanguage?.dataset?.codes || '[]');
+                    if (Array.isArray(mappedCodes) && mappedCodes.length) languageCodes = mappedCodes;
+                } catch (error) {
+                    console.debug('Language alias mapping could not be parsed.', error);
+                }
+                const params = new URLSearchParams({city, category_id: categoryId, date, occupation_id: occupationId, language_code: languageCode});
+                languageCodes.forEach(code => params.append('language_codes[]', String(code)));
+                const url = "{{ route('agency.bookings.lookup.test-centers') }}?" + params.toString();
                 const data = await fetchJSON(url);
                 const currentLookupKey = [citySelect.value, categorySelect.value, occupationSelect.value, languageSelect?.value || '', availableDateSelect?.value || ''].join('|');
                 if (currentLookupKey !== lookupKey) return;

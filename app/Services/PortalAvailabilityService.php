@@ -313,7 +313,7 @@ final class PortalAvailabilityService
         return array_values($items);
     }
 
-    /** @return array<int, array{code: string, name: string}> */
+    /** @return array<int, array{code: string, name: string, codes: array<int, string>}> */
     public function bookingLanguages(int|string $occupationId): array
     {
         $occupationId = trim((string) $occupationId);
@@ -336,6 +336,15 @@ final class PortalAvailabilityService
             ])
             ->filter(static fn (array $language): bool => $language['code'] !== '' && $language['name'] !== '')
             ->unique('code')
+            ->groupBy(static fn (array $language): string => Str::lower(preg_replace('/\\s+/', ' ', trim($language['name'])) ?? $language['name']))
+            ->map(static function ($languages): array {
+                $first = $languages->first();
+                return [
+                    'code' => $first['code'],
+                    'name' => $first['name'],
+                    'codes' => $languages->pluck('code')->values()->all(),
+                ];
+            })
             ->values()
             ->all();
     }
@@ -415,6 +424,15 @@ final class PortalAvailabilityService
             ->all();
     }
 
+    /** @return array<int, string> */
+    private function normalizedLanguageCodes(string $primaryCode, array $aliasCodes = []): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($code): string => strtoupper(trim((string) $code)),
+            array_merge([$primaryCode], $aliasCodes),
+        ))));
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function bookingCentersForDate(
         int|string $categoryId,
@@ -422,16 +440,33 @@ final class PortalAvailabilityService
         string $date,
         int|string $occupationId,
         string $languageCode,
+        array $languageCodes = [],
     ): array {
+        $languageCodes = $this->normalizedLanguageCodes($languageCode, $languageCodes);
         $merged = [];
-        foreach ($this->forEachUsableCredential(fn (PortalAvailabilityCredential $credential): array => $this->centers(
-            (int) $credential->id,
-            $categoryId,
-            trim($city),
-            trim($date),
-            $occupationId,
-            trim($languageCode),
-        )['data']['centers'] ?? []) as $rows) {
+        foreach ($this->forEachUsableCredential(function (PortalAvailabilityCredential $credential) use ($categoryId, $city, $date, $occupationId, $languageCodes): array {
+            $rows = [];
+            foreach ($languageCodes as $code) {
+                try {
+                    $rows = array_merge($rows, $this->centers(
+                        (int) $credential->id,
+                        $categoryId,
+                        trim($city),
+                        trim($date),
+                        $occupationId,
+                        $code,
+                    )['data']['centers'] ?? []);
+                } catch (\Throwable $exception) {
+                    Log::warning('Portal availability language alias lookup failed', [
+                        'credential_id' => $credential->id,
+                        'language_code' => $code,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            }
+
+            return $rows;
+        }) as $rows) {
             foreach ($rows as $row) {
                 if (! is_array($row)) {
                     continue;
@@ -470,7 +505,9 @@ final class PortalAvailabilityService
         string $city,
         int|string $occupationId,
         string $languageCode,
+        array $languageCodes = [],
     ): array {
+        $languageCodes = $this->normalizedLanguageCodes($languageCode, $languageCodes);
         $city = trim($city);
         $dates = $this->bookingDateRows($categoryId);
         $dates = collect($dates)
@@ -482,7 +519,7 @@ final class PortalAvailabilityService
 
         $centers = [];
         foreach ($dates as $date) {
-            $rows = $this->centers(null, $categoryId, $city, $date, $occupationId, $languageCode)['data']['centers'] ?? [];
+            $rows = $this->bookingCentersForDate($categoryId, $city, $date, $occupationId, $languageCode, $languageCodes);
             foreach ($rows as $row) {
                 $key = (string) ($row['test_center_id'] ?? $row['test_center_name'] ?? '');
                 if ($key !== '') {

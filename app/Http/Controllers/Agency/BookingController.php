@@ -372,7 +372,13 @@ class BookingController extends Controller
             'date' => 'nullable|date_format:Y-m-d',
             'occupation_id' => 'required|string',
             'language_code' => 'required|string|max:120',
+            'language_codes' => ['nullable', 'array'],
+            'language_codes.*' => ['string', 'max:120'],
         ]);
+        $languageCodes = array_values(array_unique(array_filter(array_map(
+            static fn ($code): string => trim((string) $code),
+            array_merge([$data['language_code']], $data['language_codes'] ?? []),
+        ))));
 
         try {
             $centers = filled($data['date'] ?? null)
@@ -382,12 +388,14 @@ class BookingController extends Controller
                     $data['date'],
                     $data['occupation_id'],
                     $data['language_code'],
+                    $languageCodes,
                 )
                 : $this->portalAvailability->bookingCenters(
                     $data['category_id'],
                     $data['city'],
                     $data['occupation_id'],
                     $data['language_code'],
+                    $languageCodes,
                 )['test_centers'];
             $availabilitySource = 'portal_availability';
             $fallback = false;

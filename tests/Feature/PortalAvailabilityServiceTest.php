@@ -281,7 +281,7 @@ class PortalAvailabilityServiceTest extends TestCase
             ['id' => '159', 'name' => 'Load and unload workers'],
         ], $service->bookingCategories('2061'));
         $this->assertSame([
-            ['code' => 'LOABB', 'name' => 'Bengali'],
+            ['code' => 'LOABB', 'name' => 'Bengali', 'codes' => ['LOABB']],
         ], $service->bookingLanguages('2061'));
         $this->assertSame([], $service->bookingLanguages('999999'));
         $this->assertSame([
@@ -374,7 +374,7 @@ class PortalAvailabilityServiceTest extends TestCase
             ['id' => '160', 'name' => 'Machine Category'],
         ], $service->bookingCategories('2062'));
         $this->assertSame([
-            ['code' => 'EN', 'name' => 'English'],
+            ['code' => 'EN', 'name' => 'English', 'codes' => ['EN']],
         ], $service->bookingLanguages('2062'));
         $this->assertSame([
             ['name' => 'Khulna'],
@@ -386,6 +386,73 @@ class PortalAvailabilityServiceTest extends TestCase
         $centers = $service->bookingCentersForDate('160', 'Dhaka', '2030-09-02', '2062', 'EN');
         $this->assertSame('Dhaka TTC', $centers[0]['name']);
         $this->assertSame(8, $centers[0]['available_seats']);
+    }
+
+    public function test_booking_languages_consolidate_aliases_and_center_lookup_tries_all_codes(): void
+    {
+        PortalAvailabilityCredential::query()->create([
+            'name' => 'Language alias account',
+            'portal_account_id' => 'language-alias-account',
+            'session_cookie' => 'session=language-alias',
+            'active' => true,
+        ]);
+
+        $provider = new class implements PortalAvailabilityProviderInterface
+        {
+            /** @var array<int, string> */
+            public array $centerLanguageCodes = [];
+
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                return [[
+                    'name' => 'Load Worker',
+                    'occupation_id' => 2061,
+                    'category_id' => 159,
+                    'category_name' => 'Load Category',
+                    'languages' => [
+                        ['code' => 'EN', 'name' => 'English'],
+                        ['code' => 'EN-ALT', 'name' => 'English'],
+                        ['code' => 'AR', 'name' => 'Arabic'],
+                    ],
+                ]];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => [['city' => 'Dhaka', 'date' => '2030-09-02']]];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                $this->centerLanguageCodes[] = $languageCode;
+                return $languageCode === 'EN-ALT'
+                    ? ['centers' => [[
+                        'test_center_name' => 'Dhaka TTC',
+                        'test_center_id' => 172,
+                        'test_time' => '10:00 AM',
+                        'available_seats' => 8,
+                        'exam_session_id' => 'alias-session',
+                    ]]]
+                    : ['centers' => []];
+            }
+        };
+
+        $service = new PortalAvailabilityService($provider);
+        $languages = $service->bookingLanguages('2061');
+
+        $this->assertSame([
+            ['code' => 'EN', 'name' => 'English', 'codes' => ['EN', 'EN-ALT']],
+            ['code' => 'AR', 'name' => 'Arabic', 'codes' => ['AR']],
+        ], $languages);
+
+        $centers = $service->bookingCentersForDate('159', 'Dhaka', '2030-09-02', '2061', 'EN', $languages[0]['codes']);
+        $this->assertSame(['EN', 'EN-ALT'], $provider->centerLanguageCodes);
+        $this->assertSame('Dhaka TTC', $centers[0]['name']);
     }
 
     public function test_admin_can_load_occupations_without_exposing_the_session_cookie(): void
