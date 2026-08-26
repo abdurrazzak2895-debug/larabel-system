@@ -572,10 +572,19 @@ final class PortalAvailabilityService
             $result = [];
             for ($attempt = 0; $attempt <= $attempts; $attempt++) {
                 if ($attempt > 0) {
-                    usleep(max(0, (int) config('portal.empty_retry_delay_ms', 150)) * 1000);
+                    $this->sleepBeforeRetry($attempt);
                 }
 
-                $result = $callback();
+                try {
+                    $result = $callback();
+                } catch (\Throwable $exception) {
+                    if (! $this->isRetryableUpstreamFailure($exception) || $attempt === $attempts) {
+                        throw $exception;
+                    }
+
+                    continue;
+                }
+
                 if ($hasData === null || $hasData($result) || $attempt === $attempts) {
                     break;
                 }
@@ -595,6 +604,35 @@ final class PortalAvailabilityService
             ])->saveQuietly();
             throw $exception;
         }
+    }
+
+    private function sleepBeforeRetry(int $retryNumber): void
+    {
+        $baseDelay = max(0, (int) config('portal.empty_retry_delay_ms', 250));
+        $maxDelay = max($baseDelay, (int) config('portal.empty_retry_max_delay_ms', 2000));
+        $delay = min($maxDelay, $baseDelay * (2 ** max(0, $retryNumber - 1)));
+
+        if ($delay > 0) {
+            usleep($delay * 1000);
+        }
+    }
+
+    private function isRetryableUpstreamFailure(\Throwable $exception): bool
+    {
+        $message = Str::lower($exception->getMessage());
+        if (Str::contains($message, ['expired', 'not authorized', 'not configured', 'no usable', 'required', 'invalid'])) {
+            return false;
+        }
+
+        return Str::contains($message, [
+            'timed out',
+            'timeout',
+            'connection',
+            'curl',
+            'failed for /api/',
+            'http 429',
+            'http 5',
+        ]);
     }
 
     /** @return array<int, array<string, mixed>> */

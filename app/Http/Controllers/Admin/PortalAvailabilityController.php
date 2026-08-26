@@ -329,6 +329,7 @@ final class PortalAvailabilityController extends Controller
 
     private function failure(Throwable $exception, string $fallback): JsonResponse
     {
+        $exceptionMessage = Str::lower($exception->getMessage());
         $message = Str::contains($exception->getMessage(), [
             'expired',
             'not authorized',
@@ -336,7 +337,15 @@ final class PortalAvailabilityController extends Controller
             'No usable',
         ], true)
             ? $exception->getMessage()
-            : $fallback;
+            : match (true) {
+                Str::contains($exceptionMessage, ['timed out', 'timeout'])
+                    => 'The portal availability provider timed out. No availability was cached; wait briefly and retry the lookup.',
+                Str::contains($exceptionMessage, ['http 429', 'too many requests'])
+                    => 'The portal availability provider is rate-limiting requests. Wait briefly before retrying.',
+                Str::contains($exceptionMessage, ['connection', 'curl', 'http 5', 'failed for /api/'])
+                    => 'The portal availability provider is temporarily unavailable. No stale availability was shown; retry the lookup shortly.',
+                default => $fallback,
+            };
 
         return response()->json([
             'success' => false,

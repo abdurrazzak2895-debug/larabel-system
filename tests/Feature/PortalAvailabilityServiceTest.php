@@ -111,7 +111,7 @@ class PortalAvailabilityServiceTest extends TestCase
 
     public function test_transient_empty_center_response_is_retried_and_not_cached(): void
     {
-        config(['portal.empty_retry_delay_ms' => 0]);
+        config(['portal.empty_retry_attempts' => 1, 'portal.empty_retry_delay_ms' => 0]);
 
         $credential = PortalAvailabilityCredential::query()->create([
             'name' => 'Transient Empty Portal Session',
@@ -168,6 +168,68 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertCount(1, $result['data']['centers']);
         $this->assertSame('recovered-session', $result['data']['centers'][0]['exam_session_id']);
         $this->assertSame(3, $calls);
+    }
+
+    public function test_retryable_center_provider_failure_is_retried_before_returning_live_data(): void
+    {
+        config(['portal.empty_retry_attempts' => 2, 'portal.empty_retry_delay_ms' => 0]);
+
+        $credential = PortalAvailabilityCredential::query()->create([
+            'name' => 'Retryable provider failure session',
+            'portal_account_id' => 'portal-account-retryable',
+            'session_cookie' => 'session=retryable',
+            'active' => true,
+        ]);
+        $calls = 0;
+        $provider = new class($calls) implements PortalAvailabilityProviderInterface
+        {
+            public function __construct(private int &$calls)
+            {
+            }
+
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                return [];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => []];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                $this->calls++;
+                if ($this->calls === 1) {
+                    throw new \RuntimeException('Portal availability request failed for /api/centers with HTTP 503.');
+                }
+
+                return ['centers' => [[
+                    'test_center_name' => 'Retry TTC',
+                    'test_center_id' => 199,
+                    'test_time' => '10:00 AM',
+                    'available_seats' => 5,
+                    'exam_session_id' => 'retry-session',
+                ]]];
+            }
+        };
+
+        $result = (new PortalAvailabilityService($provider))->centers(
+            $credential->id,
+            159,
+            'Rajshahi',
+            '2026-08-27',
+            2061,
+            'LOABB',
+        );
+
+        $this->assertSame(2, $calls);
+        $this->assertSame('retry-session', $result['data']['centers'][0]['exam_session_id']);
     }
 
     public function test_service_preserves_portal_session_identity_and_per_center_count(): void
@@ -628,6 +690,8 @@ class PortalAvailabilityServiceTest extends TestCase
             ->assertSee('Refresh now')
             ->assertSee('Refresh all accounts now')
             ->assertSee('Server auto-refresh')
+            ->assertSee('No live centers returned after bounded retries.', false)
+            ->assertSee('No stale availability is being shown.', false)
             ->assertDontSee('session=authorized');
     }
 
