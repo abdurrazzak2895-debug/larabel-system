@@ -319,11 +319,19 @@ class BookingService
             ]);
 
             $provider = $this->provider->withToken($token);
-            $rescheduleResponse = $provider->rescheduleReservation($reservationId, [
+            // Keep the selected physical center explicit in the reschedule
+            // request. The opaque session remains authoritative, while site_id
+            // and site_city prevent SVP from falling back to the reservation's
+            // previous/default center when the endpoint accepts location data.
+            $rescheduleResponse = $provider->rescheduleReservation($reservationId, array_filter([
                 'exam_session_id' => (string) $data['exam_session_id'],
                 'exam_date' => (string) $data['exam_date'],
+                'site_id' => isset($data['test_center_id'])
+                    ? $this->numericOrString($data['test_center_id'])
+                    : null,
+                'site_city' => $data['city'] ?? null,
                 'methodology' => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
-            ]);
+            ], static fn ($value): bool => $value !== null && $value !== ''));
             $reschedulePayload = $rescheduleResponse->getData(true);
             $providerResponse = ['reschedule' => $reschedulePayload];
 

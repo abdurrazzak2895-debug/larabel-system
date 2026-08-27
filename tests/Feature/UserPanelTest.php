@@ -492,8 +492,85 @@ class UserPanelTest extends TestCase
                 && str_ends_with($request->url(), '/exam_reservations/5370112/reschedule')
                 && $request['exam_session_id'] === 'reschedule-session-1'
                 && $request['exam_date'] === '2026-09-01'
+                && (string) ($request['site_id'] ?? '') === '17'
+                && ($request['site_city'] ?? null) === 'Dhaka'
                 && $request->hasHeader('Authorization', 'Bearer test-svp-token');
         });
+    }
+
+    public function test_reschedule_blocks_center_mismatch_before_upstream_mutation(): void
+    {
+        $user = $this->loginAgencyUser();
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $user->agency_id,
+            'full_name' => 'Center Guard Candidate',
+            'email' => $user->email,
+            'svp_user_id' => 'SVP-CENTER-GUARD',
+            'is_active' => true,
+        ]);
+        $csrfToken = 'reschedule-center-guard-csrf';
+        $sessionId = 'selected-cumilla-session';
+        $holdId = 'hold-center-guard';
+        $reservationId = '6001';
+
+        Http::fake([
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/6001' => Http::response([
+                'exam_reservation' => [
+                    'id' => 6001,
+                    'can_be_rescheduled' => true,
+                    'occupation_id' => 2061,
+                    'category_id' => 159,
+                    'methodology' => 'in_person',
+                ],
+            ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_sessions/selected-cumilla-session*' => Http::response([
+                'exam_session' => [
+                    'id' => $sessionId,
+                    'exam_date' => '2026-09-07',
+                    'test_center_id' => '181',
+                    'test_center_name' => 'Noakhali Technical Training Centre',
+                    'test_center_city' => 'Noakhali',
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->from(route('user.bookings.svp-reschedule', ['reservation' => $reservationId]))
+            ->withSession([
+                '_token' => $csrfToken,
+                'svp_token' => 'test-svp-token',
+                'svp_temporary_holds' => [$holdId => [
+                    'id' => $holdId,
+                    'occupation_id' => '2061',
+                    'category_id' => '159',
+                    'city' => 'Cumilla',
+                    'test_center_id' => '17',
+                    'exam_session_id' => $sessionId,
+                    'exam_date' => '2026-09-07',
+                ]],
+            ])
+            ->post(route('user.bookings.svp-reschedule.submit', ['reservation' => $reservationId]), [
+                '_token' => $csrfToken,
+                'candidate_id' => $candidate->id,
+                'occupation_id' => '2061',
+                'category_id' => '159',
+                'city' => 'Cumilla',
+                'test_center_id' => '17',
+                'test_center_name' => 'Cumilla Technical Training Centre',
+                'exam_session_id' => $sessionId,
+                'exam_session_name' => 'First Shift',
+                'exam_date' => '2026-09-07',
+                'temporary_hold_id' => $holdId,
+                'language_code' => 'LOABB',
+                'methodology' => 'in_person',
+            ]);
+
+        $response->assertRedirect()
+            ->assertSessionHas('error', 'The selected SVP session no longer matches the selected center and date. Refresh the live sessions and try again.');
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/exam_reservations/6001/reschedule'));
+        Http::assertNotSent(fn ($request): bool => $request->method() === 'DELETE'
+            && str_contains($request->url(), '/exam_reservations/6001'));
+        $this->assertDatabaseMissing('bookings', ['reservation_id' => $reservationId]);
     }
 
     public function test_booking_wizard_renders_real_occupation_search_and_category_autofill(): void

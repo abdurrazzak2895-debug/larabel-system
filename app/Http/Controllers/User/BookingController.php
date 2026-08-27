@@ -12,6 +12,7 @@ use App\Services\SvpTemporaryHoldService;
 use App\Services\UserWalletService;
 use App\Services\PortalAvailabilityService;
 use App\Services\SvpDirectAvailabilityService;
+use App\Services\SvpSessionVerifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -26,7 +27,8 @@ class BookingController extends Controller
         private SvpTemporaryHoldService $holds,
         private UserWalletService $userWallet,
         private PortalAvailabilityService $portalAvailability,
-        private SvpDirectAvailabilityService $directAvailability
+        private SvpDirectAvailabilityService $directAvailability,
+        private SvpSessionVerifier $sessionVerifier
     ) {
         $this->middleware('auth.multi');
     }
@@ -587,6 +589,31 @@ class BookingController extends Controller
             }
 
             $candidate = Candidate::where('user_id', Auth::id())->findOrFail($data['candidate_id']);
+
+            // Re-verify the exact opaque session immediately before the
+            // reschedule mutation. The earlier temporary hold check protects
+            // hold creation, but a session can rotate between hold and confirm.
+            // Never let SVP choose a different physical center silently.
+            $sessionVerification = $this->sessionVerifier->verify(
+                $token,
+                (string) $data['exam_session_id'],
+                (string) $data['test_center_id'],
+                (string) $data['city'],
+                (string) $data['exam_date'],
+                (string) $data['test_center_name'],
+            );
+            $verifiedSessionId = (string) data_get($sessionVerification, 'session.id', '');
+            if ((int) ($sessionVerification['upstream_status'] ?? 0) === 401) {
+                return redirect()->route('svp.login.form', ['force' => 1])
+                    ->with('status', 'Your SVP session expired. Sign in again before confirming this reschedule.');
+            }
+            if (! ($sessionVerification['success'] ?? false) || ! ($sessionVerification['verified'] ?? false)) {
+                return back()->withInput()->with('error', 'The selected SVP session no longer matches the selected center and date. Refresh the live sessions and try again.');
+            }
+            if ($verifiedSessionId !== '' && $verifiedSessionId !== (string) $data['exam_session_id']) {
+                return back()->withInput()->with('error', 'SVP returned a different session than the one selected. Refresh the live sessions and try again.');
+            }
+
             $hold = $this->holds->consumeMatching($request, $data);
             if ($hold === null) {
                 return back()->withInput()->withErrors([
