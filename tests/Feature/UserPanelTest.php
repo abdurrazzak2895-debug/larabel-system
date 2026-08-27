@@ -409,6 +409,11 @@ class UserPanelTest extends TestCase
         $cancel->assertRedirect(route('user.bookings.index'))
             ->assertSessionHas('success', 'The SVP reservation was canceled successfully.');
 
+        Http::assertSent(function ($request): bool {
+            return $request->method() === 'DELETE'
+                && (string) $request->url() === 'https://svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370112?locale=en';
+        });
+
         $reschedule = $this->get(route('user.bookings.svp-reschedule', ['reservation' => 5370112]));
         $reschedule->assertOk()
             ->assertSee('Reschedule SVP Reservation')
@@ -531,7 +536,7 @@ class UserPanelTest extends TestCase
         });
         Http::assertSent(function ($request) {
             return $request->method() === 'DELETE'
-                && str_ends_with($request->url(), '/exam_reservations/5370112')
+                && str_ends_with($request->url(), '/exam_reservations/5370112?locale=en')
                 && $request->hasHeader('Authorization', 'Bearer test-svp-token');
         });
         Http::assertSent(function ($request) {
@@ -1316,5 +1321,46 @@ class UserPanelTest extends TestCase
         $this->assertTrue($availabilityPosition < $centerPosition);
         $this->assertTrue($centerPosition < $sessionPosition);
         $this->assertNull(session('svp_token'));
+    }
+
+    public function test_user_svp_cancel_surfaces_upstream_404_without_success(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if ($request->method() === 'GET' && str_ends_with($path, '/individual_labor_space/exam_reservations/5490642')) {
+                return Http::response([
+                    'exam_reservation' => [
+                        'id' => 5490642,
+                        'can_be_canceled' => true,
+                    ],
+                ], 200);
+            }
+
+            if ($request->method() === 'DELETE' && str_ends_with($path, '/individual_labor_space/exam_reservations/5490642')) {
+                return Http::response([], 404);
+            }
+
+            return Http::response([], 200);
+        });
+
+        $this->loginAgencyUser();
+        $csrfToken = 'svp-cancel-404-csrf-token';
+
+        $response = $this->withSession([
+            'svp_token' => 'test-svp-token',
+            '_token' => $csrfToken,
+        ])->post(route('user.bookings.svp-cancel', ['reservation' => 5490642]), [
+            '_token' => $csrfToken,
+        ]);
+
+        $response->assertRedirect(route('user.bookings.index'))
+            ->assertSessionHas('error', 'SVP could not cancel the reservation; cancellation was not confirmed by the upstream service.')
+            ->assertSessionMissing('success');
+
+        Http::assertSent(function ($request): bool {
+            return $request->method() === 'DELETE'
+                && (string) $request->url() === 'https://svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5490642?locale=en';
+        });
     }
 }

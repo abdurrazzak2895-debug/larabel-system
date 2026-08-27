@@ -890,7 +890,7 @@ class TakamolProvider implements BookingProviderInterface
 
     public function cancelReservation(string $id): JsonResponse
     {
-        return $this->dispatch('DELETE', '/individual_labor_space/exam_reservations/'.$id);
+        return $this->dispatch('DELETE', '/individual_labor_space/exam_reservations/'.$id.'?locale=en');
     }
 
     public function rescheduleReservation(string $id, array $payload): JsonResponse

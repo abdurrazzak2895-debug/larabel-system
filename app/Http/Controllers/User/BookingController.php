@@ -502,7 +502,7 @@ class BookingController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return redirect()->route('user.bookings.index')->with('error', 'Could not cancel the SVP reservation. Please try again.');
+            return redirect()->route('user.bookings.index')->with('error', 'SVP could not cancel the reservation; cancellation was not confirmed by the upstream service.');
         }
     }
 
