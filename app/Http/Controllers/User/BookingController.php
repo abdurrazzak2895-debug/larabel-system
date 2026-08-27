@@ -1057,6 +1057,7 @@ class BookingController extends Controller
             'language_code'    => strtoupper(trim($data['language_code'])),
             'methodology'      => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
             'notes'            => $data['notes'] ?? null,
+            'require_verified_context' => true,
         ]);
 
         if (! $result['success']) {

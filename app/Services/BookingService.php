@@ -102,6 +102,29 @@ class BookingService
             throw new \InvalidArgumentException('The booking user does not belong to the selected agency.');
         }
 
+        $requireVerifiedContext = (bool) ($data['require_verified_context'] ?? false);
+        if ($requireVerifiedContext) {
+            $requiredContext = [
+                'city' => $data['city'] ?? null,
+                'test_center_id' => $data['test_center_id'] ?? null,
+                'test_center_name' => $data['test_center_name'] ?? null,
+                'exam_session_id' => $data['exam_session_id'] ?? null,
+                'exam_date' => $data['exam_date'] ?? null,
+                'language_code' => $data['language_code'] ?? null,
+                'temporary_hold_id' => $data['temporary_hold_id'] ?? null,
+            ];
+            $missingContext = array_keys(array_filter(
+                $requiredContext,
+                static fn ($value): bool => $value === null || trim((string) $value) === ''
+            ));
+            if ($missingContext !== []) {
+                return [
+                    'success' => false,
+                    'error' => 'Booking cannot be submitted without a verified city, test center, exact SVP session, exam date, language, and temporary hold.',
+                ];
+            }
+        }
+
         $booking = $booking ?? Booking::create([
             'agency_id'        => $agencyId,
             'user_id'          => $bookingUserId,
@@ -163,7 +186,8 @@ class BookingService
             $centerValidation = $this->validateReturnedReservationCenter(
                 $reservationPayload,
                 $data['test_center_id'] ?? null,
-                $data['test_center_name'] ?? null
+                $data['test_center_name'] ?? null,
+                $requireVerifiedContext
             );
             $providerResponse['center_validation'] = $centerValidation;
 
@@ -524,7 +548,12 @@ class BookingService
      *
      * @return array{valid: bool, selected_center_id: ?string, returned_center_id: ?string, selected_center_name: string, returned_center_name: ?string, metadata_present: bool, error?: string}
      */
-    protected function validateReturnedReservationCenter(array $payload, mixed $selectedCenterId, mixed $selectedCenterName = null): array
+    protected function validateReturnedReservationCenter(
+        array $payload,
+        mixed $selectedCenterId,
+        mixed $selectedCenterName = null,
+        bool $requireMetadata = false
+    ): array
     {
         $selected = trim((string) ($selectedCenterId ?? ''));
         $selectedName = $this->centerDisplayName($selected, $selectedCenterName);
@@ -567,14 +596,49 @@ class BookingService
             $this->centerNameFromPayload($payload)
         );
 
-        if ($selected === '' || $returned === null) {
+        if ($selected === '' && ! $requireMetadata) {
             return [
                 'valid' => true,
-                'selected_center_id' => $selected !== '' ? $selected : null,
+                'selected_center_id' => null,
                 'returned_center_id' => $returned,
                 'selected_center_name' => $selectedName,
                 'returned_center_name' => $returnedName,
                 'metadata_present' => $returned !== null,
+            ];
+        }
+
+        if ($selected === '') {
+            return [
+                'valid' => false,
+                'selected_center_id' => null,
+                'returned_center_id' => $returned,
+                'selected_center_name' => $selectedName,
+                'returned_center_name' => $returnedName,
+                'metadata_present' => $returned !== null,
+                'error' => 'The selected test center could not be verified before SVP booking.',
+            ];
+        }
+
+        if ($returned === null && ! $requireMetadata) {
+            return [
+                'valid' => true,
+                'selected_center_id' => $selected,
+                'returned_center_id' => null,
+                'selected_center_name' => $selectedName,
+                'returned_center_name' => null,
+                'metadata_present' => false,
+            ];
+        }
+
+        if ($returned === null) {
+            return [
+                'valid' => false,
+                'selected_center_id' => $selected,
+                'returned_center_id' => null,
+                'selected_center_name' => $selectedName,
+                'returned_center_name' => null,
+                'metadata_present' => false,
+                'error' => 'SVP did not return a physical test center for the reservation, so the booking was not completed.',
             ];
         }
 

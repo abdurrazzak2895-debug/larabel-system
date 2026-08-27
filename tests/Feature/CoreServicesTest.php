@@ -214,6 +214,31 @@ class CoreServicesTest extends TestCase
         ]);
     }
 
+    public function test_booking_service_rejects_missing_verified_center_and_hold_before_svp_create(): void
+    {
+        Http::fake();
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+
+        $result = app(BookingService::class)->completeBooking('strict-context-token', [
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'occupation_id' => '2061',
+            'exam_session_id' => 'OPAQUE-SESSION',
+            'require_verified_context' => true,
+            'test_center_id' => null,
+            'test_center_name' => null,
+            'city' => null,
+            'temporary_hold_id' => null,
+            'exam_date' => null,
+            'language_code' => null,
+        ]);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('verified city, test center, exact SVP session', $result['error']);
+        $this->assertDatabaseCount('bookings', 0);
+        Http::assertNothingSent();
+    }
+
     public function test_booking_service_persists_booking_with_candidate_credential(): void
     {
         Http::fake(function ($request) {
