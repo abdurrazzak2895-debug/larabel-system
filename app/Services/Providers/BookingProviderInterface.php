@@ -45,7 +45,7 @@ interface BookingProviderInterface
 
     // Payment / Notification / Verification
     public function validatePendingPayment(): JsonResponse;
-    public function payments(?string $id = null): JsonResponse;
+    public function payments(?string $id = null, array $params = []): JsonResponse;
     public function createPayment(array $payload): JsonResponse;
     public function getPaymentStatus(string $resourcePath): JsonResponse;
     public function updatePayment(string $id, array $payload): JsonResponse;

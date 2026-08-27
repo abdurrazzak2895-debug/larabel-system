@@ -206,6 +206,54 @@ class UserPanelTest extends TestCase
         $this->assertSame($reservedBefore, (float) $walletAfterRefund->reserved_balance);
     }
 
+    public function test_user_booking_index_renders_filtered_svp_payment_history(): void
+    {
+        $user = $this->loginAgencyUser();
+
+        Http::fake([
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations*' => Http::response([
+                'data' => ['exam_reservations' => []],
+            ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/payments*' => Http::response([
+                'data' => [
+                    'payments' => [
+                        [
+                            'id' => 901,
+                            'merchant_transaction_id' => 'PAID-901',
+                            'amount' => '50.00',
+                            'currency' => 'SAR',
+                            'payment_method' => 'card',
+                            'status' => 'completed',
+                        ],
+                        [
+                            'id' => 902,
+                            'merchant_transaction_id' => 'PENDING-902',
+                            'amount' => '50.00',
+                            'currency' => 'SAR',
+                            'payment_method' => 'card',
+                            'status' => 'pending',
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $page = $this->withSession(['svp_token' => 'payment-history-test-token'])
+            ->get(route('user.bookings.index', ['payment_status' => 'paid']));
+
+        $page->assertOk()
+            ->assertSee('SVP Payment History')
+            ->assertSee('PAID-901')
+            ->assertSee('Paid')
+            ->assertDontSee('PENDING-902');
+
+        Http::assertSent(function ($request): bool {
+            return str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/v1/individual_labor_space/payments')
+                && ($request->data()['per_page'] ?? null) === 100
+                && ($request->data()['locale'] ?? null) === 'en';
+        });
+    }
+
     public function test_user_can_see_live_svp_reservations_and_download_a_ticket(): void
     {
         Http::fake([

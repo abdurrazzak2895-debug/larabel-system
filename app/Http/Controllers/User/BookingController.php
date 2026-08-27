@@ -12,6 +12,7 @@ use App\Services\SvpTemporaryHoldService;
 use App\Services\UserWalletService;
 use App\Services\PortalAvailabilityService;
 use App\Services\SvpDirectAvailabilityService;
+use App\Services\SvpPaymentHistoryService;
 use App\Services\SvpSessionVerifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,6 +29,7 @@ class BookingController extends Controller
         private UserWalletService $userWallet,
         private PortalAvailabilityService $portalAvailability,
         private SvpDirectAvailabilityService $directAvailability,
+        private SvpPaymentHistoryService $paymentHistory,
         private SvpSessionVerifier $sessionVerifier
     ) {
         $this->middleware('auth.multi');
@@ -370,6 +372,38 @@ class BookingController extends Controller
             $svpError = 'Sign in with your SVP account to see live reservations and tickets.';
         }
 
+        $paymentStatus = (string) $request->query('payment_status', 'all');
+        $paymentSearch = trim((string) $request->query('payment_search', ''));
+        $svpPayments = [];
+        $svpPaymentError = null;
+
+        if ($svpToken) {
+            try {
+                $paymentResponse = $this->booking->payments($svpToken, [
+                    'per_page' => 100,
+                    'locale' => 'en',
+                ]);
+
+                if ($paymentResponse->getStatusCode() >= 400) {
+                    $svpPaymentError = 'Could not load payment history from SVP.';
+                } else {
+                    $svpPayments = $this->paymentHistory->normalize(
+                        (array) $paymentResponse->getData(true),
+                        $paymentStatus,
+                        $paymentSearch
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::warning('User SVP payment history fetch failed', [
+                    'user_id' => $userId,
+                    'error' => $e->getMessage(),
+                ]);
+                $svpPaymentError = 'Could not load payment history from SVP.';
+            }
+        } else {
+            $svpPaymentError = 'Sign in with your SVP account to see payment history.';
+        }
+
         return view('user.bookings.index', [
             'bookings'        => $bookings,
             'counts'          => $counts,
@@ -378,7 +412,12 @@ class BookingController extends Controller
             'svpReservations' => $svpReservations,
             'svpError'        => $svpError,
             'hasSvpToken'     => (bool) $svpToken,
-            'svpUserId'       => $svpUserId,
+                        'svpUserId'       => $svpUserId,
+            'svpPayments'     => $svpPayments,
+            'svpPaymentError' => $svpPaymentError,
+            'paymentStatus'   => $paymentStatus,
+            'paymentSearch'   => $paymentSearch,
+
         ]);
     }
 
@@ -1176,7 +1215,7 @@ class BookingController extends Controller
                 ?? data_get($payload, 'response.result.code')
                 ?? data_get($payload, 'checkout.response.result.code');
 
-            if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300 || ! is_string($resultCode) || ! str_starts_with($resultCode, '000.')) {
+            if (! $this->booking->paymentStatusIsSuccessful($response->getStatusCode(), (array) $payload)) {
                 Log::warning('SVP HyperPay payment verification failed', [
                     'booking_id' => $booking->id,
                     'resource_path' => $resourcePath,

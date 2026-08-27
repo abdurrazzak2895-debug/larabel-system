@@ -126,4 +126,12 @@
         </div>
     </div>
 @endif
+
+@include('bookings.partials.svp-payment-history', [
+    'svpPayments' => $svpPayments,
+    'svpPaymentError' => $svpPaymentError,
+    'paymentStatus' => $paymentStatus,
+    'paymentSearch' => $paymentSearch,
+    'hasSvpToken' => $hasSvpToken,
+])
 @endsection

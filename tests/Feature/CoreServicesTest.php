@@ -781,6 +781,61 @@ class CoreServicesTest extends TestCase
         ]);
     }
 
+    public function test_user_payment_return_accepts_nested_checkout_success(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/v1/checkouts/NESTED-NDC/payment')) {
+                return Http::response([
+                    'checkout' => [
+                        'response' => [
+                            'result' => ['code' => '000.100.110'],
+                        ],
+                    ],
+                ], 200);
+            }
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $booking = Booking::create([
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'reservation_id' => '7866',
+            'booking_status' => 'pending',
+            'booking_reference' => 'PAYMENT-NESTED-TEST',
+        ]);
+        BookingAttempt::create([
+            'booking_id' => $booking->id,
+            'status' => 'payment_required',
+            'provider_response' => [
+                'checkout' => [
+                    'response' => ['ndc' => 'NESTED-NDC'],
+                ],
+            ],
+        ]);
+
+        $response = $this->actingAs($user, 'web')
+            ->withSession(['svp_token' => 'nested-payment-test-token'])
+            ->get(route('user.bookings.payment-return', [
+                'booking' => $booking->id,
+                'resourcePath' => '/v1/checkouts/NESTED-NDC/payment',
+            ]));
+
+        $response->assertRedirect(route('user.bookings.show', $booking->id));
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('bookings', [
+            'id' => $booking->id,
+            'booking_status' => 'booked',
+        ]);
+        $this->assertDatabaseHas('booking_attempts', [
+            'booking_id' => $booking->id,
+            'status' => 'success',
+        ]);
+    }
+
     public function test_booking_service_marks_failed_and_refunds_on_provider_error(): void
     {
         Http::fake([

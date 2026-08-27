@@ -19,9 +19,9 @@ class PaymentNotificationService
     /**
      * List payments (id null) or fetch a single payment (id given).
      */
-    public function payments(string $token, ?string $id = null)
+    public function payments(string $token, ?string $id = null, array $params = [])
     {
-        return $this->provider->withToken($token)->payments($id);
+        return $this->provider->withToken($token)->payments($id, $params);
     }
 
     public function createPayment(string $token, array $payload)

@@ -1254,13 +1254,13 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/payments/validate_pending');
     }
 
-    public function payments(?string $id = null): JsonResponse
+    public function payments(?string $id = null, array $params = []): JsonResponse
     {
         $uri = $id
             ? '/individual_labor_space/payments/'.$id
             : '/individual_labor_space/payments';
 
-        return $this->dispatch('GET', $uri);
+        return $this->dispatch('GET', $uri, $params);
     }
 
     public function createPayment(array $payload): JsonResponse

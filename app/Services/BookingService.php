@@ -46,6 +46,47 @@ class BookingService
     public function rescheduleReservation(string $token, string $id, array $payload) { return $this->provider->withToken($token)->rescheduleReservation($id, $payload); }
     public function useReservationCredit(string $token, array $payload) { return $this->provider->withToken($token)->useReservationCredit($payload); }
     public function getPaymentStatus(string $token, string $resourcePath) { return $this->provider->withToken($token)->getPaymentStatus($resourcePath); }
+    public function payments(string $token, array $params = []) { return $this->provider->withToken($token)->payments(null, $params); }
+
+    /**
+     * Accept only an authoritative successful payment response. A checkout
+     * creation code (000.200.*), an upstream error, or an unrecognized status
+     * must never be treated as a paid transaction.
+     */
+    public function paymentStatusIsSuccessful(int $httpStatus, array $payload): bool
+    {
+        if ($httpStatus < 200 || $httpStatus >= 300) {
+            return false;
+        }
+
+        $resultCode = data_get($payload, 'result.code')
+            ?? data_get($payload, 'response.result.code')
+            ?? data_get($payload, 'payment.result.code')
+            ?? data_get($payload, 'payment_status.result.code')
+            ?? data_get($payload, 'checkout.response.result.code')
+            ?? data_get($payload, 'checkout.result.code');
+
+        if (is_string($resultCode) && str_starts_with($resultCode, '000.')) {
+            return ! str_starts_with($resultCode, '000.200.');
+        }
+
+        $statuses = [
+            data_get($payload, 'status'),
+            data_get($payload, 'payment_status'),
+            data_get($payload, 'payment.status'),
+            data_get($payload, 'transaction.status'),
+        ];
+
+        foreach ($statuses as $status) {
+            if (is_string($status) && in_array(strtolower(trim($status)), [
+                'paid', 'success', 'successful', 'succeeded', 'completed', 'confirmed', 'approved',
+            ], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
     public function examSession(string $token, string $id) { return $this->provider->withToken($token)->examSession($id); }
     public function occupations(string $token) { return $this->provider->withToken($token)->occupations(); }
     public function occupationsSearch(string $token, ?string $search = null, int $page = 1, int $perPage = 1000) { return $this->provider->withToken($token)->occupationsSearch($search, $page, $perPage); }
