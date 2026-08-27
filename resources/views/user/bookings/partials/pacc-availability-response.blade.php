@@ -143,31 +143,20 @@
                         const selectedRow = items[Number(card.dataset.paccIndex)] || {};
                         const selectedCenterId = String(centerId(selectedRow));
                         const selectedCenterName = centerName(selectedRow);
-                        const selectedDate = centerDate(selectedRow, meta.date);
-                        const selectedSessionId = centerSessionId(selectedRow);
-                        const exactSessionControl = sessionSelect || document.getElementById(options.sessionSelectId || 'exam_session_id');
-                        const exactSessionNameInput = sessionNameInput || document.getElementById(options.sessionNameInputId || 'exam_session_name');
-                        const exactDateInput = dateInput || document.getElementById(options.dateInputId || 'exam_date');
                         centerSelect.value = selectedCenterId;
                         centerSelect.dataset.name = selectedCenterName;
-                        centerSelect.dataset.sessionId = selectedSessionId;
-                        centerSelect.dataset.sessionDate = selectedDate;
+                        // A Portal Availability row may contain a session ID
+                        // from a different credential. Never submit that opaque
+                        // ID directly. The owning booking wizard must load the
+                        // exact center-scoped sessions using the candidate SVP
+                        // token before the user can create a hold.
+                        centerSelect.dataset.sessionId = '';
+                        centerSelect.dataset.sessionDate = '';
                         if (centerNameInput) {
                             centerNameInput.value = selectedCenterName;
                             centerNameInput.dataset.centerId = selectedCenterId;
                         }
-                        if (selectedSessionId && exactSessionControl) {
-                            exactSessionControl.value = selectedSessionId;
-                            exactSessionControl.dataset.centerId = selectedCenterId;
-                            exactSessionControl.dataset.centerName = selectedCenterName;
-                            exactSessionControl.dataset.name = selectedRow.session_name || selectedRow.name || selectedCenterName;
-                            exactSessionControl.dataset.date = selectedDate;
-                            if (exactSessionNameInput) exactSessionNameInput.value = exactSessionControl.dataset.name;
-                            if (exactDateInput) exactDateInput.value = selectedDate;
-                            exactSessionControl.dispatchEvent(new Event('change', {bubbles: true}));
-                        } else {
-                            centerSelect.dispatchEvent(new Event('change', {bubbles: true}));
-                        }
+                        centerSelect.dispatchEvent(new Event('change', {bubbles: true}));
                         syncSelection();
                     }));
                 }
