@@ -5,6 +5,7 @@
     $centerNameInputId = $centerNameInputId ?? 'test_center_name';
     $sessionSelectId = $sessionSelectId ?? 'exam_session_id';
     $sessionNameInputId = $sessionNameInputId ?? 'exam_session_name';
+    $centerTimeInputId = $centerTimeInputId ?? '';
     $dateInputId = $dateInputId ?? 'exam_date';
     $hidePanel = $hidePanel ?? false;
 @endphp
@@ -95,6 +96,7 @@
             const centerNameInput = document.getElementById(options.centerNameInputId || 'test_center_name');
             const sessionSelect = document.getElementById(options.sessionSelectId || 'exam_session_id');
             const sessionNameInput = document.getElementById(options.sessionNameInputId || 'exam_session_name');
+            const centerTimeInput = document.getElementById(options.centerTimeInputId || '');
             const dateInput = document.getElementById(options.dateInputId || 'exam_date');
             let selectedCardKey = '';
 
@@ -131,7 +133,7 @@
                         const id = centerId(row);
                         const exactSessionId = centerSessionId(row);
                         const date = centerDate(row, meta.date);
-                        return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}" data-pacc-index="${index}" data-pacc-session-id="${esc(exactSessionId)}">
+                        return `<button type="button" class="pacc-response-card w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-indigo-300 hover:bg-indigo-50" data-pacc-value="${esc(id)}" data-pacc-index="${index}" data-pacc-session-id="${esc(exactSessionId)}" data-pacc-time="${esc(time)}">
                             <span class="flex items-start justify-between gap-3"><span class="min-w-0"><strong class="block break-words whitespace-normal text-sm text-slate-900">${esc(centerName(row))}</strong><span class="mt-1 block text-[11px] text-slate-500">Center ID: ${esc(id || 'Not provided')}</span></span><span class="shrink-0 rounded-full ${seats !== null && seats <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} px-2 py-1 text-[11px] font-bold">${esc(seats === null ? 'Seats n/a' : seats + ' seats')}</span></span>
                             <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>Date: <b class="text-slate-700">${esc(date || 'Not provided')}</b></span><span>Time: <b class="text-slate-700">${esc(time || 'Not provided')}</b></span><span>Sessions: <b class="text-slate-700">${esc(sessionCount === null ? 'Live lookup' : sessionCount)}</b></span><span>Available slot ${index + 1}</span></span>
                             <span class="mt-1 block break-all text-[10px] text-slate-500">Session ID: <b class="font-mono text-slate-700">${esc(exactSessionId || 'Select to load exact SVP sessions')}</b></span>
@@ -152,6 +154,11 @@
                         // token before the user can create a hold.
                         centerSelect.dataset.sessionId = '';
                         centerSelect.dataset.sessionDate = '';
+                        centerSelect.dataset.time = centerTime(selectedRow);
+                        if (centerTimeInput) {
+                            centerTimeInput.value = centerTime(selectedRow);
+                            centerTimeInput.dataset.centerId = selectedCenterId;
+                        }
                         if (centerNameInput) {
                             centerNameInput.value = selectedCenterName;
                             centerNameInput.dataset.centerId = selectedCenterId;
@@ -239,7 +246,7 @@
     window.PaccAvailabilityInstances = window.PaccAvailabilityInstances || {};
     window.PaccAvailabilityInstances['{{ $componentId }}'] = window.PaccAvailabilityComponent.create(
         document.getElementById('{{ $componentId }}'),
-        {mode: '{{ $mode }}', centerSelectId: '{{ $centerSelectId }}', centerNameInputId: '{{ $centerNameInputId }}', sessionSelectId: '{{ $sessionSelectId }}', sessionNameInputId: '{{ $sessionNameInputId }}', dateInputId: '{{ $dateInputId }}'}
+        {mode: '{{ $mode }}', centerSelectId: '{{ $centerSelectId }}', centerNameInputId: '{{ $centerNameInputId }}', centerTimeInputId: '{{ $centerTimeInputId }}', sessionSelectId: '{{ $sessionSelectId }}', sessionNameInputId: '{{ $sessionNameInputId }}', dateInputId: '{{ $dateInputId }}'}
     );
 })();
 </script>

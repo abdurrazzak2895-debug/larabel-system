@@ -275,6 +275,7 @@ class UserPanelTest extends TestCase
                 'exam_session' => [
                     'id' => 'reschedule-session-1',
                     'exam_date' => '2026-09-01',
+                    'test_time' => '10:00:00',
                     'test_center_id' => 17,
                     'test_center_name' => 'Bangladesh Korea TTC Dhaka',
                     'test_center_city' => 'Dhaka',
@@ -456,7 +457,7 @@ class UserPanelTest extends TestCase
             ->assertDontSee('Locked center')
             ->assertDontSee('svp-international.pacc.sa/home')
             ->assertSee('function canCreateHold()')
-            ->assertSee('return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && session.value && date.value && language.value);', false)
+            ->assertSee('return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && centerTime.value && session.value && date.value && language.value);', false)
             ->assertDontSee("holdButton.disabled = !(candidate.value && session.value && date.value)");
 
         $rescheduleHtml = $reschedule->getContent();
@@ -483,6 +484,7 @@ class UserPanelTest extends TestCase
                 'city' => 'Dhaka',
                 'test_center_id' => '17',
                 'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+                'test_center_time' => '10:00 AM',
                 'exam_session_id' => 'reschedule-session-1',
                 'exam_date' => '2026-09-01',
             ], ['X-CSRF-TOKEN' => $csrfToken]);
@@ -497,6 +499,7 @@ class UserPanelTest extends TestCase
                 'city' => 'Dhaka',
                 'test_center_id' => '17',
                 'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+                'test_center_time' => '10:00 AM',
                 'exam_session_id' => 'reschedule-session-1',
                 'exam_session_name' => 'First Shift',
                 'exam_date' => '2026-09-01',
@@ -597,6 +600,7 @@ class UserPanelTest extends TestCase
                     'category_id' => '159',
                     'city' => 'Cumilla',
                     'test_center_id' => '17',
+                    'test_center_time' => '10:00 AM',
                     'exam_session_id' => $sessionId,
                     'exam_date' => '2026-09-07',
                 ]],
@@ -609,6 +613,7 @@ class UserPanelTest extends TestCase
                 'city' => 'Cumilla',
                 'test_center_id' => '17',
                 'test_center_name' => 'Cumilla Technical Training Centre',
+                'test_center_time' => '10:00 AM',
                 'exam_session_id' => $sessionId,
                 'exam_session_name' => 'First Shift',
                 'exam_date' => '2026-09-07',

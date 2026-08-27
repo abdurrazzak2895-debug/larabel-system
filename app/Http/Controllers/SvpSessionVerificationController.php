@@ -33,6 +33,7 @@ class SvpSessionVerificationController extends Controller
             'expected_test_center_name' => ['nullable', 'string', 'max:255'],
             'expected_city' => ['nullable', 'string', 'max:120'],
             'expected_exam_date' => ['nullable', 'date_format:Y-m-d'],
+            'expected_test_time' => ['nullable', 'string', 'max:80'],
         ]);
 
         $token = $request->session()->get('svp_token');
@@ -57,6 +58,7 @@ class SvpSessionVerificationController extends Controller
                 $data['expected_city'] ?? null,
                 $data['expected_exam_date'] ?? null,
                 $data['expected_test_center_name'] ?? null,
+                $data['expected_test_time'] ?? null,
             );
 
             return response()->json($result, (int) $result['upstream_status']);

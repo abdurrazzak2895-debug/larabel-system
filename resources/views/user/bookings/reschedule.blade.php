@@ -130,11 +130,13 @@
                 </div>
                 <input type="hidden" name="test_center_id" id="test_center_id" value="{{ old('test_center_id') }}">
                 <input type="hidden" name="test_center_name" id="test_center_name" value="{{ old('test_center_name') }}">
+                <input type="hidden" name="test_center_time" id="test_center_time" value="{{ old('test_center_time') }}">
                 <p id="center-summary" class="text-xs text-slate-500 mt-1">Select a live date to load every Portal Availability center slot for that date.</p>
                 @include('user.bookings.partials.pacc-availability-response', [
                     'componentId' => 'reschedule-center-response',
                     'mode' => 'centers',
                     'centerSelectId' => 'test_center_id',
+                    'centerTimeInputId' => 'test_center_time',
                     'sessionSelectId' => 'exam_session_id',
                 ])
                 @error('test_center_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
@@ -194,6 +196,7 @@
     const city = document.getElementById('city_id');
     const center = document.getElementById('test_center_id');
     const centerName = document.getElementById('test_center_name');
+    const centerTime = document.getElementById('test_center_time');
     const centerSection = document.getElementById('test-center-section');
     const centerSummary = document.getElementById('center-summary');
     const sessionSummary = document.getElementById('session-summary');
@@ -303,7 +306,7 @@
     }
 
     function canCreateHold() {
-        return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && session.value && date.value && language.value);
+        return Boolean(occupation.value && category.value && city.value && center.value && centerName.value && centerTime.value && session.value && date.value && language.value);
     }
 
     function syncActionButtons() {
@@ -418,7 +421,9 @@
             const directSvpFallback = body?.fallback === true || body?.availability_source === 'candidate_authenticated_sessions';
             center.value = '';
             center.dataset.name = '';
+            center.dataset.time = '';
             centerName.value = '';
+            centerTime.value = '';
             centerResponse?.renderCenters(items, {
                 city: city.value,
                 date: dateValue,
@@ -443,7 +448,9 @@
                     const restoredName = restored.name || restored.english_name || restored.test_center_name || restored.site_name || restored.center_name || 'SVP test center';
                     center.value = String(oldCenter);
                     center.dataset.name = restoredName;
+                    center.dataset.time = sessionTime(restored);
                     centerName.value = restoredName;
+                    centerTime.value = sessionTime(restored);
                     centerResponse?.syncSelection();
                     center.dispatchEvent(new Event('change'));
                 }
@@ -567,7 +574,7 @@
             holdStatus.textContent = 'The selected session does not belong to the selected test center.';
             return;
         }
-        const payload = {occupation_id: occupation.value, category_id: category.value, city: city.value, test_center_id: center.value, test_center_name: centerName.value, exam_session_id: session.value, exam_date: date.value, language_code: language.value};
+        const payload = {occupation_id: occupation.value, category_id: category.value, city: city.value, test_center_id: center.value, test_center_name: centerName.value, test_center_time: centerTime.value, exam_session_id: session.value, exam_date: date.value, language_code: language.value};
         if (Object.values(payload).some(value => !value)) {
             holdStatus.textContent = 'Select language, city, date, center slot, session, and date first.';
             return;

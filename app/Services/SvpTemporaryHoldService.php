@@ -33,6 +33,7 @@ class SvpTemporaryHoldService
             'city' => (string) ($selection['city'] ?? ''),
             'test_center_id' => (string) ($selection['test_center_id'] ?? ''),
             'test_center_name' => $selection['test_center_name'] ?? null,
+            'test_center_time' => $this->normalizeTime($selection['test_center_time'] ?? ''),
             'exam_session_id' => (string) ($selection['exam_session_id'] ?? ''),
             'exam_date' => (string) ($selection['exam_date'] ?? ''),
         ];
@@ -201,10 +202,17 @@ class SvpTemporaryHoldService
             'category_id',
             'city',
             'test_center_id',
+            'test_center_time',
             'exam_session_id',
             'exam_date',
         ] as $field) {
-            if ((string) ($hold[$field] ?? '') !== (string) ($selection[$field] ?? '')) {
+            $heldValue = $hold[$field] ?? '';
+            $selectedValue = $selection[$field] ?? '';
+            if ($field === 'test_center_time') {
+                $heldValue = $this->normalizeTime($heldValue);
+                $selectedValue = $this->normalizeTime($selectedValue);
+            }
+            if ((string) $heldValue !== (string) $selectedValue) {
                 return null;
             }
         }
@@ -250,6 +258,38 @@ class SvpTemporaryHoldService
             (string) ($context['city'] ?? ''),
             (string) ($context['test_center_id'] ?? ''),
         ]));
+    }
+
+    private function normalizeTime(mixed $value): string
+    {
+        if (! is_scalar($value)) {
+            return '';
+        }
+
+        $value = trim((string) $value);
+        if ($value === '') {
+            return '';
+        }
+
+        $value = preg_replace('/^\\d{4}-\\d{2}-\\d{2}[T ]/', '', $value) ?? $value;
+        $value = preg_replace('/(?:Z|[+-]\\d{2}:?\\d{2})$/', '', $value) ?? $value;
+        if (preg_match('/^(\\d{1,2}):(\\d{2})(?::\\d{2})?\\s*(AM|PM)?$/i', trim($value), $matches) !== 1) {
+            return '';
+        }
+
+        $hours = (int) $matches[1];
+        $minutes = (int) $matches[2];
+        $meridiem = strtoupper($matches[3] ?? '');
+        if ($minutes > 59 || ($meridiem !== '' && ($hours < 1 || $hours > 12)) || ($meridiem === '' && $hours > 23)) {
+            return '';
+        }
+        if ($meridiem === 'PM' && $hours < 12) {
+            $hours += 12;
+        } elseif ($meridiem === 'AM' && $hours === 12) {
+            $hours = 0;
+        }
+
+        return sprintf('%02d:%02d', $hours, $minutes);
     }
 
     /**

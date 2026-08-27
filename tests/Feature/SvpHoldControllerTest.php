@@ -23,6 +23,7 @@ class SvpHoldControllerTest extends TestCase
                     'exam_session' => [
                         'id' => '2',
                         'exam_date' => '2026-08-18',
+                        'test_time' => '10:00:00',
                         'test_center' => [
                             'id' => '403',
                             'name' => 'Arkan Al-Taameer',
@@ -51,6 +52,7 @@ class SvpHoldControllerTest extends TestCase
             'city' => 'Dhaka',
             'test_center_id' => '403',
             'test_center_name' => 'Arkan Al-Taameer',
+            'test_center_time' => '10:00 AM',
             'exam_session_id' => '2',
             'exam_date' => '2026-08-18',
         ]);
@@ -97,6 +99,7 @@ class SvpHoldControllerTest extends TestCase
             'category_id' => '159',
             'city' => 'Dhaka',
             'test_center_id' => '223',
+            'test_center_time' => '10:00 AM',
             'exam_session_id' => 'live-session',
             'exam_date' => '2026-08-18',
         ]);
@@ -139,6 +142,7 @@ class SvpHoldControllerTest extends TestCase
                     'session' => [
                         'id' => 'different-session-id',
                         'exam_date' => '2026-08-31',
+                        'test_time' => '10:00:00',
                         'test_center_id' => '223',
                         'test_center_name' => 'Manikganj Technical Training Center',
                         'test_center_city' => 'Dhaka',
@@ -163,6 +167,7 @@ class SvpHoldControllerTest extends TestCase
             'category_id' => '159',
             'city' => 'Dhaka',
             'test_center_id' => '223',
+            'test_center_time' => '10:00 AM',
             'exam_session_id' => 'rotated-session-id',
             'exam_date' => '2026-08-30',
         ]);
@@ -221,6 +226,7 @@ class SvpHoldControllerTest extends TestCase
             'category_id' => '159',
             'city' => 'Dhaka',
             'test_center_id' => '223',
+            'test_center_time' => '10:00 AM',
             'exam_session_id' => '223-session',
             'exam_date' => '2026-08-31',
         ]);
@@ -265,6 +271,7 @@ class SvpHoldControllerTest extends TestCase
             'category_id' => '159',
             'city' => 'Dhaka',
             'test_center_id' => '223',
+            'test_center_time' => '10:00 AM',
             'exam_session_id' => 'rotated-session-id',
             'exam_date' => '2026-08-31',
         ]);
@@ -323,6 +330,7 @@ class SvpHoldControllerTest extends TestCase
             'city' => 'Dhaka',
             'test_center_id' => '17',
             'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+            'test_center_time' => '10:00 AM',
             'exam_session_id' => 'opaque-session',
             'exam_date' => '2026-08-30',
         ]);
@@ -376,6 +384,7 @@ class SvpHoldControllerTest extends TestCase
             'category_id' => '159',
             'city' => 'Dhaka',
             'test_center_id' => '17',
+            'test_center_time' => '10:00 AM',
             'exam_session_id' => 'centerless-session',
             'exam_date' => '2026-08-30',
         ]);
@@ -413,10 +422,11 @@ class SvpHoldControllerTest extends TestCase
             ->with('svp-token', 'german-ttc-session')
             ->andReturn(response()->json([
                 'data' => [
-                    'exam_session' => [
-                        'id' => 'german-ttc-session',
-                        'exam_date' => '2026-08-23',
-                        'test_center' => [
+                        'exam_session' => [
+                            'id' => 'german-ttc-session',
+                            'exam_date' => '2026-08-23',
+                            'test_time' => '10:00:00',
+                            'test_center' => [
                             'city' => 'Dhaka',
                         ],
                     ],
@@ -440,6 +450,7 @@ class SvpHoldControllerTest extends TestCase
             'city' => 'Dhaka',
             'test_center_id' => '45',
             'test_center_name' => 'Bangladesh German TTC',
+            'test_center_time' => '10:00 AM',
             'exam_session_id' => 'german-ttc-session',
             'exam_date' => '2026-08-23',
         ]);
@@ -476,10 +487,11 @@ class SvpHoldControllerTest extends TestCase
             ->with('svp-token', 'centerless-list-session')
             ->andReturn(response()->json([
                 'data' => [
-                    'exam_session' => [
-                        'id' => 'centerless-list-session',
-                        'exam_date' => '2026-08-30',
-                        'test_center' => [
+                        'exam_session' => [
+                            'id' => 'centerless-list-session',
+                            'exam_date' => '2026-08-30',
+                            'test_time' => '10:00:00',
+                            'test_center' => [
                             'id' => '17',
                             'name' => 'Bangladesh Korea TTC Dhaka',
                             'city' => 'Dhaka',
@@ -505,6 +517,7 @@ class SvpHoldControllerTest extends TestCase
             'city' => 'Dhaka',
             'test_center_id' => '17',
             'test_center_name' => 'Bangladesh Korea TTC Dhaka',
+            'test_center_time' => '10:00 AM',
             'exam_session_id' => 'centerless-list-session',
             'exam_date' => '2026-08-30',
         ]);
@@ -532,5 +545,65 @@ class SvpHoldControllerTest extends TestCase
         $this->assertTrue($payload['success']);
         $this->assertTrue($payload['verification']['verified'] ?? true);
         $this->assertSame('Bangladesh Korea TTC Dhaka', $payload['selection']['test_center_name']);
+    }
+
+    public function test_hold_is_blocked_when_authoritative_session_time_differs_from_selected_slot(): void
+    {
+        $booking = Mockery::mock(BookingService::class);
+        $booking->shouldReceive('examSession')
+            ->once()
+            ->with('svp-token', 'cumilla-session')
+            ->andReturn(response()->json([
+                'data' => [
+                    'exam_session' => [
+                        'id' => 'cumilla-session',
+                        'exam_date' => '2026-09-09',
+                        'test_time' => '12:30:00',
+                        'test_center' => [
+                            'id' => '62',
+                            'name' => 'Cumilla Technical Training Centre',
+                            'city' => 'Cumilla',
+                        ],
+                    ],
+                ],
+            ], 200));
+        $booking->shouldNotReceive('temporarySeat');
+        $this->app->instance(BookingService::class, $booking);
+
+        $request = Request::create('/user/bookings/temporary-hold', 'POST', [
+            'occupation_id' => '2061',
+            'category_id' => '159',
+            'city' => 'Cumilla',
+            'test_center_id' => '62',
+            'test_center_name' => 'Cumilla Technical Training Centre',
+            'test_center_time' => '10:00 AM',
+            'exam_session_id' => 'cumilla-session',
+            'exam_date' => '2026-09-09',
+        ]);
+        $request->setLaravelSession(app('session.store'));
+        $request->session()->start();
+        $request->session()->put('svp_token', 'svp-token');
+
+        app(SvpTemporaryHoldService::class)->rememberSessionLookup($request, [
+            'category_id' => '159',
+            'city' => 'Cumilla',
+            'test_center_id' => '62',
+        ], [
+            'data' => [
+                'sessions' => [[
+                    'id' => 'cumilla-session',
+                    'exam_date' => '2026-09-09',
+                ]],
+            ],
+        ]);
+
+        $response = app(SvpHoldController::class)->store($request);
+        $payload = $response->getData(true);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertFalse($payload['verification']['verified']);
+        $this->assertFalse($payload['verification']['checks']['time_match']);
+        $this->assertSame([], $request->session()->get('svp_temporary_holds', []));
     }
 }

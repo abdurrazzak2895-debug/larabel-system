@@ -34,6 +34,7 @@ class SvpHoldController extends Controller
             'city' => ['required', 'string', 'max:120'],
             'test_center_id' => ['required', 'string', 'max:100'],
             'test_center_name' => ['nullable', 'string', 'max:255'],
+            'test_center_time' => ['required', 'string', 'max:80'],
             'exam_session_id' => ['required', 'string', 'max:255'],
             'exam_date' => ['required', 'date_format:Y-m-d'],
         ]);
@@ -96,6 +97,7 @@ class SvpHoldController extends Controller
                 (string) $data['city'],
                 $selectedSessionDate,
                 (string) ($data['test_center_name'] ?? ''),
+                (string) $data['test_center_time'],
             );
 
             if (! $verification['success']) {
@@ -121,9 +123,8 @@ class SvpHoldController extends Controller
                 return response()->json([
                     'success' => false,
                     'error' => sprintf(
-                        'Blocked: SVP session belongs to %s, not %s, or its live date does not match the selected date.',
-                        $actualCenterName,
-                        $expectedCenterName
+                        'Blocked: SVP session does not match the selected center, date, or %s slot.',
+                        $data['test_center_time']
                     ),
                     'verification' => $verification,
                 ], 422);
@@ -161,6 +162,7 @@ class SvpHoldController extends Controller
                 'city' => $data['city'],
                 'test_center_id' => $data['test_center_id'],
                 'test_center_name' => data_get($verification, 'actual.test_center_name') ?: ($data['test_center_name'] ?? null),
+                'test_center_time' => data_get($verification, 'expected.test_time') ?: $data['test_center_time'],
                 'exam_session_id' => $resolvedSessionId,
                 'exam_session_name' => $selectedSession['name'] ?? $selectedSession['session_name'] ?? null,
                 'exam_date' => $selectedSessionDate,

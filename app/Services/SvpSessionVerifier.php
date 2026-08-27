@@ -34,6 +34,7 @@ class SvpSessionVerifier
             $expectedCity,
             $expectedDate,
             $expectedCenterName,
+            null,
             false,
         );
     }
@@ -51,6 +52,7 @@ class SvpSessionVerifier
         ?string $expectedCity = null,
         ?string $expectedDate = null,
         ?string $expectedCenterName = null,
+        ?string $expectedTestTime = null,
     ): array {
         return $this->evaluate(
             $this->booking->examSession($token, $examSessionId),
@@ -59,6 +61,7 @@ class SvpSessionVerifier
             $expectedCity,
             $expectedDate,
             $expectedCenterName,
+            $expectedTestTime,
             true,
         );
     }
@@ -73,6 +76,7 @@ class SvpSessionVerifier
         ?string $expectedCity,
         ?string $expectedDate,
         ?string $expectedCenterName,
+        ?string $expectedTestTime,
         bool $allowScopedCenterFallback,
     ): array {
         $payload = $response->getData(true);
@@ -83,7 +87,10 @@ class SvpSessionVerifier
             'id', 'exam_session_id', 'session_id',
         ]);
         $actualDate = $this->sessionDate($session);
+        $actualTime = $this->sessionTime($session);
         $normalizedExpectedDate = $this->normalizeDate($expectedDate);
+        $normalizedExpectedTime = $this->normalizeTime($expectedTestTime);
+        $expectedTimeValid = $expectedTestTime === null || $normalizedExpectedTime !== null;
         $centerIdMatch = $center['id'] !== null && $center['id'] === (string) $expectedCenterId;
         $centerNameMatch = $center['id'] === null
             && filled($expectedCenterName)
@@ -99,6 +106,9 @@ class SvpSessionVerifier
         $dateMatch = $normalizedExpectedDate === null
             ? null
             : ($actualDate !== null && $actualDate === $normalizedExpectedDate);
+        $timeMatch = $normalizedExpectedTime === null
+            ? null
+            : ($actualTime !== null && $actualTime === $normalizedExpectedTime);
         $upstreamSuccess = $status >= 200 && $status < 300;
 
 
@@ -107,31 +117,39 @@ class SvpSessionVerifier
             'verified' => $upstreamSuccess
                 && $centerMatch
                 && ($cityMatch !== false)
-                && ($dateMatch !== false),
+                && ($dateMatch !== false)
+                && ($timeMatch !== false)
+                && $expectedTimeValid,
             'read_only' => true,
             'upstream_status' => $status,
             'session' => [
                 'id' => $actualSessionId !== null ? (string) $actualSessionId : $examSessionId,
-                'exam_date' => $actualDate,
-                'methodology' => $session['methodology'] ?? null,
+                    'exam_date' => $actualDate,
+                    'test_time' => $actualTime,
+                    'methodology' => $session['methodology'] ?? null,
             ],
             'expected' => [
                 'test_center_id' => (string) $expectedCenterId,
                 'test_center_name' => $expectedCenterName,
                 'city' => $expectedCity,
                 'exam_date' => $normalizedExpectedDate,
+                'test_time' => $normalizedExpectedTime,
             ],
             'actual' => [
                 'test_center_id' => $center['id'],
                 'test_center_name' => $center['name'],
                 'city' => $center['city'],
+                'test_time' => $actualTime,
             ],
             'checks' => [
                 'center_match' => $centerMatch,
                 'center_scope_fallback' => $scopedCenterFallback,
                 'city_match' => $cityMatch,
                 'date_match' => $dateMatch,
+                'time_match' => $timeMatch,
+                'expected_time_valid' => $expectedTimeValid,
                 'session_center_present' => $center['id'] !== null,
+                'session_time_present' => $actualTime !== null,
                 'session_date_present' => $actualDate !== null,
             ],
         ];
@@ -337,6 +355,67 @@ class SvpSessionVerifier
         return mb_strtolower(trim((string) preg_replace('/\\s+/', ' ', (string) $value)));
     }
 
+
+    private function sessionTime(array $session): ?string
+    {
+        foreach ([
+            'test_time',
+            'start_time',
+            'time',
+            'start_at',
+            'start_date_in_browser_time_zone',
+            'start_date_in_tc_time_zone',
+        ] as $key) {
+            $time = $this->normalizeTime($session[$key] ?? null);
+            if ($time !== null) {
+                return $time;
+            }
+        }
+
+        foreach (['exam_session', 'schedule', 'attributes', 'data', 'details', 'resource'] as $key) {
+            if (is_array($session[$key] ?? null)) {
+                $time = $this->sessionTime($session[$key]);
+                if ($time !== null) {
+                    return $time;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeTime(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        $value = preg_replace('/^\\d{4}-\\d{2}-\\d{2}[T ]/', '', $value) ?? $value;
+        $value = preg_replace('/(?:Z|[+-]\\d{2}:?\\d{2})$/', '', $value) ?? $value;
+        $value = trim($value);
+        if (preg_match('/^(\\d{1,2}):(\\d{2})(?::\\d{2})?\\s*(AM|PM)?$/i', $value, $matches) !== 1) {
+            return null;
+        }
+
+        $hours = (int) $matches[1];
+        $minutes = (int) $matches[2];
+        $meridiem = strtoupper($matches[3] ?? '');
+        if ($minutes > 59 || ($meridiem !== '' && ($hours < 1 || $hours > 12)) || ($meridiem === '' && $hours > 23)) {
+            return null;
+        }
+        if ($meridiem === 'PM' && $hours < 12) {
+            $hours += 12;
+        } elseif ($meridiem === 'AM' && $hours === 12) {
+            $hours = 0;
+        }
+
+        return sprintf('%02d:%02d', $hours, $minutes);
+    }
 
     private function normalizeDate(mixed $value): ?string
     {

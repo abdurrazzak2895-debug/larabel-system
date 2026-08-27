@@ -137,11 +137,13 @@
                         </div>
                         <input type="hidden" name="test_center_id" id="test_center_id" value="">
                         <input type="hidden" name="test_center_name" id="test_center_name" value="">
+                        <input type="hidden" name="test_center_time" id="test_center_time" value="">
                         <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Select a live date to load the Portal Availability center slots for that date.</p>
                         @include('user.bookings.partials.pacc-availability-response', [
                             'componentId' => 'user-center-response',
                             'mode' => 'centers',
                             'centerSelectId' => 'test_center_id',
+                            'centerTimeInputId' => 'test_center_time',
                             'sessionSelectId' => 'exam_session_id',
                         ])
                     </div>
@@ -214,6 +216,7 @@
     const languageError = document.getElementById('language-error');
     const testCenterSelect = document.getElementById('test_center_id');
     const testCenterNameInput = document.getElementById('test_center_name');
+    const testCenterTimeInput = document.getElementById('test_center_time');
     const dhakaCenterSummary = document.getElementById('dhaka-center-summary');
     const availableDateSelect = document.getElementById('available_session_date');
     const sessionSelect = document.getElementById('exam_session_id');
@@ -251,10 +254,15 @@
         if (testCenterSelect) {
             testCenterSelect.value = '';
             testCenterSelect.dataset.name = '';
+            testCenterSelect.dataset.time = '';
         }
         if (testCenterNameInput) {
             testCenterNameInput.value = '';
             delete testCenterNameInput.dataset.centerId;
+        }
+        if (testCenterTimeInput) {
+            testCenterTimeInput.value = '';
+            delete testCenterTimeInput.dataset.centerId;
         }
         centerResponse?.clear();
     }
@@ -604,6 +612,7 @@
             city: citySelect.value,
             test_center_id: testCenterSelect.value,
             test_center_name: testCenterNameInput.value,
+            test_center_time: testCenterTimeInput?.value || '',
             exam_session_id: sessionSelect.value,
             exam_date: dateInput.value
         };
@@ -617,6 +626,7 @@
         verifyUrl.searchParams.set('exam_session_id', payload.exam_session_id);
         verifyUrl.searchParams.set('expected_test_center_id', payload.test_center_id);
         verifyUrl.searchParams.set('expected_test_center_name', payload.test_center_name);
+        verifyUrl.searchParams.set('expected_test_time', payload.test_center_time);
         verifyUrl.searchParams.set('expected_city', payload.city);
         verifyUrl.searchParams.set('expected_exam_date', payload.exam_date);
         temporaryHoldRequest = Promise.resolve().then(async function () {
