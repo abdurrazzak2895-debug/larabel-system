@@ -211,16 +211,23 @@ final class PortalAvailabilityController extends Controller
         ]);
 
         try {
+            $result = $this->availability->centersWithAccountFallback(
+                (int) $data['credential_id'],
+                $data['category_id'],
+                trim($data['city']),
+                $data['date'],
+                (int) $data['occupation_id'],
+                trim($data['language_code']),
+            );
+
             return response()->json([
                 'success' => true,
-                'data' => $this->availability->centers(
-                    (int) $data['credential_id'],
-                    $data['category_id'],
-                    trim($data['city']),
-                    $data['date'],
-                    (int) $data['occupation_id'],
-                    trim($data['language_code']),
-                ),
+                'data' => $result,
+                'fallback_used' => $result['fallback_used'],
+                'accounts_attempted' => $result['accounts_attempted'],
+                'accounts_with_data' => $result['accounts_with_data'],
+                'empty_accounts' => $result['empty_accounts'],
+                'failures' => $result['failures'],
             ]);
         } catch (Throwable $exception) {
             report($exception);

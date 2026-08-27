@@ -378,6 +378,141 @@ final class PortalAvailabilityService
     }
 
     /**
+     * Query up to the configured number of ready accounts for the same center
+     * lookup. A preferred account is attempted first, but an empty or failed
+     * account never suppresses another account's live slots.
+     *
+     * @return array{credential: array<string, mixed>, data: array<string, mixed>, fetched_at: string, fallback_used: bool, accounts_attempted: array<int, int>, accounts_with_data: array<int, int>, empty_accounts: array<int, int>, failures: array<int, array{id:int, name:string, message:string}>}
+     */
+    public function centersWithAccountFallback(
+        ?int $preferredCredentialId,
+        int|string $categoryId,
+        string $city,
+        string $date,
+        int|string $occupationId,
+        string $languageCode,
+    ): array {
+        $categoryId = trim((string) $categoryId);
+        $city = trim($city);
+        $date = trim($date);
+        $occupationId = trim((string) $occupationId);
+        $languageCode = trim($languageCode);
+        if ($categoryId === '' || $city === '' || ! preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date) || $occupationId === '' || $languageCode === '') {
+            throw new RuntimeException('Category, city, date, occupation, and language are required.');
+        }
+
+        $credentials = PortalAvailabilityCredential::query()
+            ->usable()
+            ->orderBy('last_used_at')
+            ->orderBy('id')
+            ->get();
+        if ($preferredCredentialId !== null) {
+            $credentials = $credentials->sortByDesc(fn (PortalAvailabilityCredential $credential): int => (int) ((int) $credential->id === $preferredCredentialId))->values();
+        }
+
+        $credentials = $credentials->take(max(1, min(4, (int) config('portal.center_fallback_max_accounts', 4))));
+        $merged = [];
+        $attempted = [];
+        $withData = [];
+        $empty = [];
+        $failures = [];
+        $primary = $credentials->first();
+
+        foreach ($credentials as $credential) {
+            $attempted[] = (int) $credential->id;
+            try {
+                $result = $this->centers(
+                    (int) $credential->id,
+                    $categoryId,
+                    $city,
+                    $date,
+                    $occupationId,
+                    $languageCode,
+                );
+                $rows = $result['data']['centers'] ?? [];
+                if ($rows === []) {
+                    $empty[] = (int) $credential->id;
+                    continue;
+                }
+
+                $withData[] = (int) $credential->id;
+                $this->mergeCenterRows($merged, $rows, $date);
+            } catch (\Throwable $exception) {
+                $failures[] = [
+                    'id' => (int) $credential->id,
+                    'name' => (string) $credential->name,
+                    'message' => Str::limit($exception->getMessage(), 200),
+                ];
+                Log::warning('Portal availability center fallback account failed', [
+                    'credential_id' => $credential->id,
+                    'portal_account_id' => $credential->portal_account_id,
+                    'city' => $city,
+                    'date' => $date,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        $centers = array_values($merged);
+
+        return [
+            'credential' => $primary instanceof PortalAvailabilityCredential
+                ? $this->credentialSummary($primary)
+                : [],
+            'data' => [
+                'centers' => $centers,
+                'center_count' => collect($centers)->pluck('test_center_id')->filter()->unique()->count(),
+            ],
+            'fetched_at' => now()->toIso8601String(),
+            'fallback_used' => count($attempted) > 1 || ($primary instanceof PortalAvailabilityCredential && in_array((int) $primary->id, $empty, true)),
+            'accounts_attempted' => $attempted,
+            'accounts_with_data' => $withData,
+            'empty_accounts' => $empty,
+            'failures' => $failures,
+        ];
+    }
+
+    /** @param array<string, array<string, mixed>> $merged */
+    private function mergeCenterRows(array &$merged, array $rows, string $date): void
+    {
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $centerId = trim((string) ($row['test_center_id'] ?? $row['test_center_name'] ?? ''));
+            if ($centerId === '') {
+                continue;
+            }
+
+            $key = $this->centerSlotKey($row, $date);
+            $sessionId = trim((string) ($row['exam_session_id'] ?? $row['session_id'] ?? ''));
+            $normalized = array_merge($row, [
+                'id' => $row['test_center_id'] ?? null,
+                'name' => $row['test_center_name'] ?? null,
+                'date' => trim($date),
+                'session_ids' => $sessionId !== '' ? [$sessionId] : [],
+                'session_count' => $sessionId !== '' ? 1 : 0,
+            ]);
+
+            if (! isset($merged[$key])) {
+                $merged[$key] = $normalized;
+                continue;
+            }
+
+            $merged[$key]['available_seats'] = max(
+                (int) ($merged[$key]['available_seats'] ?? 0),
+                (int) ($normalized['available_seats'] ?? 0),
+            );
+            $merged[$key]['session_ids'] = array_values(array_unique(array_merge(
+                (array) ($merged[$key]['session_ids'] ?? []),
+                (array) ($normalized['session_ids'] ?? []),
+            )));
+            $merged[$key]['session_count'] = count($merged[$key]['session_ids']);
+        }
+    }
+
+    /**
      * Run a read-only availability lookup against every usable saved account.
      * A failed account is recorded and skipped so another account can still
      * supply live booking data.

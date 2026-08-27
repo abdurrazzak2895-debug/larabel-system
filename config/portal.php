@@ -8,6 +8,7 @@ return [
     'empty_retry_attempts' => (int) env('PORTAL_AVAILABILITY_EMPTY_RETRY_ATTEMPTS', 1),
     'empty_retry_delay_ms' => (int) env('PORTAL_AVAILABILITY_EMPTY_RETRY_DELAY_MS', 250),
     'empty_retry_max_delay_ms' => (int) env('PORTAL_AVAILABILITY_EMPTY_RETRY_MAX_DELAY_MS', 2000),
+    'center_fallback_max_accounts' => (int) env('PORTAL_AVAILABILITY_CENTER_FALLBACK_MAX_ACCOUNTS', 4),
     'recovery_probe_timeout' => (int) env('PORTAL_AVAILABILITY_RECOVERY_PROBE_TIMEOUT', 15),
     'recovery_failure_threshold' => (int) env('PORTAL_AVAILABILITY_RECOVERY_FAILURE_THRESHOLD', 3),
     'recovery_circuit_minutes' => (int) env('PORTAL_AVAILABILITY_RECOVERY_CIRCUIT_MINUTES', 5),

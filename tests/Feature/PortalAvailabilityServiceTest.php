@@ -448,6 +448,226 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertSame([4, 4, 4, 4], array_column($rows, 'session_count'));
     }
 
+    public function test_center_fallback_checks_up_to_four_accounts_for_september_02_and_03(): void
+    {
+        config([
+            'portal.center_fallback_max_accounts' => 4,
+            'portal.empty_retry_attempts' => 0,
+        ]);
+
+        $credentials = collect(range(1, 4))->map(function (int $number): PortalAvailabilityCredential {
+            return PortalAvailabilityCredential::query()->create([
+                'name' => 'Fallback account '.$number,
+                'portal_account_id' => 'fallback-account-'.$number,
+                'session_cookie' => 'session=fallback-'.$number,
+                'active' => true,
+            ]);
+        });
+
+        $provider = new class implements PortalAvailabilityProviderInterface
+        {
+            /** @var array<int, array{account:string,date:string}> */
+            public array $calls = [];
+
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                return [];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => []];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                $this->calls[] = ['account' => $accountId, 'date' => $date];
+
+                if ($date === '2026-09-02' && $accountId === 'fallback-account-1') {
+                    return ['centers' => []];
+                }
+
+                if ($date === '2026-09-03' && $accountId === 'fallback-account-1') {
+                    throw new \RuntimeException('Portal availability request failed for /api/centers with HTTP 503.');
+                }
+
+                if ($date === '2026-09-03' && $accountId === 'fallback-account-2') {
+                    return ['centers' => []];
+                }
+
+                if ($date === '2026-09-02' && $accountId === 'fallback-account-2') {
+                    return ['centers' => [[
+                        'test_center_name' => 'Rajshahi TTC',
+                        'test_center_id' => 172,
+                        'test_time' => '10:00 AM',
+                        'available_seats' => 7,
+                        'exam_session_id' => 'sep02-account2-session',
+                    ]]];
+                }
+
+                if ($date === '2026-09-02' && $accountId === 'fallback-account-3') {
+                    return ['centers' => [[
+                        'test_center_name' => 'Rajshahi TTC',
+                        'test_center_id' => 172,
+                        'test_time' => '10:00 AM',
+                        'available_seats' => 11,
+                        'exam_session_id' => 'sep02-account3-session',
+                    ]]];
+                }
+
+                if ($date === '2026-09-02' && $accountId === 'fallback-account-4') {
+                    return ['centers' => [[
+                        'test_center_name' => 'Rajshahi Alternate TTC',
+                        'test_center_id' => 173,
+                        'test_time' => '11:00 AM',
+                        'available_seats' => 3,
+                        'exam_session_id' => 'sep02-account4-session',
+                    ]]];
+                }
+
+                if ($date === '2026-09-03' && $accountId === 'fallback-account-3') {
+                    return ['centers' => [[
+                        'test_center_name' => 'Rajshahi TTC',
+                        'test_center_id' => 172,
+                        'test_time' => '10:00 AM',
+                        'available_seats' => 11,
+                        'exam_session_id' => 'sep03-account3-session',
+                    ]]];
+                }
+
+                if ($date === '2026-09-03' && $accountId === 'fallback-account-4') {
+                    return ['centers' => [[
+                        'test_center_name' => 'Rajshahi Alternate TTC',
+                        'test_center_id' => 173,
+                        'test_time' => '11:00 AM',
+                        'available_seats' => 4,
+                        'exam_session_id' => 'sep03-account4-session',
+                    ]]];
+                }
+
+                return ['centers' => []];
+            }
+        };
+
+        $service = new PortalAvailabilityService($provider);
+        $sep02 = $service->centersWithAccountFallback($credentials[0]->id, 159, 'Rajshahi', '2026-09-02', 2061, 'LOABB');
+        $sep03 = $service->centersWithAccountFallback($credentials[0]->id, 159, 'Rajshahi', '2026-09-03', 2061, 'LOABB');
+
+        $this->assertSame([$credentials[0]->id, $credentials[1]->id, $credentials[2]->id, $credentials[3]->id], $sep02['accounts_attempted']);
+        $this->assertSame([$credentials[1]->id, $credentials[2]->id, $credentials[3]->id], $sep02['accounts_with_data']);
+        $this->assertSame([$credentials[0]->id], $sep02['empty_accounts']);
+        $this->assertTrue($sep02['fallback_used']);
+        $this->assertCount(2, $sep02['data']['centers']);
+        $this->assertSame('sep02-account2-session', $sep02['data']['centers'][0]['exam_session_id']);
+        $this->assertSame(11, $sep02['data']['centers'][0]['available_seats']);
+        $this->assertSame(['sep02-account2-session', 'sep02-account3-session'], $sep02['data']['centers'][0]['session_ids']);
+        $this->assertSame(2, $sep02['data']['centers'][0]['session_count']);
+        $this->assertSame(2, $sep02['data']['center_count']);
+
+        $this->assertSame([$credentials[0]->id, $credentials[1]->id, $credentials[2]->id, $credentials[3]->id], $sep03['accounts_attempted']);
+        $this->assertSame([$credentials[2]->id, $credentials[3]->id], $sep03['accounts_with_data']);
+        $this->assertSame([$credentials[1]->id], $sep03['empty_accounts']);
+        $this->assertCount(1, $sep03['failures']);
+        $this->assertCount(2, $sep03['data']['centers']);
+        $this->assertSame('sep03-account3-session', $sep03['data']['centers'][0]['exam_session_id']);
+        $this->assertSame(['sep03-account3-session'], $sep03['data']['centers'][0]['session_ids']);
+        $this->assertSame(2, $sep03['data']['center_count']);
+        $this->assertSame([
+            ['account' => 'fallback-account-1', 'date' => '2026-09-02'],
+            ['account' => 'fallback-account-2', 'date' => '2026-09-02'],
+            ['account' => 'fallback-account-3', 'date' => '2026-09-02'],
+            ['account' => 'fallback-account-4', 'date' => '2026-09-02'],
+            ['account' => 'fallback-account-1', 'date' => '2026-09-03'],
+            ['account' => 'fallback-account-2', 'date' => '2026-09-03'],
+            ['account' => 'fallback-account-3', 'date' => '2026-09-03'],
+            ['account' => 'fallback-account-4', 'date' => '2026-09-03'],
+        ], $provider->calls);
+    }
+
+    public function test_center_fallback_returns_all_empty_only_after_skipping_unusable_accounts(): void
+    {
+        config([
+            'portal.center_fallback_max_accounts' => 4,
+            'portal.empty_retry_attempts' => 0,
+        ]);
+
+        $readyOne = PortalAvailabilityCredential::query()->create([
+            'name' => 'Ready empty one',
+            'portal_account_id' => 'ready-empty-one',
+            'session_cookie' => 'session=ready-empty-one',
+            'active' => true,
+        ]);
+        PortalAvailabilityCredential::query()->create([
+            'name' => 'Inactive empty account',
+            'portal_account_id' => 'inactive-empty',
+            'session_cookie' => 'session=inactive-empty',
+            'active' => false,
+        ]);
+        PortalAvailabilityCredential::query()->create([
+            'name' => 'Circuit open account',
+            'portal_account_id' => 'circuit-open',
+            'session_cookie' => 'session=circuit-open',
+            'active' => true,
+            'circuit_open_until' => now()->addMinutes(5),
+        ]);
+        $readyTwo = PortalAvailabilityCredential::query()->create([
+            'name' => 'Ready empty two',
+            'portal_account_id' => 'ready-empty-two',
+            'session_cookie' => 'session=ready-empty-two',
+            'active' => true,
+        ]);
+
+        $calls = [];
+        $provider = new class($calls) implements PortalAvailabilityProviderInterface
+        {
+            public function __construct(private array &$calls)
+            {
+            }
+
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                return [];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => []];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                $this->calls[] = $accountId;
+                return ['centers' => []];
+            }
+        };
+
+        $result = (new PortalAvailabilityService($provider))->centersWithAccountFallback(
+            $readyOne->id,
+            159,
+            'Rajshahi',
+            '2026-09-03',
+            2061,
+            'LOABB',
+        );
+
+        $this->assertSame([$readyOne->id, $readyTwo->id], $result['accounts_attempted']);
+        $this->assertSame([], $result['accounts_with_data']);
+        $this->assertSame([$readyOne->id, $readyTwo->id], $result['empty_accounts']);
+        $this->assertSame([], $result['failures']);
+        $this->assertSame([], $result['data']['centers']);
+        $this->assertSame(['ready-empty-one', 'ready-empty-two'], $calls);
+    }
+
     public function test_portal_booking_lookup_methods_return_verified_filter_data(): void
     {
         PortalAvailabilityCredential::query()->create([
@@ -720,6 +940,85 @@ class PortalAvailabilityServiceTest extends TestCase
             ->assertJsonMissing(['session_cookie' => 'session=authorized'])
             ->assertDontSee('session=authorized');
         Http::assertSentCount(1);
+    }
+
+    public function test_admin_centers_endpoint_uses_selected_account_fallback_without_exposing_cookie(): void
+    {
+        $permission = Permission::query()->create(['name' => 'manage agencies', 'slug' => 'manage-agencies']);
+        $role = Role::query()->create(['name' => 'Portal Center Fallback Admin', 'slug' => 'portal-center-fallback-admin']);
+        $role->permissions()->attach($permission->id);
+        $admin = Admin::factory()->create();
+        $admin->assignRole($role->name);
+
+        $preferred = PortalAvailabilityCredential::query()->create([
+            'name' => 'Preferred empty account',
+            'portal_account_id' => 'controller-preferred',
+            'session_cookie' => 'session=controller-preferred',
+            'active' => true,
+        ]);
+        $fallback = PortalAvailabilityCredential::query()->create([
+            'name' => 'Fallback data account',
+            'portal_account_id' => 'controller-fallback',
+            'session_cookie' => 'session=controller-fallback',
+            'active' => true,
+        ]);
+
+        config(['portal.empty_retry_attempts' => 0]);
+        $provider = new class implements PortalAvailabilityProviderInterface
+        {
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                return [];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => []];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                return $accountId === 'controller-fallback'
+                    ? ['centers' => [[
+                        'test_center_name' => 'Rajshahi TTC',
+                        'test_center_id' => 172,
+                        'test_time' => '10:00 AM',
+                        'available_seats' => 6,
+                        'exam_session_id' => 'controller-fallback-session',
+                    ]]]
+                    : ['centers' => []];
+            }
+        };
+        $this->app->instance(PortalAvailabilityProviderInterface::class, $provider);
+        Auth::guard('admin')->login($admin);
+
+        $csrfToken = 'admin-centers-fallback-csrf-token';
+        $response = $this->withSession(['_token' => $csrfToken])
+            ->withHeader('X-CSRF-TOKEN', $csrfToken)
+            ->postJson(route('admin.portal-availability.centers'), [
+            'credential_id' => $preferred->id,
+            'category_id' => 159,
+            'city' => 'Rajshahi',
+            'date' => '2026-09-02',
+            'occupation_id' => 2061,
+            'language_code' => 'LOABB',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.data.centers.0.test_center_name', 'Rajshahi TTC')
+            ->assertJsonPath('data.data.centers.0.session_ids.0', 'controller-fallback-session')
+            ->assertJsonPath('data.fallback_used', true)
+            ->assertJsonPath('data.accounts_attempted.0', $preferred->id)
+            ->assertJsonPath('data.accounts_attempted.1', $fallback->id)
+            ->assertJsonPath('fallback_used', true)
+            ->assertJsonMissing(['session_cookie' => 'session=controller-preferred'])
+            ->assertJsonMissing(['session_cookie' => 'session=controller-fallback']);
     }
 
     public function test_admin_can_refresh_all_active_portal_accounts_from_control(): void
