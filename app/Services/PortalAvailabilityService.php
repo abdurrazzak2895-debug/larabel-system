@@ -90,6 +90,137 @@ final class PortalAvailabilityService
         return $summary;
     }
 
+    /**
+     * Probe and recover every active credential without touching booking or payment APIs.
+     *
+     * @return array{checked:int, healthy:int, recovered:int, circuit_open:int, failed:int, failures:array<int, array{id:int, name:string, message:string}>}
+     */
+    public function autoRecoverCredentials(): array
+    {
+        $summary = [
+            'checked' => 0,
+            'healthy' => 0,
+            'recovered' => 0,
+            'circuit_open' => 0,
+            'failed' => 0,
+            'failures' => [],
+        ];
+
+        $credentials = PortalAvailabilityCredential::query()
+            ->where('active', true)
+            ->whereNotNull('session_cookie')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($credentials as $credential) {
+            $summary['checked']++;
+
+            if ($credential->circuitIsOpen()) {
+                $summary['circuit_open']++;
+                continue;
+            }
+
+            try {
+                $this->probeWithRetry($credential);
+                $credential->markRecoverySuccess();
+                $summary['healthy']++;
+                continue;
+            } catch (\Throwable $firstFailure) {
+                Log::warning('Portal availability health probe failed; attempting session refresh', [
+                    'credential_id' => $credential->id,
+                    'portal_account_id' => $credential->portal_account_id,
+                    'error' => $firstFailure->getMessage(),
+                ]);
+            }
+
+            try {
+                $this->refreshCredential($credential->fresh());
+                $refreshed = $credential->fresh();
+                $this->probeWithRetry($refreshed);
+                $refreshed->markRecoverySuccess();
+                $summary['recovered']++;
+            } catch (\Throwable $exception) {
+                $current = $credential->fresh();
+                $current->markRecoveryFailure($exception->getMessage());
+                $summary['failed']++;
+                $summary['failures'][] = [
+                    'id' => (int) $current->id,
+                    'name' => (string) $current->name,
+                    'message' => Str::limit($exception->getMessage(), 200),
+                ];
+
+                Log::warning('Portal availability account recovery failed', [
+                    'credential_id' => $current->id,
+                    'portal_account_id' => $current->portal_account_id,
+                    'recovery_failures' => $current->recovery_failures,
+                    'circuit_open_until' => $current->circuit_open_until?->toIso8601String(),
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
+            usleep(max(0, (int) config('portal.rate_limit_delay_ms', 250)) * 1000);
+        }
+
+        return $summary;
+    }
+
+    private function probeWithRetry(PortalAvailabilityCredential $credential): void
+    {
+        $attempts = max(0, min(3, (int) config('portal.recovery_retry_attempts', 2)));
+        $lastException = null;
+
+        for ($attempt = 0; $attempt <= $attempts; $attempt++) {
+            if ($attempt > 0) {
+                $base = max(0, (int) config('portal.recovery_retry_delay_ms', 500));
+                $maximum = max($base, (int) config('portal.recovery_retry_max_delay_ms', 5000));
+                $delay = min($maximum, $base * (2 ** ($attempt - 1)));
+                usleep($delay * 1000);
+            }
+
+            try {
+                $occupations = $this->provider->occupations((string) $credential->session_cookie);
+                if ($occupations === []) {
+                    throw new RuntimeException('Portal availability health probe returned no occupations.');
+                }
+
+                return;
+            } catch (\Throwable $exception) {
+                $lastException = $exception;
+                if (! $this->isRecoveryRetryable($exception) || $attempt === $attempts) {
+                    throw $exception;
+                }
+            }
+        }
+
+        throw $lastException ?? new RuntimeException('Portal availability health probe failed.');
+    }
+
+    private function isRecoveryRetryable(\Throwable $exception): bool
+    {
+        $message = Str::lower($exception->getMessage());
+
+        if (Str::contains($message, [
+            'expired',
+            'not authorized',
+            'unauthorized',
+            'invalid cookie',
+            'invalid session',
+        ])) {
+            return false;
+        }
+
+        return Str::contains($message, [
+            'timeout',
+            'timed out',
+            'connection',
+            'curl',
+            'http 429',
+            'http 5',
+            'no occupations',
+            'temporarily unavailable',
+        ]);
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function credentials(): array
     {
@@ -106,6 +237,10 @@ final class PortalAvailabilityService
                 'last_used_at' => $credential->last_used_at?->toIso8601String(),
                 'last_checked_at' => $credential->last_checked_at?->toIso8601String(),
                 'last_error' => $credential->last_error,
+                'recovery_failures' => (int) $credential->recovery_failures,
+                'circuit_open_until' => $credential->circuit_open_until?->toIso8601String(),
+                'last_recovered_at' => $credential->last_recovered_at?->toIso8601String(),
+                'circuit_open' => $credential->circuitIsOpen(),
                 'has_session' => filled($credential->session_cookie),
                 'usable' => $credential->hasUsableSession(),
             ])

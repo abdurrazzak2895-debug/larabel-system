@@ -98,6 +98,11 @@
                                 @if ($credential['last_error'])
                                     <p class="mt-2 text-xs text-red-700">{{ $credential['last_error'] }}</p>
                                 @endif
+                                @if ($credential['circuit_open'])
+                                    <p class="mt-2 text-xs text-amber-700">Temporary recovery pause until {{ $credential['circuit_open_until'] }}. The scheduler will retry automatically.</p>
+                                @elseif (($credential['recovery_failures'] ?? 0) > 0)
+                                    <p class="mt-2 text-xs text-amber-700">Recovery attempts: {{ $credential['recovery_failures'] }}. Other healthy accounts remain available.</p>
+                                @endif
                             </div>
                             <div class="flex shrink-0 flex-wrap gap-2">
                                 @if ($credential['active'])

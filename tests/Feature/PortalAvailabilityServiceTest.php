@@ -232,6 +232,109 @@ class PortalAvailabilityServiceTest extends TestCase
         $this->assertSame('retry-session', $result['data']['centers'][0]['exam_session_id']);
     }
 
+    public function test_auto_recovery_retries_transient_probe_and_marks_account_healthy(): void
+    {
+        config([
+            'portal.recovery_retry_attempts' => 2,
+            'portal.recovery_retry_delay_ms' => 0,
+            'portal.recovery_retry_max_delay_ms' => 0,
+        ]);
+
+        $credential = PortalAvailabilityCredential::query()->create([
+            'name' => 'Recoverable session',
+            'portal_account_id' => 'portal-account-recoverable',
+            'session_cookie' => 'session=recoverable',
+            'active' => true,
+        ]);
+        $calls = 0;
+        $provider = new class($calls) implements PortalAvailabilityProviderInterface
+        {
+            public function __construct(private int &$calls)
+            {
+            }
+
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                return ['session_cookie' => null, 'expires_at' => null, 'rotated' => false];
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                $this->calls++;
+                if ($this->calls < 3) {
+                    throw new \RuntimeException('Portal availability request timed out.');
+                }
+
+                return [['name' => 'Load and Unload Worker', 'occupation_id' => 2061, 'category_id' => 159]];
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => []];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                return ['centers' => []];
+            }
+        };
+
+        $summary = (new PortalAvailabilityService($provider))->autoRecoverCredentials();
+        $fresh = $credential->fresh();
+
+        $this->assertSame(1, $summary['healthy']);
+        $this->assertSame(0, $summary['failed']);
+        $this->assertSame(3, $calls);
+        $this->assertSame(0, $fresh->recovery_failures);
+        $this->assertNull($fresh->circuit_open_until);
+    }
+
+    public function test_repeated_recovery_failures_open_a_temporary_circuit(): void
+    {
+        config([
+            'portal.recovery_retry_attempts' => 0,
+            'portal.recovery_failure_threshold' => 1,
+            'portal.recovery_circuit_minutes' => 5,
+        ]);
+
+        $credential = PortalAvailabilityCredential::query()->create([
+            'name' => 'Unavailable session',
+            'portal_account_id' => 'portal-account-unavailable',
+            'session_cookie' => 'session=unavailable',
+            'active' => true,
+        ]);
+
+        $provider = new class implements PortalAvailabilityProviderInterface
+        {
+            public function refreshAccount(string $sessionCookie, string $accountId): array
+            {
+                throw new \RuntimeException('Portal session expired or not authorized.');
+            }
+
+            public function occupations(string $sessionCookie): array
+            {
+                throw new \RuntimeException('Portal session expired or not authorized.');
+            }
+
+            public function searchDates(string $sessionCookie, string $accountId, int|string $categoryId, string $startFrom): array
+            {
+                return ['dates' => []];
+            }
+
+            public function centers(string $sessionCookie, string $accountId, int|string $categoryId, string $city, string $date, int|string $occupationId, string $languageCode): array
+            {
+                return ['centers' => []];
+            }
+        };
+
+        $summary = (new PortalAvailabilityService($provider))->autoRecoverCredentials();
+        $fresh = $credential->fresh();
+
+        $this->assertSame(1, $summary['failed']);
+        $this->assertSame(1, $fresh->recovery_failures);
+        $this->assertTrue($fresh->circuitIsOpen());
+    }
+
     public function test_service_preserves_portal_session_identity_and_per_center_count(): void
     {
         $credential = PortalAvailabilityCredential::query()->create([

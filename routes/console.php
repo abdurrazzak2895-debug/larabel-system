@@ -169,6 +169,44 @@ Artisan::command('portal:refresh-availability {--credential-id= : Refresh one lo
     return $summary['failed'] > 0 ? 1 : 0;
 })->purpose('Refresh active encrypted Portal Availability sessions without exposing cookies');
 
+Artisan::command('portal:recover-availability', function (): int {
+    $summary = app(\App\Services\PortalAvailabilityService::class)->autoRecoverCredentials();
+
+    $this->table([
+        'Checked',
+        'Healthy',
+        'Recovered',
+        'Circuit open',
+        'Failed',
+    ], [[
+        $summary['checked'],
+        $summary['healthy'],
+        $summary['recovered'],
+        $summary['circuit_open'],
+        $summary['failed'],
+    ]]);
+
+    if ($summary['failures'] !== []) {
+        $this->table(
+            ['Credential ID', 'Name', 'Message'],
+            collect($summary['failures'])
+                ->map(fn (array $failure): array => [
+                    $failure['id'],
+                    $failure['name'],
+                    $failure['message'],
+                ])
+                ->all(),
+        );
+    }
+
+    return $summary['failed'] > 0 ? 1 : 0;
+})->purpose('Probe and automatically recover read-only Portal Availability sessions');
+
+Schedule::command('portal:recover-availability')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10)
+    ->description('Probe and recover Portal Availability sessions without touching booking or payment flows.');
+
 $refreshInterval = max(1, min(60, (int) config('portal.refresh_interval_minutes', 10)));
 
 Schedule::command('portal:refresh-availability')
