@@ -1110,6 +1110,32 @@ class UserPanelTest extends TestCase
         $this->assertTrue($centerPosition < $sessionPosition);
     }
 
+    public function test_user_booking_detail_exposes_live_svp_cancel_action_for_saved_reservation(): void
+    {
+        $user = $this->loginAgencyUser();
+        $booking = Booking::create([
+            'agency_id' => $user->agency_id,
+            'user_id' => $user->id,
+            'occupation_id' => '2061',
+            'category_id' => '159',
+            'exam_session_id' => 'session-5582',
+            'test_center_id' => '181',
+            'test_center_name' => 'Noakhali Technical Training Centre',
+            'exam_date' => '2026-09-02',
+            'reservation_id' => '5582',
+            'booking_status' => 'failed',
+            'booking_reference' => 'booking-5582-test',
+        ]);
+
+        $response = $this->get(route('user.bookings.show', $booking));
+
+        $response->assertOk()
+            ->assertSee('Cancel SVP Reservation')
+            ->assertSee(route('user.bookings.svp-cancel', ['reservation' => '5582']), false)
+            ->assertSee('Cancel this live SVP reservation?', false)
+            ->assertDontSee(route('agency.bookings.cancel', ['booking' => $booking]), false);
+    }
+
     public function test_agency_booking_create_clears_expired_svp_jwt_but_keeps_read_only_page_available(): void
     {
         $this->loginAgencyUser();

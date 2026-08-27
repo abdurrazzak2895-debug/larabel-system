@@ -57,10 +57,20 @@
                 <p class="text-sm text-slate-500 mt-1">Created {{ $booking->created_at->format('M d, Y g:i A') }}</p>
             </div>
         </div>
-        <a href="{{ route('user.bookings.create') }}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            New Booking
-        </a>
+        <div class="flex flex-wrap items-center justify-end gap-2">
+            @if ($booking->reservation_id && ctype_digit((string) $booking->reservation_id))
+                <form method="POST" action="{{ route('user.bookings.svp-cancel', ['reservation' => $booking->reservation_id]) }}" onsubmit="return confirm('Cancel this live SVP reservation? This action cannot be undone.');">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition">
+                        Cancel SVP Reservation
+                    </button>
+                </form>
+            @endif
+            <a href="{{ route('user.bookings.create') }}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                New Booking
+            </a>
+        </div>
     </div>
 
     {{-- ===================== Progress ===================== --}}
