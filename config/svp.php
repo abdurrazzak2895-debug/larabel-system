@@ -39,6 +39,12 @@ return [
         ],
     ],
     'default_methodology'   => env('SVP_DEFAULT_METHODOLOGY', 'in_person'),
+
+    /*
+    | Echo the temporary-seat hold id back on confirm. The captured official
+    | SVP frontend payload sends null here, so this stays off by default.
+    */
+    'reservation_include_hold' => (bool) env('SVP_RESERVATION_INCLUDE_HOLD', false),
     // Some SVP deployments omit earlier dates from available_dates even though
     // the date-specific exam_sessions endpoint still returns valid seats.
     'session_date_probe_backfill_days' => (int) env('SVP_SESSION_DATE_PROBE_BACKFILL_DAYS', 7),

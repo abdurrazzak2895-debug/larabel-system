@@ -543,31 +543,42 @@ class BookingService
     }
 
     /**
-     * Build the SVP reservation payload. The real session token determines the
-     * center/date; test_center_id is therefore translated to SVP's site_id.
+     * Build the SVP reservation payload.
+     *
+     * Mirrors the official SVP frontend's confirm step byte-for-byte. A network
+     * trace of svp-international.pacc.sa captures exactly:
+     *
+     *   { "exam_session_id": 1554447, "occupation_id": 2061,
+     *     "language_code": "LOABB", "methodology": "in_person",
+     *     "site_id": null, "site_city": null, "hold_id": null }
+     *
+     * The UI deliberately nulls site_id / site_city / hold_id so that SVP
+     * resolves the test centre (and its exam engine) purely from
+     * `exam_session_id`. Forwarding the UI's own values used to make SVP confirm
+     * the booking in a different centre within the same city, and this app's
+     * earlier `test_center_id` / `country_id` / declaration fields are not part
+     * of the captured contract either, so they are no longer sent.
      *
      * @param array<string, mixed> $data
      * @return array<string, mixed>
      */
     protected function reservationPayload(array $data): array
     {
-        return array_filter([
-            'exam_session_id'       => (string) ($data['exam_session_id'] ?? ''),
-            'occupation_id'         => $this->numericOrString($data['occupation_id'] ?? null),
-            'language_code'         => strtoupper((string) ($data['language_code'] ?? config('svp.default_language_code', 'LOABB'))),
-            'methodology'           => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
-            // SVP resolves the centre from `test_center_id`. Sending `site_id` /
-            // `site_city` instead made it look up a site without an exam engine
-            // and the reservation was rejected live with
-            // `reservation_exam_engine_snapshot: Exam engine code not found`
-            // (verified 2026-10-02 against svp-international.pacc.sa).
-            'test_center_id'        => isset($data['test_center_id']) ? (string) $data['test_center_id'] : null,
-            'hold_id'               => isset($data['temporary_hold_id']) ? $this->numericOrString($data['temporary_hold_id']) : null,
-            'country_id'            => (int) config('svp.country_id', 78),
-            'accept_declaration'    => true,
-            'info_confirmation'    => true,
-            'practical_confirmation' => true,
-        ], static fn ($value): bool => $value !== null && $value !== '');
+        return [
+            'exam_session_id' => (string) ($data['exam_session_id'] ?? ''),
+            'occupation_id'   => $this->numericOrString($data['occupation_id'] ?? null),
+            'language_code'   => strtoupper((string) ($data['language_code'] ?? config('svp.default_language_code', 'LOABB'))),
+            'methodology'     => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
+            // Seat holds are created up-front for the operator's benefit, but the
+            // captured contract never echoes the hold id back on confirm. Set
+            // SVP_RESERVATION_INCLUDE_HOLD=true to opt back in without a deploy.
+            'hold_id'         => (bool) config('svp.reservation_include_hold', false)
+                && isset($data['temporary_hold_id'])
+                ? $this->numericOrString($data['temporary_hold_id'])
+                : null,
+            'site_id'         => null,
+            'site_city'       => null,
+        ];
     }
 
     protected function numericOrString(mixed $value): mixed
