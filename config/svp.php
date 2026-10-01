@@ -66,4 +66,40 @@ return [
     'log_requests'  => (bool) env('SVP_LOG_REQUESTS', true),
     'log_channel'   => env('SVP_LOG_CHANNEL', 'daily'),
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Email OTP automation
+    |--------------------------------------------------------------------------
+    | SVP answers the login call with {"required_2fa": true} and mails a code.
+    | When the switch below is on, the code is read from the mailbox and the
+    | login is completed without a human. Only the email channel is automated.
+    */
+    'otp_auto_verify' => filter_var(env('SVP_OTP_AUTO_VERIFY', false), FILTER_VALIDATE_BOOL),
+    'otp_auto_timeout' => (int) env('SVP_OTP_AUTO_TIMEOUT', 90),
+    'otp_auto_poll_seconds' => (int) env('SVP_OTP_AUTO_POLL_SECONDS', 5),
+    'otp_mailbox' => [
+        // dakbox | imap | none
+        'driver' => env('SVP_OTP_MAILBOX_DRIVER', 'none'),
+        'dakbox' => [
+            'base_url' => env('SVP_OTP_DAKBOX_URL', 'https://dakbox.net'),
+            // API token from the DakBox dashboard (Bearer auth on /api/otp/get).
+            'token' => env('SVP_OTP_DAKBOX_TOKEN'),
+            // Username only, without @dakbox.net.
+            'username' => env('SVP_OTP_DAKBOX_USERNAME'),
+            'timeout' => (int) env('SVP_OTP_DAKBOX_TIMEOUT', 30),
+        ],
+        'imap' => [
+            'host' => env('SVP_OTP_IMAP_HOST'),
+            'port' => (int) env('SVP_OTP_IMAP_PORT', 993),
+            'username' => env('SVP_OTP_IMAP_USER'),
+            'password' => env('SVP_OTP_IMAP_PASS'),
+            'folder' => env('SVP_OTP_IMAP_FOLDER', 'INBOX'),
+            'verify_peer' => filter_var(env('SVP_OTP_IMAP_VERIFY_PEER', false), FILTER_VALIDATE_BOOL),
+            'fingerprint' => env('SVP_OTP_IMAP_FINGERPRINT'),
+        ],
+    ],
+    'otp_test_email' => env('SVP_OTP_TEST_EMAIL'),
+    'otp_test_password' => env('SVP_OTP_TEST_PASSWORD'),
+
 ];

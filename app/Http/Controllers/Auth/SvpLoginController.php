@@ -83,6 +83,26 @@ class SvpLoginController extends Controller
             'otp_method' => $request->input('otp_method', 'email'),
         ]);
 
+        // Email OTP automation: when a mailbox is configured, read the code SVP
+        // just mailed and finish the login instead of showing the manual form.
+        $otpMethod = $request->input('otp_method', 'email');
+        $autoVerifier = app(OtpAutoVerifier::class);
+
+        if ($otpMethod === 'email' && $autoVerifier->enabled()) {
+            $code = $autoVerifier->awaitCode(time() - 60);
+
+            if ($code !== null) {
+                Log::info('SVP OTP auto-verified from mailbox', ['source' => $code['source']]);
+
+                return $this->verifyOtp($request->merge([
+                    'otp_code'   => $code['code'],
+                    'otp_method' => 'email',
+                ]));
+            }
+
+            Log::warning('SVP OTP automation found no code; falling back to the manual OTP form');
+        }
+
         return redirect()->route('svp.otp.form');
     }
 
