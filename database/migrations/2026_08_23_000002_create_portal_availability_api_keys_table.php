@@ -24,7 +24,9 @@ return new class extends Migration
             $table->unsignedInteger('rate_limit_per_minute')->default(60);
             $table->timestamps();
 
-            $table->index(['portal_availability_credential_id', 'revoked_at']);
+            // Explicit short name: the generated one is 79 characters and MySQL
+            // rejects identifiers longer than 64.
+            $table->index(['portal_availability_credential_id', 'revoked_at'], 'pa_api_keys_credential_revoked_idx');
         });
     }
 
