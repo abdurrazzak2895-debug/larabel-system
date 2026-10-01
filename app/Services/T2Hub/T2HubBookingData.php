@@ -235,6 +235,35 @@ final class T2HubBookingData
      * provenance check behind the pre-hold guard: the ID must be present in the
      * centre-scoped list, so a caller cannot point the hold at another centre.
      */
+    /**
+     * Return the live centre-scoped session row for this exam-session ID, or null
+     * when the ID is not part of the requested centre/city/date list.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function sessionSnapshot(
+        int|string $categoryId,
+        string $city,
+        string $date,
+        string $testCenterId,
+        string $examSessionId,
+    ): ?array {
+        $wanted = trim($examSessionId);
+        if ($wanted === '' || trim($city) === '' || trim($date) === '') {
+            return null;
+        }
+
+        foreach ($this->sessionRows($categoryId, $city, $date, $testCenterId) as $row) {
+            foreach (['exam_session_id', 'id', 'session_id'] as $key) {
+                if (trim((string) ($row[$key] ?? '')) === $wanted) {
+                    return $row;
+                }
+            }
+        }
+
+        return null;
+    }
+
     public function confirmsSessionCenter(
         int|string $categoryId,
         string $city,
@@ -242,20 +271,7 @@ final class T2HubBookingData
         string $testCenterId,
         string $examSessionId,
     ): bool {
-        $wanted = trim($examSessionId);
-        if ($wanted === '' || trim($city) === '' || trim($date) === '') {
-            return false;
-        }
-
-        foreach ($this->sessionRows($categoryId, $city, $date, $testCenterId) as $row) {
-            foreach (['exam_session_id', 'id', 'session_id'] as $key) {
-                if (trim((string) ($row[$key] ?? '')) === $wanted) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return $this->sessionSnapshot($categoryId, $city, $date, $testCenterId, $examSessionId) !== null;
     }
 
     public function sessionRows(int|string $categoryId, string $city, ?string $date, ?string $testCenterId = null): array

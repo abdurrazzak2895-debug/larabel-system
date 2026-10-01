@@ -80,17 +80,26 @@ class SvpSessionVerificationController extends Controller
         // on the exam-session detail, and without this check such a session
         // could not be confirmed at all.
         $snapshotConfirmed = false;
+        $centerCity = null;
         if (! empty($data['category_id']) && $this->t2hub->enabled()) {
             try {
-                $snapshotConfirmed = $this->t2hub->confirmsSessionCenter(
+                $snapshotRow = $this->t2hub->sessionSnapshot(
                     (string) $data['category_id'],
                     (string) ($data['expected_city'] ?? ''),
                     (string) ($data['expected_exam_date'] ?? ''),
                     $data['expected_test_center_id'],
                     $data['exam_session_id'],
                 );
+                $snapshotConfirmed = $snapshotRow !== null;
+                $centerCity = trim((string) (
+                    data_get($snapshotRow, 'raw.center_city')
+                    ?? data_get($snapshotRow, 'raw.site_city')
+                    ?? data_get($snapshotRow, 'raw.test_center.city')
+                    ?? ''
+                )) ?: null;
             } catch (\Throwable $e) {
                 $snapshotConfirmed = false;
+                $centerCity = null;
             }
         }
 
@@ -111,6 +120,7 @@ class SvpSessionVerificationController extends Controller
                 $data['expected_test_center_name'] ?? null,
                 $data['expected_test_time'] ?? null,
                 $snapshotConfirmed,
+                $centerCity,
             );
 
             if (($result['verified'] ?? false) !== true) {
@@ -123,6 +133,7 @@ class SvpSessionVerificationController extends Controller
                     'expected_test_time' => $data['expected_test_time'] ?? null,
                     'category_id' => $data['category_id'] ?? null,
                     'session_center_snapshot_confirmed' => $snapshotConfirmed,
+                    'session_center_city' => $centerCity,
                     'upstream_status' => $result['upstream_status'] ?? null,
                     'actual' => $result['actual'] ?? null,
                     'checks' => $result['checks'] ?? null,

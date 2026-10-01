@@ -99,7 +99,7 @@ final class SvpAutoSession
         $method = (string) config('svp.auto_login.otp_method', 'email');
         $result = $this->otp->login($credentials['email'], $credentials['password'], $method);
         $body = (array) ($result['body'] ?? []);
-        $token = trim((string) data_get($body, 'access_token', ''));
+        $token = (string) ($this->findToken($body) ?? '');
 
         if ($token === '') {
             Log::warning('SVP auto login did not return an access token', [
@@ -132,6 +132,28 @@ final class SvpAutoSession
     public function forget(Request $request): void
     {
         $request->session()->forget(self::SESSION_KEYS);
+    }
+
+    /**
+     * SVP returns the bearer token under different keys depending on the flow
+     * (token / access_token / access), so search the envelope the same way the
+     * interactive login does.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function findToken(array $data): ?string
+    {
+        foreach ($data as $key => $value) {
+            if (in_array($key, ['token', 'access_token', 'access'], true) && is_string($value) && $value !== '') {
+                return $value;
+            }
+
+            if (is_array($value) && ($nested = $this->findToken($value)) !== null) {
+                return $nested;
+            }
+        }
+
+        return null;
     }
 
     private function expired(string $token): bool

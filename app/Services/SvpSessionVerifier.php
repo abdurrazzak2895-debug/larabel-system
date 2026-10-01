@@ -54,6 +54,7 @@ class SvpSessionVerifier
         ?string $expectedCenterName = null,
         ?string $expectedTestTime = null,
         bool $snapshotConfirmed = false,
+        ?string $alternateCity = null,
     ): array {
         return $this->evaluate(
             $this->booking->examSession($token, $examSessionId),
@@ -65,6 +66,7 @@ class SvpSessionVerifier
             $expectedTestTime,
             true,
             $snapshotConfirmed,
+            $alternateCity,
         );
     }
 
@@ -81,6 +83,7 @@ class SvpSessionVerifier
         ?string $expectedTestTime,
         bool $allowScopedCenterFallback,
         bool $snapshotConfirmed = false,
+        ?string $alternateCity = null,
     ): array {
         $payload = $response->getData(true);
         $status = $response->getStatusCode();
@@ -98,9 +101,21 @@ class SvpSessionVerifier
         $centerNameMatch = $center['id'] === null
             && filled($expectedCenterName)
             && $this->normalizeLabel($center['name']) === $this->normalizeLabel($expectedCenterName);
-        $cityMatch = $expectedCity === null || trim($expectedCity) === ''
+        // SVP names the area its own way (Bogura/Bogra, Cumilla/Comilla, ...)
+        // and a session may be listed under a division city while the centre
+        // itself sits in another district. The server-side snapshot therefore
+        // contributes the centre's own city as an accepted alias.
+        $cityCandidates = [];
+        foreach ([$expectedCity, $snapshotConfirmed ? $alternateCity : null] as $candidate) {
+            $normalized = $this->normalizeCity($candidate);
+            if ($normalized !== '') {
+                $cityCandidates[$normalized] = true;
+            }
+        }
+        $actualCity = $this->normalizeCity($center['city']);
+        $cityMatch = $cityCandidates === [] || $actualCity === ''
             ? null
-            : ($center['city'] !== null && mb_strtolower($center['city']) === mb_strtolower(trim($expectedCity)));
+            : isset($cityCandidates[$actualCity]);
         // Some SVP deployments never expose a test centre on the exam-session
         // detail, so the centre can only be established from the live session
         // list that produced this ID. That provenance is confirmed server-side
@@ -120,9 +135,14 @@ class SvpSessionVerifier
         $dateMatch = $normalizedExpectedDate === null
             ? null
             : ($actualDate !== null && $actualDate === $normalizedExpectedDate);
+        // The authoritative exam-session detail carries only the date, the
+        // category, and a city-level test centre -- it exposes no session time.
+        // A missing upstream time means "not contradicted", not "mismatched":
+        // the exact slot comes from the live session list that produced this ID.
+        // Only a time that SVP really reports can fail this check.
         $timeMatch = $normalizedExpectedTime === null
             ? null
-            : ($actualTime !== null && $actualTime === $normalizedExpectedTime);
+            : ($actualTime === null ? null : $actualTime === $normalizedExpectedTime);
         $upstreamSuccess = $status >= 200 && $status < 300;
 
 
@@ -161,6 +181,8 @@ class SvpSessionVerifier
                 'center_snapshot_fallback' => $snapshotCenterFallback,
                 'session_center_snapshot_confirmed' => $snapshotConfirmed,
                 'city_match' => $cityMatch,
+                'city_candidates' => array_keys($cityCandidates),
+                'city_actual' => $actualCity,
                 'date_match' => $dateMatch,
                 'time_match' => $timeMatch,
                 'expected_time_valid' => $expectedTimeValid,
@@ -364,6 +386,31 @@ class SvpSessionVerifier
         }
 
         return null;
+    }
+
+    /**
+     * Canonical form of a Bangladeshi place name so spelling variants compare
+     * equal (Bogura == Bogra, Cumilla == Comilla, Chattogram == Chittagong).
+     */
+    private function normalizeCity(mixed $value): string
+    {
+        if (! is_string($value)) {
+            return '';
+        }
+
+        $city = strtolower(preg_replace('/[^a-z]/i', '', $value) ?? '');
+        $aliases = [
+            'bogura' => 'bogra',
+            'chattogram' => 'chittagong',
+            'cumilla' => 'comilla',
+            'barishal' => 'barisal',
+            'jashore' => 'jessore',
+            'mymensingh' => 'mymensing',
+            'coxsbazar' => 'coxsbazar',
+            'netrokona' => 'netrakona',
+        ];
+
+        return $aliases[$city] ?? $city;
     }
 
     private function normalizeLabel(?string $value): string
