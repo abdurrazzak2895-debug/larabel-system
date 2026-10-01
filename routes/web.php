@@ -54,6 +54,21 @@ Route::middleware('web')->group(function () {
     Route::post('/svp/otp/resend', [SvpLoginController::class, 'resendOtp'])->middleware('throttle:3,1')->name('svp.otp.resend');
 
     // -------------------------------
+    // Booking data — live T2Hub agent catalogue
+    // occupations → cities → available dates → centres → sessions
+    // -------------------------------
+    Route::prefix('booking-data')->name('booking-data.')->middleware('auth.multi')->group(function () {
+        Route::get('/status', [\App\Http\Controllers\T2HubController::class, 'status'])->name('status');
+        Route::post('/session', [\App\Http\Controllers\T2HubController::class, 'refresh'])->middleware('throttle:6,1')->name('session.refresh');
+        Route::get('/occupations', [\App\Http\Controllers\T2HubController::class, 'occupations'])->name('occupations');
+        Route::get('/cities', [\App\Http\Controllers\T2HubController::class, 'cities'])->name('cities');
+        Route::get('/dates', [\App\Http\Controllers\T2HubController::class, 'dates'])->name('dates');
+        Route::get('/centers', [\App\Http\Controllers\T2HubController::class, 'centers'])->name('centers');
+        Route::get('/sessions', [\App\Http\Controllers\T2HubController::class, 'sessions'])->name('sessions');
+        Route::match(['get', 'post'], '/bootstrap', [\App\Http\Controllers\T2HubController::class, 'bootstrap'])->name('bootstrap');
+    });
+
+    // -------------------------------
     // Super Admin panel
     // -------------------------------
     Route::prefix('admin')->name('admin.')->middleware(['auth.multi', 'CheckPermission:manage_agencies'])->group(function () {
