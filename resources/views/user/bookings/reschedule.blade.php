@@ -28,7 +28,7 @@
         </a>
         <div>
             <h2 class="text-xl font-bold text-slate-900">Reschedule SVP Reservation #{{ $reservation }}</h2>
-            <p class="text-sm text-slate-500 mt-0.5">Choose a new city, test center, date, and session. SVP keeps the same reservation ID.</p>
+            <p class="text-sm text-slate-500 mt-0.5">Same reservation ID</p>
         </div>
     </div>
 
@@ -45,8 +45,8 @@
             </div>
             <div class="md:text-right text-sm text-indigo-800">
                 <p>Current exam date</p>
-                <p class="font-semibold text-indigo-950">{{ $context['current_exam_date'] ?? 'Not supplied by SVP' }}</p>
-                <p class="mt-2 text-xs">Occupation and category stay fixed. Location and schedule are selectable below.</p>
+                <p class="font-semibold text-indigo-950">—</p>
+                <p class="mt-2 text-xs">Fixed</p>
             </div>
         </div>
     </div>
@@ -61,7 +61,7 @@
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                 <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Portal wallet balance</p>
                 <p class="text-2xl font-bold text-slate-900">{{ number_format($wallet?->available_balance ?? 0, 2) }} <span class="text-sm font-medium text-slate-500">BDT</span></p>
-                <p class="text-xs text-slate-500 mt-3">The portal booking fee is separate from SVP credit or card payment and is deducted only after SVP confirms the reschedule.</p>
+                <p class="text-xs text-slate-500 mt-3">Separate fee</p>
             </div>
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                 <label for="candidate_id" class="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Candidate / SVP profile</label>
@@ -73,7 +73,7 @@
                 </select>
                 @error('candidate_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 @if ($candidates->isEmpty())
-                    <p class="text-xs text-amber-600 mt-2">No candidate profile is synced. Sign in with SVP again before rescheduling.</p>
+                    <p class="text-xs text-amber-600 mt-2">Log in to sync</p>
                 @endif
             </div>
         </div>
@@ -104,24 +104,24 @@
         </div>
 
         <div class="rounded-xl border border-slate-200 bg-white p-4">
-            <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
+            <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">Language</label>
             <select name="language_code" id="language_code" required disabled class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
-                <option value="">Select a live SVP exam language…</option>
+                <option value="">Select language</option>
             </select>
             <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
-            <p class="text-xs text-slate-400 mt-1">Languages are loaded live from Portal Availability for the fixed reservation occupation. No language is preselected.</p>
+            <p class="text-xs text-slate-400 mt-1">Live list</p>
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
             <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC reschedule</p>
             <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
                 @include('user.bookings.partials.svp-calendar', ['calendarId' => 'reschedule-availability-calendar'])
                 <select id="available_session_date" aria-hidden="true" tabindex="-1"
                     class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <option value="">Select a live available date first…</option>
+                    <option value="">Select date</option>
                 </select>
-                <p id="date-hint" class="text-xs text-slate-400 mt-1">Only live Portal Availability dates for the selected city are clickable. Pick a date to load that date’s available center slots.</p>
+                <p id="date-hint" class="text-xs text-slate-400 mt-1">Live dates only</p>
             </div>
 
             <div id="test-center-section" style="display:none;" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -131,7 +131,7 @@
                 <input type="hidden" name="test_center_id" id="test_center_id" value="{{ old('test_center_id') }}">
                 <input type="hidden" name="test_center_name" id="test_center_name" value="{{ old('test_center_name') }}">
                 <input type="hidden" name="test_center_time" id="test_center_time" value="{{ old('test_center_time') }}">
-                <p id="center-summary" class="text-xs text-slate-500 mt-1">Select a live date to load every Portal Availability center slot for that date.</p>
+                <p id="center-summary" class="text-xs text-slate-500 mt-1">Pick a date</p>
                 @include('user.bookings.partials.pacc-availability-response', [
                     'componentId' => 'reschedule-center-response',
                     'mode' => 'centers',
@@ -175,8 +175,8 @@
 
             <div id="svp-credit-panel" class="rounded-xl border border-sky-200 bg-sky-50 p-4">
                 <p class="text-sm font-semibold text-sky-900">SVP reservation payment routing</p>
-                <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Select a candidate to check the live SVP credit. If no credit is available, confirmation opens the official SVP card-payment page.</p>
-                <p class="text-xs text-sky-700 mt-2">SVP credit/card payment is separate from the portal wallet fee.</p>
+                <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Live credit</p>
+                <p class="text-xs text-sky-700 mt-2">Live list</p>
             </div>
         </div>
 
@@ -363,7 +363,7 @@
             setLoading(language, true);
             const body = await getJson('{{ route('user.bookings.lookup.languages') }}?occupation_id=' + encodeURIComponent(occupation.value));
             const items = Array.isArray(body?.data?.languages) ? body.data.languages : (Array.isArray(body?.data) ? body.data : []);
-            language.innerHTML = '<option value="">Select a live SVP exam language…</option>';
+            language.innerHTML = '<option value="">Select language</option>';
             items.forEach(function (item) {
                 const code = item.code || item.language_code || item.id || '';
                 if (!code) return;
@@ -436,7 +436,7 @@
             centerSummary.textContent = items.length
                 ? (directSvpFallback
                     ? 'Portal Availability had no slot; active SVP authentication confirmed ' + items.length + ' center slot' + (items.length === 1 ? '' : 's') + ' for ' + city.value + ' on ' + dateValue + '. Click one card to load exact SVP sessions.'
-                    : 'Portal Availability returned ' + items.length + ' center slot' + (items.length === 1 ? '' : 's') + ' for ' + city.value + ' on ' + dateValue + '. Click one card to load exact SVP sessions.')
+                    : items.length + ' center' + (items.length === 1 ? '' : 's'))
                 : (directSvpFallback
                     ? 'Active SVP authentication returned no exact session for ' + city.value + ' on ' + dateValue + '.'
                     : 'No center slots returned for ' + city.value + ' on ' + dateValue + '.');

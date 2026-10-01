@@ -11,7 +11,7 @@
         </a>
         <div>
             <h2 class="text-xl font-bold text-slate-900">New Booking</h2>
-            <p class="text-sm text-slate-500 mt-0.5">Complete the form below to book an exam session through SVP.</p>
+            <p class="text-sm text-slate-500 mt-0.5">—</p>
         </div>
     </div>
 
@@ -44,7 +44,7 @@
                 </select>
                 @error('candidate_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 @if ($candidates->isEmpty())
-                    <p class="text-xs text-amber-600 mt-2">No candidate synced yet. Complete SVP login to auto-generate your profile as a candidate.</p>
+                    <p class="text-xs text-amber-600 mt-2">Log in to sync</p>
                 @endif
             </div>
         </div>
@@ -72,7 +72,7 @@
                             @endphp
                             @foreach ($occ as $o)
                                 @php $o = is_array($o) ? $o : (array) $o; @endphp
-                                <option value="{{ $o['id'] ?? $o['occupation_id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? $o['occupation_id'] ?? '') ? 'selected' : '' }}>{{ $o['name'] ?? $o['english_name'] ?? $o['arabic_name'] ?? $o['title'] ?? $o['id'] ?? $o['occupation_id'] ?? '' }}</option>
+                                <option value="{{ $o['id'] ?? $o['occupation_id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? $o['occupation_id'] ?? '') ? 'selected' : '' }}>—</option>
                             @endforeach
                         </select>
                         <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -110,35 +110,35 @@
         </div>
 
         <div class="rounded-xl border border-slate-200 bg-white p-4">
-            <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">SVP exam language</label>
+            <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">Language</label>
             <select name="language_code" id="language_code" required disabled class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
-                <option value="">Select a live SVP exam language…</option>
+                <option value="">Select language</option>
             </select>
             <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
-            <p class="text-xs text-slate-400 mt-1">Languages are loaded live from Portal Availability for the selected occupation. No language is preselected.</p>
+            <p class="text-xs text-slate-400 mt-1">Live list</p>
         </div>
 
         {{-- Session, date, and live SVP payment routing --}}
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC booking</p>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Sessions</p>
             <div class="grid grid-cols-1 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Available Exam Date</label>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
                     @include('user.bookings.partials.svp-calendar', ['calendarId' => 'booking-availability-calendar'])
                     <select id="available_session_date" aria-hidden="true" tabindex="-1"
                         class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select a live available date first…</option>
+                        <option value="">Select date</option>
                     </select>
-                    <p class="text-xs text-slate-400 mt-1">Only dates returned live by Portal Availability for the selected city are clickable. Pick a date, then choose a center slot and one of its verified SVP sessions.</p>
+                    <p class="text-xs text-slate-400 mt-1">Live dates only</p>
 
                     <div id="test-center-section" style="display:none;" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                         <div class="mb-2 flex items-center justify-between gap-3">
-                            <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Test Center</span>
+                            <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Center</span>
                         </div>
                         <input type="hidden" name="test_center_id" id="test_center_id" value="">
                         <input type="hidden" name="test_center_name" id="test_center_name" value="">
                         <input type="hidden" name="test_center_time" id="test_center_time" value="">
-                        <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Select a live date to load the Portal Availability center slots for that date.</p>
+                        <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Pick a date</p>
                         @include('user.bookings.partials.pacc-availability-response', [
                             'componentId' => 'user-center-response',
                             'mode' => 'centers',
@@ -171,7 +171,7 @@
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div>
                         <p class="text-sm font-semibold text-amber-900">Temporary SVP seat hold</p>
-                        <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">Select a session and date, then create a temporary hold before confirming the booking.</p>
+                        <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">Select a session</p>
                     </div>
                     <button type="button" id="create-temporary-hold" disabled
                         class="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition">
@@ -182,8 +182,8 @@
             <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
             <div id="svp-credit-panel" class="rounded-xl border border-sky-200 bg-sky-50 p-4">
                 <p class="text-sm font-semibold text-sky-900">SVP reservation credit</p>
-                <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Select a candidate and occupation to check the live SVP credit. If no credit is available, confirmation will open the official SVP card-payment page.</p>
-                <p class="text-xs text-sky-700 mt-2">The payable amount is set by SVP after reservation creation; it is not entered in this form.</p>
+                <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Live credit</p>
+                <p class="text-xs text-sky-700 mt-2">SVP sets the amount</p>
             </div>
         </div>
 
@@ -285,7 +285,7 @@
     function mountAvailabilityCalendar() {
         if (!window.SvpCalendar || availabilityCalendar) return;
         availabilityCalendar = window.SvpCalendar.create('booking-availability-calendar', {
-            emptyText: 'Pick a test center to load its open exam dates.',
+            emptyText: 'Pick a center',
             onSelect: function (date) {
                 if (!date || date === availableDateSelect.value) return;
                 availableDateSelect.value = date;
@@ -300,7 +300,7 @@
         const lookupKey = String(occupationId || '');
         if (languageLookupInFlightKey === lookupKey) return;
         languageLookupInFlightKey = lookupKey;
-        languageSelect.innerHTML = '<option value="">Select a live SVP exam language…</option>';
+        languageSelect.innerHTML = '<option value="">Select language</option>';
         languageSelect.value = '';
         languageSelect.disabled = true;
         if (languageError) languageError.classList.add('hidden');
@@ -941,7 +941,7 @@
             populateSelect(citySelect, []);
             populateSelect(categorySelect, []);
             if (languageSelect) {
-                languageSelect.innerHTML = '<option value="">Select a live SVP exam language…</option>';
+                languageSelect.innerHTML = '<option value="">Select language</option>';
                 languageSelect.value = '';
                 languageSelect.disabled = true;
             }
@@ -1100,7 +1100,7 @@
                 dhakaCenterSummary.textContent = centers.length
                     ? (directSvpFallback
                         ? 'Portal Availability had no slot; active SVP authentication confirmed ' + centers.length + ' center slot' + (centers.length === 1 ? '' : 's') + ' for ' + city + ' on ' + date + '. Select one to load exact SVP sessions.'
-                        : 'Portal Availability returned ' + centers.length + ' center slot' + (centers.length === 1 ? '' : 's') + ' for ' + city + ' on ' + date + '. Select one to load exact SVP sessions.')
+                        : centers.length + ' center' + (centers.length === 1 ? '' : 's'))
                     : (directSvpFallback
                         ? 'Active SVP authentication returned no exact session for ' + city + ' on ' + date + '.'
                         : 'No center slots returned for ' + city + ' on ' + date + '.');

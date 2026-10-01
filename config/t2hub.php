@@ -42,6 +42,27 @@ return [
     'auto_login' => filter_var(env('T2HUB_AUTO_LOGIN', true), FILTER_VALIDATE_BOOL),
 
     // Log every step of the login/fetch flow (troubleshooting).
+    /*
+    |--------------------------------------------------------------------------
+    | Booking catalogue cache
+    |--------------------------------------------------------------------------
+    |
+    | Cities, dates, centres and sessions are identical for every user of the
+    | same category/city, so they are cached briefly to keep the booking and
+    | reschedule wizards fast. Holds and confirmations are POSTs and are never
+    | cached.
+    |
+    */
+    'cache_enabled' => filter_var(env('T2HUB_CACHE_ENABLED', true), FILTER_VALIDATE_BOOL),
+    'cache_ttl' => (int) env('T2HUB_CACHE_TTL', 120),
+    'cache_ttl_overrides' => [
+        'occupations' => (int) env('T2HUB_CACHE_TTL_OCCUPATIONS', 600),
+        'cities' => (int) env('T2HUB_CACHE_TTL_CITIES', 600),
+        'test-centers' => (int) env('T2HUB_CACHE_TTL_CENTERS', 300),
+        'available-dates' => (int) env('T2HUB_CACHE_TTL_DATES', 90),
+        'exam-sessions' => (int) env('T2HUB_CACHE_TTL_SESSIONS', 45),
+    ],
+
     'debug' => filter_var(env('T2HUB_DEBUG', false), FILTER_VALIDATE_BOOL),
 
     // Which upstream the booking chain reads from: t2hub | svp.

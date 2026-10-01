@@ -130,7 +130,7 @@
         <div class="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
                 <h2 class="text-base font-semibold text-slate-800">SVP My Bookings</h2>
-                <p class="text-xs text-slate-400 mt-1">Live reservations and official tickets from your authenticated SVP account.</p>
+                <p class="text-xs text-slate-400 mt-1">Live list</p>
             </div>
             @if ($svpUserId)
                 <span class="inline-flex items-center gap-1.5 text-xs text-slate-500">
@@ -265,7 +265,7 @@
                                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                     </div>
                                     <p class="text-sm font-medium text-slate-600">No live SVP reservations found</p>
-                                    <p class="text-xs text-slate-400 mt-1">Completed reservations will appear here with their official ticket.</p>
+                                    <p class="text-xs text-slate-400 mt-1">Live list</p>
                                 </td>
                             </tr>
                         @endforelse

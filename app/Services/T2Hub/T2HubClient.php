@@ -3,6 +3,7 @@
 namespace App\Services\T2Hub;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -219,12 +220,45 @@ class T2HubClient
     /**
      * GET a booking API path, e.g. get('/pacc/occupations', ['per_page' => 10000]).
      *
+     * Booking catalogue lookups (cities, dates, centres, sessions) are read-only
+     * and identical for every user of the same category/city, so they are cached
+     * for a short window. That keeps the booking and reschedule wizards
+     * responsive instead of paying a full T2Hub round trip on every click.
+     *
      * @param  array<string, mixed>  $params
      * @return array<string, mixed>
      */
     public function get(string $path, array $params = [], bool $retry = true): array
     {
-        return $this->send('GET', $path, $params, null, $retry);
+        if (! (bool) config('t2hub.cache_enabled', true)) {
+            return $this->send('GET', $path, $params, null, $retry);
+        }
+
+        $ttl = $this->cacheTtl($path);
+        if ($ttl <= 0) {
+            return $this->send('GET', $path, $params, null, $retry);
+        }
+
+        $key = 't2hub:get:'.sha1($path.'|'.json_encode($params));
+
+        return Cache::remember($key, $ttl, fn (): array => $this->send('GET', $path, $params, null, $retry));
+    }
+
+    /**
+     * Cache TTL (seconds) for a GET path. `t2hub.cache_ttl_overrides` wins over
+     * the default `t2hub.cache_ttl`.
+     */
+    private function cacheTtl(string $path): int
+    {
+        $overrides = (array) config('t2hub.cache_ttl_overrides', []);
+
+        foreach ($overrides as $needle => $ttl) {
+            if (str_contains($path, (string) $needle)) {
+                return (int) $ttl;
+            }
+        }
+
+        return (int) config('t2hub.cache_ttl', 120);
     }
 
     /**
