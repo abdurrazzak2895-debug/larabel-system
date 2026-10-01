@@ -17,7 +17,9 @@ install -d -m 700 "$BACKUP_DIR"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 OUT="${BACKUP_DIR}/${DB_NAME}-${STAMP}.sql.gz"
 
-mysqldump --single-transaction --quick --routines --triggers \
+# --no-tablespaces: the app user has no PROCESS privilege, which mysqldump needs
+# to read tablespace metadata; the flag keeps the dump complete without it.
+mysqldump --single-transaction --quick --routines --triggers --no-tablespaces \
   -u "$DB_NAME" -p"$(cat "$DB_PASS_FILE")" "$DB_NAME" | gzip -9 > "${OUT}.part"
 mv "${OUT}.part" "$OUT"
 chmod 600 "$OUT"
