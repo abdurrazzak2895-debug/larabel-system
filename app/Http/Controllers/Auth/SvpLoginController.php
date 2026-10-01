@@ -7,6 +7,7 @@ use App\Models\Candidate;
 use App\Models\User;
 use App\Services\ProfileService;
 use App\Services\SvpApiService;
+use App\Services\SvpOtp\OtpAutoVerifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;

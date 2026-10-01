@@ -19,7 +19,7 @@ final class DakBoxOtpMailbox implements OtpMailbox
         private readonly string $baseUrl,
         private readonly ?string $token,
         private readonly ?string $username,
-        private readonly int $timeout = 30,
+        private readonly int $timeout = 45,
     ) {}
 
     public function describe(): string
@@ -40,7 +40,12 @@ final class DakBoxOtpMailbox implements OtpMailbox
         try {
             $response = Http::withToken($this->token)
                 ->acceptJson()
+                ->connectTimeout(10)
                 ->timeout($this->timeout)
+                // DakBox is intermittently slow (observed: 30s with 0 bytes), so a
+                // connection timeout is retried; a 429 is not, because the poll
+                // loop already treats it as "fetch in progress".
+                ->retry(2, 800, fn ($exception) => $exception instanceof \Illuminate\Http\Client\ConnectionException, throw: false)
                 ->get($url, [
                     'email' => $this->username,
                     'website' => 'svp',
