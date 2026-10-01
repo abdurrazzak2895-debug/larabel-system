@@ -42,6 +42,20 @@ class BookingService
     public function reservation(string $token, string $id) { return $this->provider->withToken($token)->reservationDetails($id); }
     public function ticketPdf(string $token, string $reservationId, ?string $filename = null) { return $this->provider->withToken($token)->ticketPdf($reservationId, $filename); }
     public function createReservation(string $token, array $payload) { return $this->provider->withToken($token)->createReservation($payload); }
+    /**
+     * Create the real SVP temporary seat ("hold") for a session + centre pair.
+     * Live-verified 2026-10-02: returns `{"id": <hold id>, "expired_at": ...}`.
+     * A candidate can only hold one seat at a time, so SVP answers
+     * `temporaryseat.labor_id: has already been taken` when a hold is active.
+     */
+    public function createTemporaryHold(string $token, string $examSessionId, int|string $testCenterId)
+    {
+        return $this->provider->withToken($token)->temporarySeats([
+            'exam_session_id' => $examSessionId,
+            'test_center_id' => (string) $testCenterId,
+        ]);
+    }
+
     public function cancelReservation(string $token, string $id) { return $this->provider->withToken($token)->cancelReservation($id); }
     public function rescheduleReservation(string $token, string $id, array $payload) { return $this->provider->withToken($token)->rescheduleReservation($id, $payload); }
     public function useReservationCredit(string $token, array $payload) { return $this->provider->withToken($token)->useReservationCredit($payload); }
@@ -542,8 +556,12 @@ class BookingService
             'occupation_id'         => $this->numericOrString($data['occupation_id'] ?? null),
             'language_code'         => strtoupper((string) ($data['language_code'] ?? config('svp.default_language_code', 'LOABB'))),
             'methodology'           => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
-            'site_id'               => isset($data['test_center_id']) ? (string) $data['test_center_id'] : null,
-            'site_city'             => $data['city'] ?? null,
+            // SVP resolves the centre from `test_center_id`. Sending `site_id` /
+            // `site_city` instead made it look up a site without an exam engine
+            // and the reservation was rejected live with
+            // `reservation_exam_engine_snapshot: Exam engine code not found`
+            // (verified 2026-10-02 against svp-international.pacc.sa).
+            'test_center_id'        => isset($data['test_center_id']) ? (string) $data['test_center_id'] : null,
             'hold_id'               => isset($data['temporary_hold_id']) ? $this->numericOrString($data['temporary_hold_id']) : null,
             'country_id'            => (int) config('svp.country_id', 78),
             'accept_declaration'    => true,

@@ -51,6 +51,16 @@ final class DakBoxOtpMailbox implements OtpMailbox
             return null;
         }
 
+        // 429 means DakBox is already fetching for this mailbox; the caller's
+        // poll loop simply tries again, so keep it out of the warning channel.
+        if ($response->status() === 429) {
+            Log::debug('SVP OTP: DakBox fetch already in progress', [
+                'retry_after' => $response->json('retry_after'),
+            ]);
+
+            return null;
+        }
+
         if (! $response->successful()) {
             Log::warning('SVP OTP: DakBox returned a non-2xx response', [
                 'status' => $response->status(),
@@ -66,6 +76,30 @@ final class DakBoxOtpMailbox implements OtpMailbox
             return null;
         }
 
+        // DakBox reports the message itself under `data`, together with its
+        // age and expiry. Reject a code that expired or predates this attempt so
+        // a stale OTP can never be replayed into SVP.
+        $data = is_array($payload['data'] ?? null) ? $payload['data'] : $payload;
+
+        if (! empty($data['expired'])) {
+            Log::debug('SVP OTP: DakBox reported the code as expired');
+
+            return null;
+        }
+
+        $receivedAt = isset($data['date_utc'])
+            ? (int) strtotime((string) $data['date_utc'] . ' UTC')
+            : time();
+
+        if ($since !== null && $receivedAt < $since) {
+            Log::debug('SVP OTP: DakBox code is older than this login attempt', [
+                'received_at' => $receivedAt,
+                'since' => $since,
+            ]);
+
+            return null;
+        }
+
         $code = $this->extractCode($payload);
 
         if ($code === null) {
@@ -74,8 +108,8 @@ final class DakBoxOtpMailbox implements OtpMailbox
 
         return [
             'code' => $code,
-            'subject' => (string) ($payload['subject'] ?? 'DakBox OTP'),
-            'received_at' => isset($payload['received_at']) ? (int) strtotime((string) $payload['received_at']) : time(),
+            'subject' => (string) ($data['subject'] ?? $payload['subject'] ?? 'DakBox OTP'),
+            'received_at' => $receivedAt,
             'source' => 'dakbox',
         ];
     }

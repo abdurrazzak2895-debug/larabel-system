@@ -883,6 +883,15 @@ class TakamolProvider implements BookingProviderInterface
         }
     }
 
+    /**
+     * Reserve a temporary seat (the SVP "hold") for a session + centre pair.
+     * The returned hold id is what the reservation (confirm) step consumes.
+     */
+    public function temporarySeats(array $payload): JsonResponse
+    {
+        return $this->dispatch('POST', '/individual_labor_space/temporary_seats', $payload);
+    }
+
     public function createReservation(array $payload): JsonResponse
     {
         return $this->dispatch('POST', '/individual_labor_space/exam_reservations', $payload);
