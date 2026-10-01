@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PortalAvailabilityCredential;
 use App\Contracts\PortalAvailabilityProviderInterface;
+use App\Services\T2Hub\T2HubBookingData;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -550,6 +551,11 @@ final class PortalAvailabilityService
     /** @return array<int, array<string, mixed>> */
     public function bookingOccupations(?string $search = null): array
     {
+
+        if ($t2hub = $this->t2hubData()) {
+            return $t2hub->occupations($search);
+        }
+
         $items = [];
         foreach ($this->forEachUsableCredential(fn (PortalAvailabilityCredential $credential): array => $this->occupations((int) $credential->id)['data'] ?? []) as $credentialItems) {
             foreach ($credentialItems as $item) {
@@ -639,9 +645,27 @@ final class PortalAvailabilityService
         ]];
     }
 
+    /**
+     * Live T2Hub catalogue bridge, used when the booking pages are pointed at
+     * the T2Hub agent portal (`BOOKING_DATA_SOURCE=t2hub`).
+     */
+    private function t2hubData(): ?T2HubBookingData
+    {
+        if (config('t2hub.data_source') !== 't2hub') {
+            return null;
+        }
+
+        return app(T2HubBookingData::class);
+    }
+
     /** @return array<int, array{city: string, date: string}> */
     private function bookingDateRows(int|string $categoryId): array
     {
+
+        if ($t2hub = $this->t2hubData()) {
+            return $t2hub->dateRows($categoryId);
+        }
+
         $rows = [];
         foreach ($this->forEachUsableCredential(fn (PortalAvailabilityCredential $credential): array => $this->searchDates(
             (int) $credential->id,
@@ -725,6 +749,11 @@ final class PortalAvailabilityService
         string $languageCode,
         array $languageCodes = [],
     ): array {
+
+        if ($t2hub = $this->t2hubData()) {
+            return $t2hub->centersForDate($categoryId, $city, $date);
+        }
+
         $languageCodes = $this->normalizedLanguageCodes($languageCode, $languageCodes);
         $merged = [];
         foreach ($this->forEachUsableCredential(function (PortalAvailabilityCredential $credential) use ($categoryId, $city, $date, $occupationId, $languageCodes): array {
@@ -797,6 +826,11 @@ final class PortalAvailabilityService
         string $languageCode,
         array $languageCodes = [],
     ): array {
+
+        if ($t2hub = $this->t2hubData()) {
+            return ['test_centers' => $t2hub->centers($city)];
+        }
+
         $languageCodes = $this->normalizedLanguageCodes($languageCode, $languageCodes);
         $city = trim($city);
         $dates = $this->bookingDateRows($categoryId);

@@ -98,3 +98,9 @@ the SVP candidate flow that is already implemented — `GET /svp/login` →
 `GET /svp/otp` → Bearer token — and needs a real SVP candidate account
 (email + password, OTP by email). The T2Hub agent account is only for the
 catalogue.
+
+## Booking + reschedule pages
+
+The New Booking and Reschedule pages read this same catalogue. See
+[`t2hub-booking-page.md`](t2hub-booking-page.md) for the switch
+(`BOOKING_DATA_SOURCE`) and the live verification results.

@@ -486,6 +486,32 @@ class BookingController extends Controller
      */
     public function lookupSessions(Request $request)
     {
+        if (config('t2hub.data_source') === 't2hub') {
+            $data = $request->validate([
+                'city' => 'required|string',
+                'category_id' => 'required|string',
+                'test_center_id' => 'required|string',
+                'exam_date' => 'nullable|date_format:Y-m-d',
+            ]);
+
+            $sessions = app(\App\Services\T2Hub\T2HubBookingData::class)->sessionRows(
+                $data['category_id'],
+                $data['city'],
+                $data['exam_date'] ?? null,
+                $data['test_center_id'],
+            );
+
+            return response()->json([
+                'success' => true,
+                'availability_source' => 't2hub_agent_catalogue',
+                'data' => [
+                    'sessions' => $sessions,
+                    'exam_sessions' => $sessions,
+                    'source' => 't2hub',
+                ],
+            ]);
+        }
+
         $request->validate([
             'city' => 'required|string',
             'category_id' => 'required|string',
