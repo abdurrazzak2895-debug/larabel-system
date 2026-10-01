@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\SvpOtp\SvpAutoSession;
+use App\Services\T2Hub\T2HubBookingData;
 use App\Services\SvpSessionVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class SvpSessionVerificationController extends Controller
     public function __construct(
         private SvpSessionVerifier $verifier,
         private SvpAutoSession $autoSession,
+        private T2HubBookingData $t2hub,
     ) {
     }
 
@@ -52,6 +54,7 @@ class SvpSessionVerificationController extends Controller
             'expected_city' => ['nullable', 'string', 'max:120'],
             'expected_exam_date' => ['nullable', 'date_format:Y-m-d'],
             'expected_test_time' => ['nullable', 'string', 'max:80'],
+            'category_id' => ['nullable', 'string', 'max:100'],
         ]);
 
         // The wizard reads live T2Hub data without an SVP login, so the first
@@ -71,6 +74,26 @@ class SvpSessionVerificationController extends Controller
             ], 401);
         }
 
+        // Establish the provenance of the submitted session ID server-side: it
+        // must be present in the live, centre-scoped session list for the
+        // requested city and date. SVP sometimes returns no test centre at all
+        // on the exam-session detail, and without this check such a session
+        // could not be confirmed at all.
+        $snapshotConfirmed = false;
+        if (! empty($data['category_id']) && $this->t2hub->enabled()) {
+            try {
+                $snapshotConfirmed = $this->t2hub->confirmsSessionCenter(
+                    (string) $data['category_id'],
+                    (string) ($data['expected_city'] ?? ''),
+                    (string) ($data['expected_exam_date'] ?? ''),
+                    $data['expected_test_center_id'],
+                    $data['exam_session_id'],
+                );
+            } catch (\Throwable $e) {
+                $snapshotConfirmed = false;
+            }
+        }
+
         try {
             // This preflight exists only to preview whether the hold-creation
             // endpoint (SvpHoldController::store) will accept this session, so
@@ -87,6 +110,7 @@ class SvpSessionVerificationController extends Controller
                 $data['expected_exam_date'] ?? null,
                 $data['expected_test_center_name'] ?? null,
                 $data['expected_test_time'] ?? null,
+                $snapshotConfirmed,
             );
 
             if (($result['verified'] ?? false) !== true) {
@@ -97,6 +121,8 @@ class SvpSessionVerificationController extends Controller
                     'expected_city' => $data['expected_city'] ?? null,
                     'expected_exam_date' => $data['expected_exam_date'] ?? null,
                     'expected_test_time' => $data['expected_test_time'] ?? null,
+                    'category_id' => $data['category_id'] ?? null,
+                    'session_center_snapshot_confirmed' => $snapshotConfirmed,
                     'upstream_status' => $result['upstream_status'] ?? null,
                     'actual' => $result['actual'] ?? null,
                     'checks' => $result['checks'] ?? null,

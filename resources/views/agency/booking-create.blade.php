@@ -637,6 +637,7 @@
             verifyUrl.searchParams.set('expected_test_center_id', payload.test_center_id);
             verifyUrl.searchParams.set('expected_test_center_name', payload.test_center_name);
             verifyUrl.searchParams.set('expected_test_time', payload.test_center_time);
+            verifyUrl.searchParams.set('category_id', payload.category_id || '');
             verifyUrl.searchParams.set('expected_city', payload.city);
             verifyUrl.searchParams.set('expected_exam_date', payload.exam_date);
             temporaryHoldRequest = Promise.resolve().then(async function () {

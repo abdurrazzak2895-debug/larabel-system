@@ -229,6 +229,35 @@ final class T2HubBookingData
      *
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * Confirm that an exam-session ID really belongs to the requested centre by
+     * re-reading the live T2Hub session list for that city and date. This is the
+     * provenance check behind the pre-hold guard: the ID must be present in the
+     * centre-scoped list, so a caller cannot point the hold at another centre.
+     */
+    public function confirmsSessionCenter(
+        int|string $categoryId,
+        string $city,
+        string $date,
+        string $testCenterId,
+        string $examSessionId,
+    ): bool {
+        $wanted = trim($examSessionId);
+        if ($wanted === '' || trim($city) === '' || trim($date) === '') {
+            return false;
+        }
+
+        foreach ($this->sessionRows($categoryId, $city, $date, $testCenterId) as $row) {
+            foreach (['exam_session_id', 'id', 'session_id'] as $key) {
+                if (trim((string) ($row[$key] ?? '')) === $wanted) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public function sessionRows(int|string $categoryId, string $city, ?string $date, ?string $testCenterId = null): array
     {
         $date = trim((string) $date);

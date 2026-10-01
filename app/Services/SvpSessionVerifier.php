@@ -53,6 +53,7 @@ class SvpSessionVerifier
         ?string $expectedDate = null,
         ?string $expectedCenterName = null,
         ?string $expectedTestTime = null,
+        bool $snapshotConfirmed = false,
     ): array {
         return $this->evaluate(
             $this->booking->examSession($token, $examSessionId),
@@ -63,6 +64,7 @@ class SvpSessionVerifier
             $expectedCenterName,
             $expectedTestTime,
             true,
+            $snapshotConfirmed,
         );
     }
 
@@ -78,6 +80,7 @@ class SvpSessionVerifier
         ?string $expectedCenterName,
         ?string $expectedTestTime,
         bool $allowScopedCenterFallback,
+        bool $snapshotConfirmed = false,
     ): array {
         $payload = $response->getData(true);
         $status = $response->getStatusCode();
@@ -98,11 +101,22 @@ class SvpSessionVerifier
         $cityMatch = $expectedCity === null || trim($expectedCity) === ''
             ? null
             : ($center['city'] !== null && mb_strtolower($center['city']) === mb_strtolower(trim($expectedCity)));
+        // Some SVP deployments never expose a test centre on the exam-session
+        // detail, so the centre can only be established from the live session
+        // list that produced this ID. That provenance is confirmed server-side
+        // (the wizard's own centre-scoped snapshot, or a fresh T2Hub lookup for
+        // the requested centre/date). When it is confirmed, a session whose
+        // detail carries no centre record at all is still a real match, as long
+        // as it does not contradict the requested city/date/time.
+        $svpHasNoCenter = $center['id'] === null && $center['name'] === null;
         $scopedCenterFallback = $allowScopedCenterFallback
-            && $center['id'] === null
-            && $center['name'] === null
-            && $cityMatch === true;
-        $centerMatch = $centerIdMatch || $centerNameMatch || $scopedCenterFallback;
+            && $svpHasNoCenter
+            && ($cityMatch === true || ($snapshotConfirmed && $cityMatch === null));
+        $snapshotCenterFallback = $allowScopedCenterFallback
+            && $snapshotConfirmed
+            && $svpHasNoCenter
+            && $cityMatch !== false;
+        $centerMatch = $centerIdMatch || $centerNameMatch || $scopedCenterFallback || $snapshotCenterFallback;
         $dateMatch = $normalizedExpectedDate === null
             ? null
             : ($actualDate !== null && $actualDate === $normalizedExpectedDate);
@@ -144,6 +158,8 @@ class SvpSessionVerifier
             'checks' => [
                 'center_match' => $centerMatch,
                 'center_scope_fallback' => $scopedCenterFallback,
+                'center_snapshot_fallback' => $snapshotCenterFallback,
+                'session_center_snapshot_confirmed' => $snapshotConfirmed,
                 'city_match' => $cityMatch,
                 'date_match' => $dateMatch,
                 'time_match' => $timeMatch,

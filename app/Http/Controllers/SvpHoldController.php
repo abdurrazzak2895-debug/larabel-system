@@ -108,6 +108,9 @@ class SvpHoldController extends Controller
                 $selectedSessionDate,
                 (string) ($data['test_center_name'] ?? ''),
                 (string) $data['test_center_time'],
+                // resolveCenterSession() above already proved that this ID is
+                // present in the centre-scoped list for the requested centre.
+                snapshotConfirmed: true,
             );
 
             if (! $verification['success']) {
