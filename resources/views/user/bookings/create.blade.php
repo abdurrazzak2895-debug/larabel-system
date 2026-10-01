@@ -632,9 +632,25 @@
         temporaryHoldRequest = Promise.resolve().then(async function () {
             const verification = await fetchJSON(verifyUrl.toString());
             if (!verification.verified) {
-                const actualName = verification.actual?.test_center_name || 'unknown center';
                 const selectedName = selectedTestCenterLabel() || 'the selected test center';
-                const message = 'Blocked before hold: live SVP session belongs to "' + actualName + '" instead of "' + selectedName + '" or its date/metadata is not valid.';
+                const actualName = verification.actual?.test_center_name || '';
+                const checks = verification.checks || {};
+                let message = verification.error || '';
+                if (!message) {
+                    if (verification.requires_svp_login) {
+                        message = 'SVP session expired. Sign in with SVP again, then retry the hold.';
+                    } else if (actualName) {
+                        message = 'Blocked before hold: live SVP session center "' + actualName + '" does not match "' + selectedName + '".';
+                    } else if (checks.city_match === false) {
+                        message = 'Blocked before hold: SVP has no center record for this session and reports a different city than ' + payload.city + '.';
+                    } else if (checks.date_match === false) {
+                        message = 'Blocked before hold: SVP reports a different exam date for this session than ' + payload.exam_date + '.';
+                    } else if (checks.time_match === false) {
+                        message = 'Blocked before hold: SVP reports a different session time for this session than ' + payload.test_center_time + '.';
+                    } else {
+                        message = 'Blocked before hold: SVP could not confirm this session center, date, or time.';
+                    }
+                }
                 if (sessionCenterError) {
                     sessionCenterError.textContent = message;
                     sessionCenterError.classList.remove('hidden');
@@ -786,6 +802,19 @@
             throw new Error('HTTP ' + response.status + ': ' + (body.error || body.message || 'SVP lookup failed.'));
         }
         return body;
+    }
+
+    // Warm the SVP bearer token in the background so the first "Create Hold"
+    // click does not wait for a candidate login plus e-mail OTP.
+    function warmSvpSession() {
+        fetch("{{ route('user.bookings.lookup.svp-session') }}", {headers: {'Accept': 'application/json'}})
+            .then(response => response.ok ? response.json() : null)
+            .then(body => {
+                if (body && body.connected === false && !body.auto_login_enabled && temporaryHoldStatus) {
+                    temporaryHoldStatus.textContent = 'SVP sign-in required before creating a hold.';
+                }
+            })
+            .catch(() => {});
     }
 
     let occupationsCache = [];
@@ -1216,6 +1245,7 @@
             temporaryHoldButton.disabled = false;
         });
     }
+    warmSvpSession();
 })();
 </script>
 @endsection

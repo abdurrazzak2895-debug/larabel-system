@@ -81,6 +81,25 @@ return [
     | When the switch below is on, the code is read from the mailbox and the
     | login is completed without a human. Only the email channel is automated.
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Candidate auto login
+    |--------------------------------------------------------------------------
+    |
+    | The booking wizard reads live T2Hub data without an SVP login, but the
+    | pre-hold check and the hold itself call SVP. When the SVP token is missing
+    | or expired the app signs the configured candidate in automatically and
+    | verifies the e-mail OTP through the configured mailbox driver.
+    |
+    */
+    'auto_login' => [
+        'enabled' => filter_var(env('SVP_AUTO_LOGIN', true), FILTER_VALIDATE_BOOL),
+        'email' => env('SVP_EMAIL'),
+        'password' => env('SVP_PASSWORD'),
+        'otp_method' => env('SVP_OTP_METHOD', 'email'),
+        'cooldown' => (int) env('SVP_AUTO_LOGIN_COOLDOWN', 120),
+    ],
+
     'otp_auto_verify' => filter_var(env('SVP_OTP_AUTO_VERIFY', false), FILTER_VALIDATE_BOOL),
     'otp_auto_timeout' => (int) env('SVP_OTP_AUTO_TIMEOUT', 90),
     'otp_auto_poll_seconds' => (int) env('SVP_OTP_AUTO_POLL_SECONDS', 5),

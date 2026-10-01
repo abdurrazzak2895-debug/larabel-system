@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\SvpOtp\SvpAutoSession;
 use App\Services\SvpSessionVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,13 +17,30 @@ use Illuminate\Validation\ValidationException;
  */
 class SvpSessionVerificationController extends Controller
 {
-    public function __construct(private SvpSessionVerifier $verifier)
-    {
+    public function __construct(
+        private SvpSessionVerifier $verifier,
+        private SvpAutoSession $autoSession,
+    ) {
     }
 
     public function show(Request $request): JsonResponse
     {
         return $this->verify($request);
+    }
+
+    /**
+     * Warm the SVP bearer token while the wizard is opening, so the first hold
+     * click does not have to wait for a full candidate login plus e-mail OTP.
+     */
+    public function status(Request $request): JsonResponse
+    {
+        $token = $this->autoSession->ensure($request);
+
+        return response()->json([
+            'connected' => is_string($token) && trim($token) !== '',
+            'auto_login_enabled' => $this->autoSession->enabled($request),
+            'login_url' => route('svp.login.form', ['force' => 1]),
+        ]);
     }
 
     public function verify(Request $request): JsonResponse
@@ -36,11 +54,21 @@ class SvpSessionVerificationController extends Controller
             'expected_test_time' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $token = $request->session()->get('svp_token');
+        // The wizard reads live T2Hub data without an SVP login, so the first
+        // hold click can arrive with no (or an expired) SVP bearer token. Log
+        // the candidate in automatically instead of failing the request with a
+        // bare validation error, which the UI used to render as "unknown
+        // center" even though the centre and date were correct.
+        $token = $this->autoSession->ensure($request);
         if (! is_string($token) || trim($token) === '') {
-            throw ValidationException::withMessages([
-                'svp' => 'SVP session expired. Sign in with SVP again before verifying a session.',
-            ]);
+            return response()->json([
+                'success' => false,
+                'verified' => false,
+                'read_only' => true,
+                'requires_svp_login' => true,
+                'login_url' => route('svp.login.form', ['force' => 1]),
+                'error' => 'SVP session expired and automatic sign-in is unavailable. Sign in with SVP again, then retry the hold.',
+            ], 401);
         }
 
         try {
@@ -61,6 +89,20 @@ class SvpSessionVerificationController extends Controller
                 $data['expected_test_time'] ?? null,
             );
 
+            if (($result['verified'] ?? false) !== true) {
+                Log::info('SVP pre-hold session check not verified', [
+                    'exam_session_id' => $data['exam_session_id'],
+                    'expected_test_center_id' => $data['expected_test_center_id'],
+                    'expected_test_center_name' => $data['expected_test_center_name'] ?? null,
+                    'expected_city' => $data['expected_city'] ?? null,
+                    'expected_exam_date' => $data['expected_exam_date'] ?? null,
+                    'expected_test_time' => $data['expected_test_time'] ?? null,
+                    'upstream_status' => $result['upstream_status'] ?? null,
+                    'actual' => $result['actual'] ?? null,
+                    'checks' => $result['checks'] ?? null,
+                ]);
+            }
+
             return response()->json($result, (int) $result['upstream_status']);
         } catch (\Throwable $e) {
             Log::warning('SVP exam session center verification failed', [
@@ -78,4 +120,3 @@ class SvpSessionVerificationController extends Controller
         }
     }
 }
-

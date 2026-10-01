@@ -179,6 +179,7 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::get('/bookings/lookup/occupations', [\App\Http\Controllers\Agency\BookingController::class, 'lookupOccupations'])->name('bookings.lookup.occupations');
     Route::get('/bookings/lookup/test-centers', [\App\Http\Controllers\Agency\BookingController::class, 'lookupTestCenters'])->name('bookings.lookup.test-centers');
     Route::get('/bookings/lookup/sessions', [\App\Http\Controllers\Agency\BookingController::class, 'lookupSessions'])->name('bookings.lookup.sessions');
+    Route::get('/bookings/lookup/svp-session', [SvpSessionVerificationController::class, 'status'])->name('bookings.lookup.svp-session');
     Route::get('/bookings/lookup/verify-session-center', [SvpSessionVerificationController::class, 'show'])->name('bookings.lookup.verify-session-center');
     Route::post('/bookings/lookup/verify-session-center', [SvpSessionVerificationController::class, 'verify'])->name('bookings.lookup.verify-session-center.post');
     Route::get('/bookings/{booking}/payment', [\App\Http\Controllers\Agency\BookingController::class, 'payment'])->whereNumber('booking')->name('bookings.payment');
@@ -252,6 +253,7 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/lookup/occupations', [UserBookingController::class, 'lookupOccupations'])->name('lookup.occupations');
         Route::get('/lookup/test-centers', [UserBookingController::class, 'lookupTestCenters'])->name('lookup.test-centers');
         Route::get('/lookup/sessions', [UserBookingController::class, 'lookupSessions'])->name('lookup.sessions');
+        Route::get('/lookup/svp-session', [SvpSessionVerificationController::class, 'status'])->name('lookup.svp-session');
         Route::get('/lookup/verify-session-center', [SvpSessionVerificationController::class, 'show'])->name('lookup.verify-session-center');
         Route::post('/lookup/verify-session-center', [SvpSessionVerificationController::class, 'verify'])->name('lookup.verify-session-center.post');
         Route::get('/svp-reservations/{reservation}/ticket', [UserBookingController::class, 'svpTicket'])

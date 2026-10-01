@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\BookingService;
+use App\Services\SvpOtp\SvpAutoSession;
 use App\Services\SvpSessionVerifier;
 use App\Services\SvpTemporaryHoldService;
 use Illuminate\Http\JsonResponse;
@@ -14,7 +15,8 @@ class SvpHoldController extends Controller
     public function __construct(
         private BookingService $booking,
         private SvpTemporaryHoldService $holds,
-        private SvpSessionVerifier $sessionVerifier
+        private SvpSessionVerifier $sessionVerifier,
+        private SvpAutoSession $autoSession,
     ) {
     }
 
@@ -39,9 +41,17 @@ class SvpHoldController extends Controller
             'exam_date' => ['required', 'date_format:Y-m-d'],
         ]);
 
-        $token = $request->session()->get('svp_token');
+        // The wizard is driven by live T2Hub data, so a hold can be requested
+        // after the SVP bearer token has expired. Renew it automatically rather
+        // than refusing a session the user just selected.
+        $token = $this->autoSession->ensure($request);
         if (! is_string($token) || $token === '') {
-            return response()->json(['error' => 'SVP session expired.'], 401);
+            return response()->json([
+                'success' => false,
+                'requires_svp_login' => true,
+                'login_url' => route('svp.login.form', ['force' => 1]),
+                'error' => 'SVP session expired and automatic sign-in is unavailable. Sign in with SVP again, then retry.',
+            ], 401);
         }
 
         try {
