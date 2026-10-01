@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('portal_availability_api_keys', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('portal_availability_credential_id')
-                ->constrained('portal_availability_credentials')
+                // MySQL caps identifiers at 64 characters and the auto-generated
+                // name here would be 70, so name the constraint explicitly.
+                ->constrained('portal_availability_credentials', null, 'pa_api_keys_credential_fk')
                 ->cascadeOnDelete();
             $table->string('name', 120);
             $table->string('key_prefix', 32);
