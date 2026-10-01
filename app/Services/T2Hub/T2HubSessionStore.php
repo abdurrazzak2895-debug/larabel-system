@@ -75,6 +75,7 @@ class T2HubSessionStore
 
         if (! is_dir($directory)) {
             mkdir($directory, 0775, true);
+            @chmod($directory, 0775);
         }
 
         $payload = [
@@ -85,7 +86,13 @@ class T2HubSessionStore
             'captured_at' => time(),
         ];
 
-        file_put_contents($path, Crypt::encryptString((string) json_encode($payload)), LOCK_EX);
+        if (@file_put_contents($path, Crypt::encryptString((string) json_encode($payload)), LOCK_EX) === false) {
+            throw new \RuntimeException(
+                "T2Hub session could not be written to {$path}. " .
+                'Make the directory writable by the web user (chown -R www-data:www-data storage/app).',
+            );
+        }
+
         @chmod($path, 0660);
     }
 

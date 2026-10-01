@@ -84,12 +84,15 @@ class T2HubSessionCommand extends Command
             foreach (array_slice($result['sessions'], 0, 5) as $session) {
                 $this->line(sprintf(
                     '  %s | %s | seats=%s | centre=%s',
-                    (string) ($session['session_date'] ?? $session['exam_date'] ?? $date),
-                    (string) ($session['session_time'] ?? $session['start_time'] ?? '—'),
+                    (string) ($session['exam_date'] ?? $session['session_date'] ?? $date),
+                    (string) ($session['exam_time'] ?? $session['session_time'] ?? $session['start_time'] ?? '—'),
                     (string) ($session['available_seats'] ?? $session['seats'] ?? '—'),
                     (string) ($session['test_center']['name'] ?? $session['center_name'] ?? '—'),
                 ));
             }
+
+            $this->line('cities: ' . count($provider->cities($categoryId)) . ' with dates for this category');
+            $this->line('dates:  ' . implode(', ', array_slice(array_column($provider->availableDates($categoryId, $city)['dates'], 'date'), 0, 6)));
         } catch (\Throwable $e) {
             $this->error('Probe failed: ' . $e->getMessage());
 

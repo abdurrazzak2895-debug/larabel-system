@@ -38,6 +38,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'svp_cors' => HandleSvpCors::class,
             'portal.api.key' => AuthenticatePortalAvailabilityApiKey::class,
         ]);
+
+        // The booking-data endpoints are a read-only JSON API used by the
+        // booking pages and by server-to-server callers, so they carry no
+        // session-mutating form state and skip CSRF verification.
+        $middleware->validateCsrfTokens(except: [
+            'booking-data/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

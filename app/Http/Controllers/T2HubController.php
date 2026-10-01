@@ -85,12 +85,10 @@ class T2HubController extends Controller
 
         return $this->respond(function () use ($request) {
             $categoryId = (string) $request->query('category_id');
-            $dates = $this->provider->availableDates($categoryId, '');
 
             return [
                 'category_id' => $categoryId,
-                'cities' => $dates['cities'] ?? $dates['data']['cities'] ?? [],
-                'raw' => $dates,
+                'cities' => $this->provider->cities($categoryId),
             ];
         });
     }

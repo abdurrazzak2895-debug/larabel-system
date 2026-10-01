@@ -79,7 +79,16 @@ class T2HubClient
             throw new RuntimeException('T2Hub session is missing and automatic login is disabled.');
         }
 
-        return $this->login();
+        try {
+            return $this->login();
+        } catch (\Throwable $e) {
+            // The portal throttles rapid repeat logins and occasionally serves a
+            // page without the session key; one spaced retry clears both.
+            $this->trace('login: first attempt failed, retrying', ['error' => $e->getMessage()]);
+            sleep(3);
+
+            return $this->login();
+        }
     }
 
     /**
@@ -92,8 +101,12 @@ class T2HubClient
         $loginUrl = (string) config('t2hub.login_url');
         $origin = rtrim((string) parse_url($loginUrl, PHP_URL_SCHEME) . '://' . parse_url($loginUrl, PHP_URL_HOST), '/');
 
+        $this->trace('login: fetching the login page', ['url' => $loginUrl]);
+
         $page = $this->request()->get($loginUrl);
         $html = $page->body();
+
+        $this->trace('login: login page loaded', ['status' => $page->status(), 'bytes' => strlen($html)]);
 
         if (! $page->successful()) {
             throw new RuntimeException("T2Hub login page returned HTTP {$page->status()}.");
@@ -113,6 +126,12 @@ class T2HubClient
         }
 
         $cookies = $this->cookieJar($page->headers()['Set-Cookie'] ?? []);
+
+        $this->trace('login: form contract', [
+            'csrf' => $csrf !== '',
+            'snapshot_bytes' => strlen($snapshot),
+            'cookie_bytes' => strlen($cookies),
+        ]);
 
         $response = $this->request()
             ->withHeaders([
@@ -140,6 +159,12 @@ class T2HubClient
         $body = $response->body();
         $cookies = $this->mergeCookies($cookies, $this->cookieJar($response->headers()['Set-Cookie'] ?? []));
 
+        $this->trace('login: credentials submitted', [
+            'status' => $response->status(),
+            'location' => $response->header('Location') ?: null,
+            'cookie_bytes' => strlen($cookies),
+        ]);
+
         if (! $response->successful() && ! in_array($response->status(), [302, 303], true)) {
             throw new RuntimeException("T2Hub login failed with HTTP {$response->status()}.");
         }
@@ -160,7 +185,15 @@ class T2HubClient
                 continue;
             }
 
-            $key = $this->extractSessionKey($this->request()->withHeaders(['cookie' => $cookies])->get($candidate)->body());
+            $probe = $this->request()->withHeaders(['cookie' => $cookies])->get($candidate);
+            $key = $this->extractSessionKey($probe->body());
+
+            $this->trace('login: session key probe', [
+                'url' => $candidate,
+                'status' => $probe->status(),
+                'bytes' => strlen($probe->body()),
+                'key_found' => $key !== null,
+            ]);
         }
 
         $key ??= (string) config('t2hub.session_key');
@@ -255,11 +288,18 @@ class T2HubClient
     private function decode(string $body, ?string $encrypted, string $keyRaw, string $path): array
     {
         if (trim((string) $encrypted) === '1') {
-            // Encrypted responses arrive as {"p":"<base64(iv|ciphertext|tag)>"}.
+            // Encrypted responses arrive as {"p":"<base64(ciphertext|tag)>","iv":"<base64(iv)>"}.
             $envelope = json_decode($body, true);
-            $payload = is_array($envelope) && isset($envelope['p']) ? (string) $envelope['p'] : $body;
 
-            $body = $this->decrypt($payload, $keyRaw, $path);
+            if (! is_array($envelope)) {
+                $envelope = json_decode(trim($body, '"'), true);
+            }
+
+            if (! is_array($envelope) || ! isset($envelope['p'])) {
+                throw new RuntimeException("T2Hub encrypted response for {$path} had no payload envelope.");
+            }
+
+            $body = $this->decryptEnvelope($envelope, $keyRaw, $path);
         }
 
         $decoded = json_decode($body, true);
@@ -272,32 +312,64 @@ class T2HubClient
     }
 
     /**
-     * AES-256-GCM decrypt of a base64(iv || ciphertext || tag) payload.
+     * AES-256-GCM decrypt of the portal's `{p, iv}` envelope.
+     *
+     * `p` is base64(ciphertext ‖ tag) and `iv` is base64(12-byte nonce); the
+     * key is the base64-decoded `window.__sk` value.
+     *
+     * @param  array<string, mixed>  $envelope
      */
-    public function decrypt(string $payload, string $keyRaw, string $path = ''): string
+    public function decryptEnvelope(array $envelope, string $keyRaw, string $path = ''): string
     {
         $key = base64_decode($keyRaw, true);
-        $binary = base64_decode($payload, true);
 
         if ($key === false || strlen($key) !== 32) {
             throw new RuntimeException('T2Hub session key is not a 32-byte base64 value.');
         }
 
-        if ($binary === false || strlen($binary) <= 28) {
+        $cipher = base64_decode((string) $envelope['p'], true);
+
+        if ($cipher === false || strlen($cipher) <= 16) {
             throw new RuntimeException('T2Hub encrypted payload is malformed.');
         }
 
-        $iv = substr($binary, 0, 12);
-        $tag = substr($binary, -16);
-        $cipher = substr($binary, 12, -16);
+        $ivValue = (string) ($envelope['iv'] ?? '');
 
-        $plain = openssl_decrypt($cipher, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
+        if ($ivValue !== '') {
+            $iv = base64_decode($ivValue, true);
+
+            if ($iv === false || strlen($iv) !== 12) {
+                throw new RuntimeException('T2Hub encryption nonce is malformed.');
+            }
+        } else {
+            // Older payloads prefix the nonce to the ciphertext instead.
+            $iv = substr($cipher, 0, 12);
+            $cipher = substr($cipher, 12);
+        }
+
+        $tag = substr($cipher, -16);
+        $cipherText = substr($cipher, 0, -16);
+
+        $plain = openssl_decrypt($cipherText, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
 
         if ($plain === false) {
             throw new RuntimeException("T2Hub response for {$path} could not be decrypted (stale session key?).");
         }
 
         return $plain;
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function trace(string $message, array $context = []): void
+    {
+        if (! config('t2hub.debug', false)) {
+            return;
+        }
+
+        Log::info($message, $context);
+        fwrite(STDERR, '  [t2hub] ' . $message . ' ' . json_encode($context) . PHP_EOL);
     }
 
     private function request(): PendingRequest

@@ -213,3 +213,10 @@ Schedule::command('portal:refresh-availability')
     ->cron(sprintf('*/%d * * * *', $refreshInterval))
     ->withoutOverlapping(max(1, $refreshInterval - 1))
     ->description('Refresh active Portal Availability sessions before they expire.');
+
+// Keep the T2Hub agent session (cookie + AES key) warm so the booking pages
+// never pay the login round-trip and never see an expired portal session.
+Schedule::command('t2hub:session refresh')
+    ->cron('*/15 * * * *')
+    ->withoutOverlapping(10)
+    ->description('Refresh the T2Hub agent session used by the live booking catalogue.');

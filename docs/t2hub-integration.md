@@ -1,111 +1,100 @@
 # T2Hub booking-data integration
 
-**Status:** implemented and deployed on `46.224.89.43` (https://takamol.choice-pc-sv.xyz).
-Waiting on one input to go live: the **T2Hub agent account** (`T2HUB_EMAIL` / `T2HUB_PASSWORD`).
+**Status: LIVE and verified with real data** on `46.224.89.43`
+(https://takamol.choice-pc-sv.xyz) — signed in as the T2Hub agent
+`01778300054`, reading the real booking catalogue from `https://t2hub.app/takamol`.
 
-The Laravel app now reads the live booking catalogue — occupation → city →
-available date → test centre → exam session (with time) — from the T2Hub agent
-portal (`https://takamol.t2hub.app`), instead of only from the SVP/PACC API.
+The Laravel app now serves the live booking chain — occupation → city →
+available date → test centre → exam session (with time and seats) — from the
+T2Hub agent portal.
+
+## Live verification (2026-10-02)
+
+| Endpoint | Result |
+| --- | --- |
+| `GET /booking-data/status` | **200** — session stored, key captured, cookie 1254 B |
+| `GET /booking-data/occupations` | **200** — **40 occupations** (e.g. `Barber` → category `50`, `Bus Driver` → `51`) |
+| `GET /booking-data/cities?category_id=50` | **200** — `["Dhaka", "Rajshahi"]` |
+| `GET /booking-data/dates?category_id=50&city=Dhaka` | **200** — 6 dates (`2026-10-07`, `08`, `13`, `18`, `19`, `25`) |
+| `GET /booking-data/centers?city=Dhaka` | **200** — 6 centres (e.g. *Arkan Al-Taameer for professional classification - Dhaka*) |
+| `GET /booking-data/sessions?category_id=50&city=Dhaka&exam_date=2026-10-07` | **200** — 1 session: **9:30 AM @ Bangladesh German TTC, 6 seats**, `site_id=45` |
+| `POST /booking-data/bootstrap` (whole chain in one call) | **200** — sessions + the centres that hold them |
+
+```
+$ php artisan t2hub:session probe
+  occupations: 40
+  probe: category=50 city=Dhaka date=2026-10-04
+  cities: 2 with dates for this category
+  dates:  2026-10-07, 2026-10-08, 2026-10-13, 2026-10-18, 2026-10-19, 2026-10-25
+```
 
 ## What was added
 
 | File | Purpose |
 | --- | --- |
-| `config/t2hub.php` | Portal URL, credentials, timeouts, session store, data-source switch |
-| `app/Services/T2Hub/T2HubClient.php` | Livewire login, session cookie + AES key handling, encrypted JSON fetch |
+| `config/t2hub.php` | Portal URL, credentials, timeouts, session store, data-source switch, debug flag |
+| `app/Services/T2Hub/T2HubClient.php` | Livewire login, cookie/AES-key session, encrypted JSON fetch, one-shot re-login + retry |
 | `app/Services/T2Hub/T2HubSessionStore.php` | Encrypted session snapshot (cookie + key + CSRF) between requests |
-| `app/Services/T2Hub/T2HubProvider.php` | Booking chain: occupations, centres, dates, sessions (with centre resolution) |
-| `app/Http/Controllers/T2HubController.php` | Authenticated JSON endpoints for the booking page |
+| `app/Services/T2Hub/T2HubProvider.php` | Booking chain: occupations, cities, centres, dates, sessions with centre resolution |
+| `app/Http/Controllers/T2HubController.php` | Authenticated JSON endpoints for the booking pages |
 | `app/Console/Commands/T2HubSessionCommand.php` | `php artisan t2hub:session status\|refresh\|probe\|forget` |
-
-### Routes (all require a signed-in user)
-
-| Route | Returns |
-| --- | --- |
-| `GET /booking-data/status` | session + configuration health (no secrets) |
-| `POST /booking-data/session` | forces a fresh portal login |
-| `GET /booking-data/occupations` | PACC occupation catalogue (carries the category id the chain needs) |
-| `GET /booking-data/cities?category_id=` | cities with availability for the category |
-| `GET /booking-data/dates?category_id=&city=` | available exam dates |
-| `GET /booking-data/centers?city=` | test centres in a city |
-| `GET /booking-data/sessions?category_id=&city=&exam_date=[&test_center_id=]` | sessions **with times and seat counts**, limited to centres that actually hold sessions |
-| `GET\|POST /booking-data/bootstrap` | one call for the whole chain (`category_id`, `city`, `exam_date`, `resource`) |
+| `routes/console.php` | `t2hub:session refresh` every 15 minutes (keeps the session warm) |
+| `bootstrap/app.php` | `booking-data/*` is a read-only JSON API, so it skips CSRF |
 
 ## How the portal client works
 
 1. **Login** — the portal is a Filament/Livewire app. The client fetches
    `/takamol/agent/login`, reads the `csrf-token` meta tag and the
-   `wire:snapshot` attribute, then posts the credentials to `/livewire/update`
+   `wire:snapshot` attribute, then POSTs the credentials to `/livewire/update`
    calling `authenticate` with `data.mobile`, `data.password`, `data.remember`
-   (verified against the live login page — those are the real field names).
+   (verified against the live form).
 2. **Session material** — the login response rotates cookies; the client merges
-   them, follows the redirect and captures the page AES key `window.__sk`.
-   When the portal only publishes that key to browser JavaScript, the
-   pre-captured `T2HUB_SESSION_KEY` is used instead.
-3. **API calls** — every booking call goes to
-   `https://takamol.t2hub.app/takamol/api/…` with the session cookie and
-   `x-session-key`. Responses arrive as `x-encrypted: 1` with the body
-   `{"p":"<base64(iv[12] ‖ ciphertext ‖ tag[16])>"}`, decrypted with
-   **AES-256-GCM** using the base64-decoded `window.__sk` as the raw key.
-4. **Session rotation** — a `401/403/419` answer drops the stored session and
-   logs in once more before the request is retried.
-5. The session snapshot is stored with Laravel's encrypter at
-   `storage/app/t2hub/session.json`; the cookie and key never leave the server.
+   them and then reads `window.__sk` from the app root (`/takamol`), which is the
+   page that publishes it. `T2HUB_SESSION_KEY` can be set as a fallback for
+   deployments that only expose the key to browser JavaScript.
+3. **API calls** — `https://t2hub.app/takamol/api/…` with the session cookie and
+   `x-session-key`. Encrypted responses arrive with `x-encrypted: 1` as
+   `{"p":"<base64(ciphertext‖tag)>","iv":"<base64(12-byte nonce)>"}` and are
+   decrypted with **AES-256-GCM** using the base64-decoded `window.__sk` as the
+   raw key.
+4. **Rotation** — a `401/403/419` answer drops the stored session, logs in again
+   and retries once; a failed login is retried once after a short pause.
+5. The snapshot is stored with Laravel's encrypter at
+   `storage/app/t2hub/session.json` (`www-data`, 0660); the cookie and key never
+   leave the server and are never exposed by the API (`/booking-data/status`
+   reports only lengths and expiry).
 
-## Verified against the live portal (2026-10-02)
+## Routes (signed-in users)
 
-| Check | Result |
+| Route | Returns |
 | --- | --- |
-| `https://takamol.t2hub.app/takamol/agent/login` reachable from the server | **200** in 0.6 s, 34.5 KB |
-| Login form contract (`csrf-token`, `wire:snapshot`, `data.mobile`/`data.password`/`data.remember`) | **matches the implementation** |
-| `window.__sk` on the public login page | absent — it is emitted only for an authenticated session, so a real login (or a captured key) is required |
-| `/takamol/api/pacc/occupations`, `/test-centers?division=Dhaka`, `/exam-available-dates?category_id=50&city=Dhaka` | **200** with `x-encrypted: 1` and a `{"p":"…"}` envelope |
-| `php artisan t2hub:session status` | reports `credentials: MISSING (T2HUB_EMAIL / T2HUB_PASSWORD)` |
-| `GET /booking-data/status` (authenticated) | **200** with the configuration/session summary |
-| `GET /booking-data/occupations` (authenticated) | **502** with a clear "credentials not configured" detail |
+| `GET /booking-data/status` | session + configuration health (no secrets) |
+| `POST /booking-data/session` | forces a fresh portal login |
+| `GET /booking-data/occupations` | PACC occupation catalogue (`id` is the category id used by the chain) |
+| `GET /booking-data/cities?category_id=` | cities that publish dates for the category |
+| `GET /booking-data/dates?category_id=&city=` | `available_dates[]` + a normalised `dates[]` list |
+| `GET /booking-data/centers?city=` | test centres in a city (all centres without `city`) |
+| `GET /booking-data/sessions?category_id=&city=&exam_date=[&test_center_id=]` | sessions with times and seats, limited to centres that hold sessions |
+| `GET\|POST /booking-data/bootstrap` | the whole chain in one call (`category_id`, `city`, `exam_date`, `resource`) |
 
-## Going live
+## Operating notes
 
-Add the agent account to `/var/www/takamol/.env`:
+- Credentials live in `/var/www/takamol/.env` (`T2HUB_EMAIL`, `T2HUB_PASSWORD`,
+  file mode 640). **Rotate the agent password** now that it has been shared in
+  chat, then update `.env` and run `php artisan t2hub:session refresh`.
+- The Laravel scheduler must be running (`* * * * * php artisan schedule:run`)
+  for the 15-minute session refresh; it was installed on this server.
+- `T2HUB_DEBUG=true` prints each login/fetch step to stderr and the Laravel log.
 
-```ini
-T2HUB_EMAIL=agent@example.com
-T2HUB_PASSWORD=…
-```
+## Next step — booking pages
 
-then:
+The catalogue API is live; the remaining work is pointing the booking and
+reschedule pages (`resources/views/user/bookings/create.blade.php`,
+`reschedule.blade.php`) at `/booking-data/*` so occupation → city → date →
+centre → session (with time) is driven by exactly what T2Hub reports.
 
-```bash
-cd /var/www/takamol
-php artisan config:cache
-php artisan t2hub:session refresh            # logs in, stores cookie + __sk
-php artisan t2hub:session probe --city=Dhaka --date=2026-10-05
-```
-
-`probe` prints the occupation count, the first occupation, the resolved
-category/city/date, the session count, the centres that hold sessions, and the
-first few session times with seat counts.
-
-If the portal refuses server-side login (OTP/2FA or a key emitted only in the
-browser), capture the values once from a logged-in browser session and set
-`T2HUB_SESSION_COOKIE`, `T2HUB_SESSION_KEY` and `T2HUB_SESSION_CSRF` instead —
-the client will use them directly.
-
-## Real SVP booking (after the catalogue)
-
-The actual hold + reservation still runs through the SVP account flow that is
-already implemented in the app:
-
-1. `GET /svp/login` → candidate email + password (`/api/v1/sessions/login`)
-2. `GET /svp/otp` → OTP verification (`/api/v1/sessions/otp`) → Bearer token
-3. Booking page → temporary seat hold → reservation → payment page
-
-That path needs a **real SVP candidate account** (email + password + OTP
-delivery). It does not use the T2Hub agent account.
-
-## Remaining wiring
-
-The existing booking pages (`resources/views/user/bookings/create.blade.php`,
-`reschedule.blade.php`) still read their lookups from the portal-availability
-adapter. Pointing those lookups at `/booking-data/*` is the next step once the
-credentials are in place, so the page shows exactly what T2Hub reports.
+The **real booking** (temporary seat hold → reservation → payment) keeps using
+the SVP candidate flow that is already implemented — `GET /svp/login` →
+`GET /svp/otp` → Bearer token — and needs a real SVP candidate account
+(email + password, OTP by email). The T2Hub agent account is only for the
+catalogue.

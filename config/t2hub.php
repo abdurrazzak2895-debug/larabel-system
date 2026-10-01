@@ -41,6 +41,9 @@ return [
     // Re-login automatically when the stored session is missing or rejected.
     'auto_login' => filter_var(env('T2HUB_AUTO_LOGIN', true), FILTER_VALIDATE_BOOL),
 
+    // Log every step of the login/fetch flow (troubleshooting).
+    'debug' => filter_var(env('T2HUB_DEBUG', false), FILTER_VALIDATE_BOOL),
+
     // Which upstream the booking chain reads from: t2hub | svp.
     'data_source' => env('BOOKING_DATA_SOURCE', 't2hub'),
 ];

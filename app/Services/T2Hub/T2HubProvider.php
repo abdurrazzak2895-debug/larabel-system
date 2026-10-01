@@ -62,14 +62,106 @@ class T2HubProvider
     /**
      * Dates that have sessions for the category in the city.
      *
+     * Upstream returns `available_dates[]` keyed by the browser time zone; a
+     * normalised `dates[]` list is added for the booking page.
+     *
      * @return array<string, mixed>
      */
     public function availableDates(string $categoryId, string $city): array
     {
-        return $this->client->get('/exam-available-dates', [
+        $payload = $this->client->get('/exam-available-dates', [
             'category_id' => $categoryId,
             'city' => $city,
         ]);
+
+        $dates = [];
+
+        foreach ((array) ($payload['available_dates'] ?? []) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $date = (string) ($row['start_date_in_browser_time_zone'] ?? $row['start_date_in_tc_time_zone'] ?? '');
+
+            if ($date === '') {
+                continue;
+            }
+
+            $dates[$date] = [
+                'date' => $date,
+                'test_center_date' => (string) ($row['start_date_in_tc_time_zone'] ?? $date),
+                'city' => (string) ($row['test_center']['city'] ?? $city),
+                'country_id' => $row['test_center']['country_id'] ?? null,
+            ];
+        }
+
+        ksort($dates);
+        $payload['dates'] = array_values($dates);
+        $payload['count'] = count($dates);
+
+        return $payload;
+    }
+
+    /**
+     * Cities that can be booked.
+     *
+     * With a category id, only cities that actually publish dates for it are
+     * returned (that is what the booking chain needs); otherwise every city
+     * that has a test centre.
+     *
+     * @return list<string>
+     */
+    public function cities(?string $categoryId = null): array
+    {
+        if ($categoryId !== null && trim($categoryId) !== '') {
+            $cities = [];
+
+            foreach ((array) ($this->client->get('/exam-available-dates', ['category_id' => $categoryId])['available_dates'] ?? []) as $row) {
+                $city = trim((string) ($row['test_center']['city'] ?? ''));
+
+                if ($city !== '') {
+                    $cities[$city] = true;
+                }
+            }
+
+            if ($cities !== []) {
+                $list = array_keys($cities);
+                sort($list);
+
+                return $list;
+            }
+        }
+
+        $cities = [];
+
+        foreach ($this->allTestCenters() as $site) {
+            foreach (['raw_city', 'city', 'division'] as $key) {
+                $city = trim((string) ($site[$key] ?? ''));
+
+                if ($city !== '') {
+                    $cities[$city] = true;
+                    break;
+                }
+            }
+        }
+
+        $list = array_keys($cities);
+        sort($list);
+
+        return $list;
+    }
+
+    /**
+     * Every test centre the portal knows about.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function allTestCenters(): array
+    {
+        $payload = $this->client->get('/test-centers');
+        $sites = $payload['sites'] ?? $payload;
+
+        return is_array($sites) ? array_values(array_filter($sites, 'is_array')) : [];
     }
 
     /**
