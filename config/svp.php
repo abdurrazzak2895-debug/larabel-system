@@ -98,6 +98,10 @@ return [
         'password' => env('SVP_PASSWORD'),
         'otp_method' => env('SVP_OTP_METHOD', 'email'),
         'cooldown' => (int) env('SVP_AUTO_LOGIN_COOLDOWN', 120),
+        // Do not hammer the OTP mailbox after a failed automatic sign-in.
+        'failure_backoff' => (int) env('SVP_AUTO_LOGIN_FAILURE_BACKOFF', 900),
+        // Fallback TTL when a bearer token carries no readable expiry.
+        'shared_ttl' => (int) env('SVP_AUTO_LOGIN_SHARED_TTL', 1800),
     ],
 
     'otp_auto_verify' => filter_var(env('SVP_OTP_AUTO_VERIFY', false), FILTER_VALIDATE_BOOL),

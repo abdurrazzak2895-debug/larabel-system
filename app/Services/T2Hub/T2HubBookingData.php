@@ -2,6 +2,7 @@
 
 namespace App\Services\T2Hub;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
@@ -272,6 +273,51 @@ final class T2HubBookingData
         string $examSessionId,
     ): bool {
         return $this->sessionSnapshot($categoryId, $city, $date, $testCenterId, $examSessionId) !== null;
+    }
+
+    /**
+     * Warm the catalogue for a city so the operator's next click is instant.
+     *
+     * Runs after the response is flushed: centres once per city and a session
+     * lookup per upcoming date are exactly the calls the wizard would otherwise
+     * pay for on the first click.
+     *
+     * @param  array<int, string>  $dates
+     */
+    public function warmCityDates(int|string $categoryId, string $city, array $dates): int
+    {
+        if ((string) config('t2hub.data_source') !== 't2hub') {
+            return 0;
+        }
+
+        // One warm per city/category per two minutes: enough to keep the first
+        // clicks instant without hammering the upstream portal.
+        $lock = 't2hub:warm:'.sha1((string) $categoryId.'|'.$city);
+        if (! Cache::add($lock, 1, 120)) {
+            return 0;
+        }
+
+        $warmed = 0;
+        try {
+            $this->provider->testCenters($city);
+        } catch (\Throwable) {
+            // Enrichment only.
+        }
+
+        foreach (array_slice($dates, 0, 4) as $date) {
+            $date = trim((string) $date);
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1) {
+                continue;
+            }
+            try {
+                $this->provider->sessions((string) $categoryId, $city, $date);
+                $warmed++;
+            } catch (\Throwable) {
+                // A single failed date must not break the prewarm batch.
+            }
+        }
+
+        return $warmed;
     }
 
     public function sessionRows(int|string $categoryId, string $city, ?string $date, ?string $testCenterId = null): array

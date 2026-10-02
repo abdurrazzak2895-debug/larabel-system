@@ -401,9 +401,24 @@ class BookingController extends Controller
         ]);
 
         try {
+            $dates = $this->portalAvailability->bookingDates($data['category_id'], $data['city']);
+
+            // Warm centres and the next dates after the response is flushed so
+            // the operator's click on a date is served from cache instead of a
+            // cold T2Hub round trip.
+            $categoryId = (string) $data['category_id'];
+            $city = (string) $data['city'];
+            defer(function () use ($categoryId, $city, $dates): void {
+                try {
+                    app(\App\Services\T2Hub\T2HubBookingData::class)->warmCityDates($categoryId, $city, array_values((array) $dates));
+                } catch (\Throwable) {
+                    // Prewarming is best effort only.
+                }
+            });
+
             return response()->json([
                 'success' => true,
-                'data' => ['dates' => $this->portalAvailability->bookingDates($data['category_id'], $data['city'])],
+                'data' => ['dates' => $dates],
             ]);
         } catch (\Throwable $e) {
             Log::error('Portal lookup dates failed', ['error' => $e->getMessage()]);

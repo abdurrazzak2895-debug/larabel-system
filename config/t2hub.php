@@ -58,9 +58,9 @@ return [
     'cache_ttl_overrides' => [
         'occupations' => (int) env('T2HUB_CACHE_TTL_OCCUPATIONS', 600),
         'cities' => (int) env('T2HUB_CACHE_TTL_CITIES', 600),
-        'test-centers' => (int) env('T2HUB_CACHE_TTL_CENTERS', 300),
-        'available-dates' => (int) env('T2HUB_CACHE_TTL_DATES', 90),
-        'exam-sessions' => (int) env('T2HUB_CACHE_TTL_SESSIONS', 45),
+        'test-centers' => (int) env('T2HUB_CACHE_TTL_CENTERS', 900),
+        'available-dates' => (int) env('T2HUB_CACHE_TTL_DATES', 600),
+        'exam-sessions' => (int) env('T2HUB_CACHE_TTL_SESSIONS', 240),
     ],
 
     'debug' => filter_var(env('T2HUB_DEBUG', false), FILTER_VALIDATE_BOOL),

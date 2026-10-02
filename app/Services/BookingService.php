@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use App\Models\Agency;
 use App\Models\Booking;
 use App\Models\BookingAttempt;
@@ -105,7 +106,22 @@ class BookingService
 
         return false;
     }
-    public function examSession(string $token, string $id) { return $this->provider->withToken($token)->examSession($id); }
+    public function examSession(string $token, string $id)
+    {
+        $id = (string) $id;
+        if ($id === '') {
+            return $this->provider->withToken($token)->examSession($id);
+        }
+
+        // The wizard verifies each session card, so a short shared cache removes
+        // a live SVP round trip per card without hiding seat state: holds and
+        // reservations are never cached.
+        return Cache::remember(
+            'svp:session_detail:'.sha1($id),
+            (int) config('svp.session_detail_ttl', 90),
+            fn () => $this->provider->withToken($token)->examSession($id)
+        );
+    }
     public function occupations(string $token) { return $this->provider->withToken($token)->occupations(); }
     public function occupationsSearch(string $token, ?string $search = null, int $page = 1, int $perPage = 1000) { return $this->provider->withToken($token)->occupationsSearch($search, $page, $perPage); }
     public function cities(string $token, ?string $categoryId = null) { return $this->provider->withToken($token)->cities($categoryId); }

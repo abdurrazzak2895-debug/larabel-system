@@ -22,6 +22,10 @@ final class SvpAutoSession
     /** @var array<int, string> */
     private const SESSION_KEYS = ['svp_token', 'svp_csrf', 'svp_user_id'];
 
+    private const SHARED_KEY = 'svp:shared_token';
+
+    private const BLOCK_KEY = 'svp:auto-login:blocked';
+
     public function __construct(private readonly OtpAutoVerifier $otp)
     {
     }
@@ -63,18 +67,69 @@ final class SvpAutoSession
      */
     public function ensure(Request $request, bool $force = false): ?string
     {
+        $shared = $this->sharedToken();
         $token = $request->session()->get('svp_token');
         $token = is_string($token) ? trim($token) : '';
 
+        // One live SVP session serves the whole portal: SVP invalidates the
+        // previous token on every new sign-in, so reusing the shared bearer
+        // token is both faster and the only way to stop login churn.
+        if (! $force && $shared !== '') {
+            if ($token !== $shared) {
+                $this->storeInSession($request, $shared);
+            }
+
+            return $shared;
+        }
+
         if (! $force && $token !== '' && ! $this->expired($token)) {
+            $this->publishSharedToken($token);
+
             return $token;
         }
 
-        if (! $this->enabled($request)) {
-            return null;
+        if (Cache::has(self::BLOCK_KEY)) {
+            // A recent automatic sign-in failed (for example the mailbox helper
+            // has hit its plan limit). Back off instead of hammering the OTP
+            // helper on every wizard request.
+            return $shared !== '' ? $shared : null;
         }
 
-        return $this->login($request);
+        if (! $this->enabled($request)) {
+            return $shared !== '' ? $shared : null;
+        }
+
+        $fresh = $this->login($request);
+        if ($fresh === null) {
+            Cache::put(self::BLOCK_KEY, now()->timestamp, (int) config('svp.auto_login.failure_backoff', 900));
+
+            Log::warning('SVP auto login failed; backing off', [
+                'backoff_seconds' => (int) config('svp.auto_login.failure_backoff', 900),
+            ]);
+
+            return $shared !== '' ? $shared : null;
+        }
+
+        return $fresh;
+    }
+
+    /**
+     * The bearer token currently shared by the whole portal, or '' when none is
+     * stored. Only tokens whose JWT has not expired are returned.
+     */
+    public function sharedToken(): string
+    {
+        $stored = Cache::get(self::SHARED_KEY);
+        $token = is_string($stored) ? trim($stored) : '';
+        if ($token === '' || $this->expired($token)) {
+            if ($token !== '') {
+                Cache::forget(self::SHARED_KEY);
+            }
+
+            return '';
+        }
+
+        return $token;
     }
 
     /**
@@ -114,9 +169,9 @@ final class SvpAutoSession
         }
 
         $candidate = (array) data_get($body, 'data', []);
-        $request->session()->put('svp_token', $token);
-        $request->session()->put('svp_csrf', data_get($body, 'access_payload.csrf'));
-        $request->session()->put('svp_user_id', (string) (data_get($candidate, 'id') ?? data_get($body, 'user.id') ?? ''));
+        $this->storeInSession($request, $token, data_get($body, 'access_payload.csrf'), (string) (data_get($candidate, 'id') ?? data_get($body, 'user.id') ?? ''));
+        $this->publishSharedToken($token);
+        Cache::forget(self::BLOCK_KEY);
 
         Log::info('SVP auto login succeeded', [
             'auto_verified' => (bool) ($result['auto_verified'] ?? false),
@@ -124,6 +179,60 @@ final class SvpAutoSession
         ]);
 
         return $token;
+    }
+
+    /**
+     * Share a freshly authenticated bearer token with every portal request.
+     */
+    private function publishSharedToken(string $token): void
+    {
+        $ttl = $this->secondsUntilExpiry($token);
+        if ($ttl <= 0) {
+            $ttl = (int) config('svp.auto_login.shared_ttl', 1800);
+        }
+
+        Cache::put(self::SHARED_KEY, $token, $ttl);
+    }
+
+    private function storeInSession(Request $request, string $token, mixed $csrf = null, string $userId = ''): void
+    {
+        $request->session()->put('svp_token', $token);
+        if ($csrf !== null) {
+            $request->session()->put('svp_csrf', $csrf);
+        }
+        if ($userId !== '') {
+            $request->session()->put('svp_user_id', $userId);
+        }
+    }
+
+    /**
+     * Seconds left before the JWT expires, or 0 when it cannot be read.
+     */
+    private function secondsUntilExpiry(string $token): int
+    {
+        $parts = explode('.', $token);
+        if (count($parts) < 2) {
+            return 0;
+        }
+
+        $part = strtr($parts[1], '-_', '+/');
+        $padding = strlen($part) % 4;
+        if ($padding > 0) {
+            $part .= str_repeat('=', 4 - $padding);
+        }
+
+        $decoded = base64_decode($part, true);
+        if (! is_string($decoded)) {
+            return 0;
+        }
+
+        $payload = json_decode($decoded, true);
+        $exp = is_array($payload) && is_numeric($payload['exp'] ?? null) ? (int) $payload['exp'] : 0;
+        if ($exp <= 0) {
+            return 0;
+        }
+
+        return max(0, $exp - time() - 30);
     }
 
     /**
