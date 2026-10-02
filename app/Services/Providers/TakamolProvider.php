@@ -1369,6 +1369,9 @@ class TakamolProvider implements BookingProviderInterface
                     'path' => $url,
                     'status' => $response->status(),
                     'response_keys' => is_array($response->json()) ? array_keys($response->json()) : [],
+                    'response_errors' => substr((string) json_encode(
+                        is_array($response->json()) ? ($response->json()['errors'] ?? null) : null
+                    ), 0, 1200),
                 ]);
             }
 

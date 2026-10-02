@@ -12,6 +12,7 @@ use App\Services\SvpTemporaryHoldService;
 use App\Services\UserWalletService;
 use App\Services\PortalAvailabilityService;
 use App\Services\SvpDirectAvailabilityService;
+use App\Services\SvpOtp\SvpAutoSession;
 use App\Services\SvpPaymentHistoryService;
 use App\Services\SvpSessionVerifier;
 use Illuminate\Http\Request;
@@ -30,7 +31,8 @@ class BookingController extends Controller
         private PortalAvailabilityService $portalAvailability,
         private SvpDirectAvailabilityService $directAvailability,
         private SvpPaymentHistoryService $paymentHistory,
-        private SvpSessionVerifier $sessionVerifier
+        private SvpSessionVerifier $sessionVerifier,
+        private SvpAutoSession $autoSession
     ) {
         $this->middleware('auth.multi');
     }
@@ -42,20 +44,81 @@ class BookingController extends Controller
      * lifetime ends. Detecting the expiry locally avoids rendering a booking
      * wizard with an empty occupation list and lets the user re-authenticate.
      */
-    private function ensureSvpToken(Request $request): ?string
+    /**
+     * Does this upstream error look like an invalidated SVP bearer token?
+     */
+    private function looksLikeSvpAuthFailure(string $error): bool
     {
-        $token = $request->session()->get('svp_token');
+        if ($error === '') {
+            return false;
+        }
 
+        foreach (['401', 'unauthorized', 'unauthenticated', 'session expired', 'jwt'] as $needle) {
+            if (stripos($error, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * SVP keeps one active bearer token per account, so any parallel sign-in
+     * (or our own renewal) invalidates the previous one. Read paths therefore
+     * renew once and repeat the exact same call instead of surfacing a 401.
+     */
+    private function withFreshSvpToken(Request $request, callable $call, ?string $token = null): mixed
+    {
+        $token = $token ?? $this->ensureSvpToken($request);
         if (! is_string($token) || $token === '') {
             return null;
         }
 
-        if ($this->svpTokenExpired($token)) {
-            $this->forgetSvpSession($request);
-            return null;
+        $result = $call($token);
+        if (! $this->isUnauthorized($result)) {
+            return $result;
         }
 
-        return $token;
+        $renewed = $this->autoSession->ensure($request, true);
+        if (! is_string($renewed) || $renewed === '' || $renewed === $token) {
+            return $result;
+        }
+
+        Log::warning('SVP call retried with a renewed bearer token.');
+
+        return $call($renewed);
+    }
+
+    private function isUnauthorized(mixed $result): bool
+    {
+        if ($result instanceof \Illuminate\Http\JsonResponse || $result instanceof \Illuminate\Http\Client\Response) {
+            return (int) $result->getStatusCode() === 401;
+        }
+
+        if (is_array($result)) {
+            return (int) ($result['status'] ?? 0) === 401;
+        }
+
+        return false;
+    }
+
+    private function ensureSvpToken(Request $request): ?string
+    {
+        $token = $request->session()->get('svp_token');
+
+        if (is_string($token) && $token !== '' && ! $this->svpTokenExpired($token)) {
+            return $token;
+        }
+
+        // A missing or expired bearer token must not fail the action the user
+        // just started, so renew through the configured automatic SVP sign-in.
+        if (is_string($token) && $token !== '') {
+            $this->forgetSvpSession($request);
+        }
+
+        $renewed = $this->autoSession->ensure($request, true);
+
+        return is_string($renewed) && $renewed !== '' ? $renewed : null;
     }
 
     private function svpTokenExpired(string $token): bool
@@ -970,18 +1033,19 @@ class BookingController extends Controller
             'reservation_id' => 'nullable|string',
         ]);
 
-        $token = $this->ensureSvpToken($request);
-        if (! $token) {
-            return response()->json(['error' => 'SVP session expired.'], 401);
-        }
-
         $params = $request->only([
             'city', 'category_id', 'test_center_id', 'exam_date', 'reservation_id', 'available_seats',
         ]);
         $params = array_filter($params, static fn ($value) => $value !== null && $value !== '');
 
         try {
-            $response = $this->booking->sessionsForCenter($token, $params);
+            $response = $this->withFreshSvpToken(
+                $request,
+                fn (string $bearer) => $this->booking->sessionsForCenter($bearer, $params)
+            );
+            if ($response === null) {
+                return response()->json(['error' => 'SVP session expired.'], 401);
+            }
             if ($response->getStatusCode() === 401) {
                 return $this->expiredSvpResponse($request, $response);
             }
@@ -1029,16 +1093,35 @@ class BookingController extends Controller
             ], 422);
         }
 
-        try {
-            $status = $this->credits->status(
-                $token,
+        $fetchCredits = function (string $bearer) use ($candidate, $data): array {
+            return $this->credits->status(
+                $bearer,
                 $candidate,
                 $data['occupation_id'],
                 $data['methodology'] ?? config('svp.default_methodology', 'in_person')
             );
+        };
+
+        try {
+            $status = $fetchCredits($token);
 
             return response()->json(['success' => true, 'data' => ['credits' => $status['credits']]]);
         } catch (\Throwable $e) {
+            // SVP invalidates the previous bearer token whenever another sign-in
+            // happens, so renew once and repeat before reporting the failure.
+            if ($this->looksLikeSvpAuthFailure($e->getMessage())) {
+                $renewed = $this->autoSession->ensure($request, true);
+                if (is_string($renewed) && $renewed !== '' && $renewed !== $token) {
+                    try {
+                        $status = $fetchCredits($renewed);
+
+                        return response()->json(['success' => true, 'data' => ['credits' => $status['credits']]]);
+                    } catch (\Throwable $retryError) {
+                        $e = $retryError;
+                    }
+                }
+            }
+
             Log::warning('SVP credit status lookup failed', ['error' => $e->getMessage()]);
 
             return response()->json(['success' => false, 'error' => $e->getMessage()], 503);
@@ -1087,21 +1170,27 @@ class BookingController extends Controller
             return back()->with('error', 'Your account is not assigned to an agency yet. Please contact the administrator.');
         }
 
-        $data = $request->validate([
-            'candidate_id'    => ['required', 'integer', 'exists:candidates,id'],
-            'occupation_id'    => ['required', 'string'],
-            'category_id'      => ['required', 'string'],
-            'city'             => ['required', 'string', 'max:120'],
-            'test_center_id'   => ['required', 'string'],
-            'test_center_name' => ['required', 'string', 'max:255'],
-            'exam_session_id'  => ['required', 'string'],
-            'exam_session_name'=> ['nullable', 'string', 'max:255'],
-            'exam_date'        => ['required', 'date'],
-            'temporary_hold_id' => ['required', 'string', 'max:100'],
-            'language_code'    => ['required', 'string', 'max:120'],
-            'methodology'      => ['nullable', 'string', 'max:40'],
-            'notes'           => ['nullable', 'string', 'max:500'],
-        ]);
+        try {
+            $data = $request->validate([
+                'candidate_id'    => ['required', 'integer', 'exists:candidates,id'],
+                'occupation_id'    => ['required', 'string'],
+                'category_id'      => ['required', 'string'],
+                'city'             => ['required', 'string', 'max:120'],
+                'test_center_id'   => ['required', 'string'],
+                'test_center_name' => ['required', 'string', 'max:255'],
+                'test_center_time' => ['required', 'string', 'max:80'],
+                'exam_session_id'  => ['required', 'string'],
+                'exam_session_name'=> ['nullable', 'string', 'max:255'],
+                'exam_date'        => ['required', 'date'],
+                'temporary_hold_id' => ['required', 'string', 'max:100'],
+                'language_code'    => ['required', 'string', 'max:120'],
+                'methodology'      => ['nullable', 'string', 'max:40'],
+                'notes'           => ['nullable', 'string', 'max:500'],
+            ]);
+        } catch (ValidationException $e) {
+            Log::warning('Booking confirm rejected: payload validation', ['errors' => $e->errors()]);
+            throw $e;
+        }
 
         $data['language_code'] = $this->validatedLiveLanguageCode(
             (string) $data['occupation_id'],
@@ -1134,6 +1223,13 @@ class BookingController extends Controller
 
         $hold = $this->holds->consumeMatching($request, $data);
         if ($hold === null) {
+            Log::warning('Booking confirm rejected: no matching temporary hold', [
+                'temporary_hold_id' => $data['temporary_hold_id'] ?? null,
+                'exam_session_id' => $data['exam_session_id'] ?? null,
+                'exam_date' => $data['exam_date'] ?? null,
+                'test_center_id' => $data['test_center_id'] ?? null,
+                'test_center_time' => $data['test_center_time'] ?? null,
+            ]);
             return back()
                 ->withInput()
                 ->withErrors(['temporary_hold_id' => 'Create a new temporary SVP hold for the selected session before confirming the booking.']);
@@ -1161,7 +1257,46 @@ class BookingController extends Controller
             'require_verified_context' => true,
         ]);
 
+        if (! $result['success'] && $this->looksLikeSvpAuthFailure((string) ($result['error'] ?? ''))) {
+            // SVP invalidates bearer tokens (expiry, a parallel login elsewhere)
+            // independently of our JWT check. Renew once and retry the exact same
+            // confirmed selection before reporting a failure.
+            $renewed = $this->autoSession->ensure($request, true);
+            if (is_string($renewed) && $renewed !== '' && $renewed !== $token) {
+                Log::warning('Booking confirm retried after an SVP auth failure', [
+                    'exam_session_id' => $data['exam_session_id'] ?? null,
+                ]);
+                $token = $renewed;
+                $result = $this->booking->completeBooking($renewed, [
+                    'agency_id'       => $agencyId,
+                    'user_id'         => Auth::id(),
+                    'credential_id'   => $candidate->id,
+                    'svp_user_id'     => $candidate->svp_user_id,
+                    'occupation_id'    => $data['occupation_id'],
+                    'category_id'      => $data['category_id'],
+                    'city'             => $data['city'],
+                    'test_center_id'   => $data['test_center_id'],
+                    'test_center_name' => $data['test_center_name'],
+                    'test_center_time' => $data['test_center_time'],
+                    'exam_session_id' => $data['exam_session_id'],
+                    'exam_session_name'=> $data['exam_session_name'] ?? null,
+                    'exam_date'        => $data['exam_date'],
+                    'temporary_hold_id' => $hold['id'],
+                    'temporary_hold_expires_at' => $hold['expires_at'] ?? null,
+                    'language_code'    => strtoupper(trim($data['language_code'])),
+                    'methodology'      => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
+                    'notes'            => $data['notes'] ?? null,
+                    'require_verified_context' => true,
+                ]);
+            }
+        }
+
         if (! $result['success']) {
+            Log::warning('Booking confirm rejected: SVP reservation failed', [
+                'error' => $result['error'] ?? null,
+                'exam_session_id' => $data['exam_session_id'] ?? null,
+                'test_center_id' => $data['test_center_id'] ?? null,
+            ]);
             return back()
                 ->withInput()
                 ->with('error', $result['error'] ?? 'Booking failed.');
@@ -1205,6 +1340,12 @@ class BookingController extends Controller
         )));
 
         if (! in_array($normalized, $validCodes, true)) {
+            Log::warning('Booking confirm rejected: language not advertised live', [
+                'occupation_id' => $occupationId,
+                'submitted' => $normalized,
+                'valid' => $validCodes,
+            ]);
+
             throw ValidationException::withMessages([
                 'language_code' => 'Select a live SVP exam language for the selected occupation.',
             ]);

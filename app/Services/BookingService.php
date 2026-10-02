@@ -8,6 +8,8 @@ use App\Models\BookingAttempt;
 use App\Models\BookingLog;
 use App\Models\Setting;
 use App\Services\Providers\BookingProviderInterface;
+use App\Services\Svp\SvpOccupationResolver;
+use App\Services\T2Hub\T2HubBookingData;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -23,11 +25,13 @@ class BookingService
 {
     public function __construct(
         private BookingProviderInterface $provider,
+        private SvpOccupationResolver $occupationResolver,
         private SvpReservationCreditService $credits,
         private NotificationService $notifications,
         private AuditService $audit,
         private WalletService $wallet,
-        private UserWalletService $userWallet
+        private UserWalletService $userWallet,
+        private T2HubBookingData $t2hubBridge
     ) {}
 
     // -----------------------------------------------------------------
@@ -148,6 +152,49 @@ class BookingService
      * }  $data
      * @return array{booking?: Booking, response?: mixed, success: bool, error?: string}
      */
+    /**
+     * Turn an SVP reservation error payload into a short, human readable reason.
+     *
+     * SVP returns {errors: {field: [messages]}} for a 422 and a plain message for
+     * other failures. Nothing here is secret; it is the validation detail the
+     * official page would also show.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public function describeReservationFailure(array $payload, int $status): string
+    {
+        $errors = $payload['errors'] ?? null;
+        $parts = [];
+
+        if (is_array($errors)) {
+            foreach ($errors as $field => $messages) {
+                if (is_array($messages)) {
+                    foreach ($messages as $message) {
+                        if (is_scalar($message)) {
+                            $parts[] = is_string($field) ? $field . ': ' . (string) $message : (string) $message;
+                        }
+                    }
+                } elseif (is_scalar($messages)) {
+                    $parts[] = is_string($field) ? $field . ': ' . (string) $messages : (string) $messages;
+                }
+            }
+        } elseif (is_scalar($errors)) {
+            $parts[] = (string) $errors;
+        }
+
+        $message = $payload['message'] ?? $payload['detail'] ?? null;
+        if (is_scalar($message) && trim((string) $message) !== '') {
+            $parts[] = (string) $message;
+        }
+
+        $parts = array_values(array_unique(array_filter(array_map('trim', $parts))));
+        if ($parts === []) {
+            return 'SVP rejected the reservation (HTTP ' . $status . ').';
+        }
+
+        return 'SVP rejected the reservation (HTTP ' . $status . '): ' . implode(' ', array_slice($parts, 0, 4));
+    }
+
     public function completeBooking(string $token, array $data, ?Booking $booking = null): array
     {
         $agencyId = (int) $data['agency_id'];
@@ -224,14 +271,46 @@ class BookingService
             // is the authoritative center assignment; site_id/site_city are
             // included as the wizard does for the selected center context.
             $provider = $this->provider->withToken($token);
+
+            // The wizard speaks T2Hub occupation ids while SVP expects the
+            // occupation id that belongs to the category of the selected exam
+            // session. Resolve it from the authoritative session detail plus the
+            // SVP catalogue so the reservation is not rejected with
+            // "selected occupation does not belong to the exam session category".
+            $occupation = $this->occupationResolver->resolveForSession(
+                $token,
+                (string) ($data['exam_session_id'] ?? ''),
+                (string) ($data['occupation_id'] ?? ''),
+            );
+            $providerResponse['occupation_resolution'] = $occupation;
+            if (($occupation['occupation_id'] ?? '') !== '') {
+                $data['svp_occupation_id'] = (string) $occupation['occupation_id'];
+            }
+            if (($occupation['resolved'] ?? false) === true) {
+                $this->logEvent($booking, 'svp_occupation_resolved', [
+                    'submitted' => $occupation['submitted'] ?? null,
+                    'resolved' => $occupation['occupation_id'] ?? null,
+                    'session_category_id' => $occupation['session_category_id'] ?? null,
+                    'reason' => $occupation['reason'] ?? null,
+                ]);
+            }
+
             $reservationResponse = $provider->createReservation($this->reservationPayload($data));
             $reservationPayload = $reservationResponse->getData(true);
             $reservationId = $this->extractReservationId($reservationPayload);
             $providerResponse = ['reservation' => $reservationPayload];
 
             if ($reservationResponse->getStatusCode() < 200 || $reservationResponse->getStatusCode() >= 300 || ! $reservationId) {
-                $attempt->update(['provider_response' => $providerResponse]);
-                return $this->handleBookingFailure($booking, $attempt, $providerResponse);
+                // SVP answers 422 with a field-level errors object. Surface that
+                // reason instead of a generic failure so the wizard can explain
+                // exactly what SVP rejected.
+                $detail = $this->describeReservationFailure($reservationPayload, $reservationResponse->getStatusCode());
+                $attempt->update([
+                    'provider_response' => $providerResponse,
+                    'error_message' => $detail,
+                ]);
+
+                return $this->handleBookingFailure($booking, $attempt, $providerResponse, $detail);
             }
 
             // SVP may echo the requested site_id in prometric_data while
@@ -244,6 +323,33 @@ class BookingService
                 $data['test_center_name'] ?? null,
                 $requireVerifiedContext
             );
+            // Some SVP exam types (for example cbt_and_practical) return no
+            // test-centre block at all. A missing echo must not cancel a
+            // reservation whose session was already proven against the exact
+            // centre-scoped live snapshot, so confirm it from that snapshot and
+            // keep the strict comparison whenever SVP does echo a centre.
+            if (($centerValidation['valid'] ?? false) === false
+                && ($centerValidation['metadata_present'] ?? false) === false) {
+                $snapshotConfirms = false;
+                try {
+                    $snapshotConfirms = $this->t2hubBridge->confirmsSessionCenter(
+                        (string) ($data['category_id'] ?? ''),
+                        (string) ($data['city'] ?? ''),
+                        (string) ($data['exam_date'] ?? ''),
+                        (string) ($data['test_center_id'] ?? ''),
+                        (string) ($data['exam_session_id'] ?? ''),
+                    );
+                } catch (\Throwable $e) {
+                    $snapshotConfirms = false;
+                }
+
+                if ($snapshotConfirms) {
+                    $centerValidation['valid'] = true;
+                    $centerValidation['confirmed_by'] = 'centre_scoped_live_session_snapshot';
+                    $centerValidation['error'] = null;
+                }
+            }
+
             $providerResponse['center_validation'] = $centerValidation;
 
             if (! $centerValidation['valid']) {
@@ -267,7 +373,7 @@ class BookingService
             $creditStatus = $this->credits->statusForUser(
                 $token,
                 (string) ($data['svp_user_id'] ?? ''),
-                (string) ($data['occupation_id'] ?? ''),
+                (string) ($data['svp_occupation_id'] ?? $data['occupation_id'] ?? ''),
                 (string) $methodology
             );
             $providerResponse['credit_status'] = ['credits' => $creditStatus['credits']];
@@ -276,7 +382,7 @@ class BookingService
                 $paymentResponse = $provider->useReservationCredit([
                     'methodology_type' => $methodology,
                     'reservation_id' => $this->numericOrString($reservationId),
-                    'occupation_id' => $this->numericOrString($data['occupation_id'] ?? null),
+                    'occupation_id' => $this->numericOrString($data['svp_occupation_id'] ?? $data['occupation_id'] ?? null),
                 ]);
                 $providerResponse['credit_payment'] = $paymentResponse->getData(true);
                 $attempt->update(['provider_response' => $providerResponse]);
@@ -440,7 +546,7 @@ class BookingService
             $creditStatus = $this->credits->statusForUser(
                 $token,
                 (string) ($data['svp_user_id'] ?? ''),
-                (string) ($data['occupation_id'] ?? ''),
+                (string) ($data['svp_occupation_id'] ?? $data['occupation_id'] ?? ''),
                 (string) $methodology
             );
             $providerResponse['credit_status'] = ['credits' => $creditStatus['credits']];
@@ -449,7 +555,7 @@ class BookingService
                 $creditResponse = $provider->useReservationCredit([
                     'methodology_type' => $methodology,
                     'reservation_id' => $this->numericOrString($reservationId),
-                    'occupation_id' => $this->numericOrString($data['occupation_id'] ?? null),
+                    'occupation_id' => $this->numericOrString($data['svp_occupation_id'] ?? $data['occupation_id'] ?? null),
                 ]);
                 $providerResponse['credit_payment'] = $creditResponse->getData(true);
                 $attempt->update(['provider_response' => $providerResponse]);
@@ -566,7 +672,7 @@ class BookingService
     {
         return [
             'exam_session_id' => (string) ($data['exam_session_id'] ?? ''),
-            'occupation_id'   => $this->numericOrString($data['occupation_id'] ?? null),
+            'occupation_id'   => $this->numericOrString($data['svp_occupation_id'] ?? $data['occupation_id'] ?? null),
             'language_code'   => strtoupper((string) ($data['language_code'] ?? config('svp.default_language_code', 'LOABB'))),
             'methodology'     => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
             // Seat holds are created up-front for the operator's benefit, but the
