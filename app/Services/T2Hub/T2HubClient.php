@@ -241,6 +241,24 @@ class T2HubClient
 
         $key = 't2hub:get:'.sha1($path.'|'.json_encode($params));
 
+        if (str_contains($path, '/pacc-exam-sessions')) {
+            $cached = Cache::get($key);
+            if (is_array($cached)) {
+                return $cached;
+            }
+
+            $result = $this->send('GET', $path, $params, null, $retry);
+            // A temporarily empty day must become visible quickly when seats
+            // reappear; never cache a failed/decryption response here.
+            $emptyTtl = max(0, (int) config('t2hub.empty_sessions_ttl', 8));
+            $resultTtl = empty($result['sessions']) ? min($ttl, $emptyTtl) : $ttl;
+            if ($resultTtl > 0) {
+                Cache::put($key, $result, $resultTtl);
+            }
+
+            return $result;
+        }
+
         return Cache::remember($key, $ttl, fn (): array => $this->send('GET', $path, $params, null, $retry));
     }
 

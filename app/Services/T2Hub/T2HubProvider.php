@@ -87,10 +87,13 @@ class T2HubProvider
                 continue;
             }
 
-            $dates[$date] = [
+            // A date can be available in several cities. Keying by date alone
+            // silently discarded all but the final city's slot.
+            $dateCity = trim((string) ($row['test_center']['city'] ?? $city));
+            $dates[strtolower($dateCity).'|'.$date] = [
                 'date' => $date,
                 'test_center_date' => (string) ($row['start_date_in_tc_time_zone'] ?? $date),
-                'city' => (string) ($row['test_center']['city'] ?? $city),
+                'city' => $dateCity,
                 'country_id' => $row['test_center']['country_id'] ?? null,
             ];
         }

@@ -282,7 +282,7 @@ final class T2HubBookingData
      * lookup per upcoming date are exactly the calls the wizard would otherwise
      * pay for on the first click.
      *
-     * @param  array<int, string>  $dates
+     * @param  array<int, string|array{date: string, city?: string}>  $dates
      */
     public function warmCityDates(int|string $categoryId, string $city, array $dates): int
     {
@@ -304,11 +304,20 @@ final class T2HubBookingData
             // Enrichment only.
         }
 
-        foreach (array_slice($dates, 0, 4) as $date) {
-            $date = trim((string) $date);
+        // bookingDates() returns rows, not strings. Never cast an array to
+        // "Array" (which silently skipped every real date in the old warmup).
+        $uniqueDates = [];
+        foreach ($dates as $row) {
+            $date = trim((string) (is_array($row) ? ($row['date'] ?? '') : $row));
             if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1) {
                 continue;
             }
+            $uniqueDates[$date] = true;
+        }
+
+        // Only warm the first two dates: empty upstream dates can take seconds
+        // and PHP-FPM must not be tied up warming every date in a calendar.
+        foreach (array_slice(array_keys($uniqueDates), 0, 2) as $date) {
             try {
                 $this->provider->sessions((string) $categoryId, $city, $date);
                 $warmed++;

@@ -30,7 +30,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="bg-white rounded-xl border border-slate-200 p-4">
                 <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Selected User Wallet</p>
-                <p class="text-sm font-semibold text-slate-700">The selected user’s personal wallet will be charged.</p>
+                <p class="text-sm font-semibold text-slate-700">User wallet</p>
             </div>
             <div class="bg-white rounded-xl border border-slate-200 p-4">
                 <label for="candidate_id" class="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Candidate / User</label>
@@ -71,7 +71,7 @@
                             @endphp
                             @foreach($occ as $o)
                                 @php $o = (array) $o; @endphp
-                                <option value="{{ $o['id'] ?? $o['occupation_id'] ?? '' }}">—</option>
+                                <option value="{{ $o['id'] ?? $o['occupation_id'] ?? '' }}">{{ $o['name'] ?? $o['english_name'] ?? $o['category_name'] ?? '' }}</option>
                             @endforeach
                         </select>
                         <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -505,7 +505,7 @@
             const key = sessionLookupKey(centerId, dateValue);
             if (sessionLookupCache.has(key)) {
                 const cached = sessionLookupCache.get(key);
-                if (Array.isArray(cached) && cached.length > 0) return Promise.resolve(cached);
+                if (cached?.expiresAt > Date.now() && Array.isArray(cached.rows) && cached.rows.length) return Promise.resolve(cached.rows);
                 // Never retain a transient empty response: the same date may become
                 // available again after the upstream session refresh completes.
                 sessionLookupCache.delete(key);
@@ -515,7 +515,7 @@
             const request = fetchJSON("{{ route('agency.bookings.lookup.sessions') }}?" + params.toString())
                 .then(body => {
                     const sessions = Array.isArray(sessionRowsFromResponse(body)) ? sessionRowsFromResponse(body) : [];
-                    if (sessions.length > 0) sessionLookupCache.set(key, sessions);
+                    if (sessions.length > 0) sessionLookupCache.set(key, {rows: sessions, expiresAt: Date.now() + 30000});
                     else sessionLookupCache.delete(key);
                     return sessions;
                 })
@@ -526,6 +526,19 @@
                 .finally(() => sessionLookupRequests.delete(key));
             sessionLookupRequests.set(key, request);
             return request;
+        }
+
+        function seedBundledSessions(body, centers, dateValue) {
+            if (body?.data?.sessions_bundled !== true) return false;
+            const bundled = body.data.sessions_by_center || {};
+            (Array.isArray(centers) ? centers : []).forEach(center => {
+                const id = String(center.id || center.test_center_id || '');
+                const rows = bundled[id];
+                if (id && Array.isArray(rows) && rows.length) {
+                    sessionLookupCache.set(sessionLookupKey(id, dateValue), {rows, expiresAt: Date.now() + 30000});
+                }
+            });
+            return true;
         }
 
         function prefetchSessionsForCenters(centers, dateValue) {
@@ -1116,12 +1129,16 @@
             }
         });
 
+        let dateLookupSerial = 0;
         async function loadPortalDatesForCity(city) {
             if (!city || !categorySelect.value) return;
+            const categoryId = categorySelect.value;
+            const serial = ++dateLookupSerial;
             try {
                 setLoading(availableDateSelect, true);
-                const url = "{{ route('agency.bookings.lookup.dates') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categorySelect.value);
+                const url = "{{ route('agency.bookings.lookup.dates') }}?city=" + encodeURIComponent(city) + "&category_id=" + encodeURIComponent(categoryId);
                 const data = await fetchJSON(url);
+                if (serial !== dateLookupSerial || citySelect.value !== city || categorySelect.value !== categoryId) return;
                 const availableDates = data?.data?.dates || data?.dates || [];
                 sessionCatalog = [];
                 availableDateCatalog = Array.isArray(availableDates) ? availableDates : [];
@@ -1131,18 +1148,19 @@
                 dateInput.value = '';
                 renderSessionsForDate('');
                 if (dates.length) {
-                    if (temporaryHoldStatus) temporaryHoldStatus.textContent = dates.length + ' live exam date' + (dates.length === 1 ? '' : 's') + ' available for ' + city + '. Select a date to load its center slots.';
+                    if (temporaryHoldStatus) temporaryHoldStatus.textContent = dates.length + ' live date' + (dates.length === 1 ? '' : 's');
                 } else {
-                    showError(dateError, 'No live Portal Availability dates returned for ' + city + '.');
+                    showError(dateError, 'No dates for ' + city + '.');
                 }
             } catch (e) {
+                if (serial !== dateLookupSerial || citySelect.value !== city || categorySelect.value !== categoryId) return;
                 availableDateCatalog = [];
                 renderAvailableDates([], []);
                 renderSessionsForDate('');
                 showError(dateError, 'Could not load live dates. The SVP service is unreachable — please try again.');
                 console.error(e);
             } finally {
-                setLoading(availableDateSelect, false);
+                if (serial === dateLookupSerial) setLoading(availableDateSelect, false);
             }
         }
 
@@ -1179,21 +1197,21 @@
                     date: date,
                     emptyText: directSvpFallback
                         ? 'Active SVP authentication returned no exact session at a configured center for this date.'
-                        : 'No live test-center slots returned for the selected date.'
+                            : 'No centers for this date.'
                 });
                 testCenterSelect.value = '';
                 testCenterSelect.dataset.name = '';
                 if (dhakaCenterSummary) {
                     dhakaCenterSummary.textContent = centers.length
                         ? (directSvpFallback
-                            ? 'Portal Availability had no slot; active SVP authentication confirmed ' + centers.length + ' center slot' + (centers.length === 1 ? '' : 's') + ' for ' + city + ' on ' + date + '. Select one to load exact SVP sessions.'
+                            ? centers.length + ' SVP center' + (centers.length === 1 ? '' : 's')
                             : centers.length + ' center' + (centers.length === 1 ? '' : 's'))
                         : (directSvpFallback
-                            ? 'Active SVP authentication returned no exact session for ' + city + ' on ' + date + '.'
+                            ? 'No SVP sessions for this date.'
                             : 'No center slots returned for ' + city + ' on ' + date + '.');
                 }
                 testCenterSection.style.display = centers.length ? '' : 'none';
-                prefetchSessionsForCenters(centers, date);
+                if (!seedBundledSessions(data, centers, date)) prefetchSessionsForCenters(centers, date);
                 if (!centers.length) showError(testCenterError, 'No test centers available for the selected date.');
             } catch (e) {
                 testCenterSection.style.display = 'none';

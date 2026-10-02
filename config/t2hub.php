@@ -59,9 +59,10 @@ return [
         'occupations' => (int) env('T2HUB_CACHE_TTL_OCCUPATIONS', 600),
         'cities' => (int) env('T2HUB_CACHE_TTL_CITIES', 600),
         'test-centers' => (int) env('T2HUB_CACHE_TTL_CENTERS', 900),
-        'available-dates' => (int) env('T2HUB_CACHE_TTL_DATES', 600),
-        'exam-sessions' => (int) env('T2HUB_CACHE_TTL_SESSIONS', 240),
+        'available-dates' => (int) env('T2HUB_CACHE_TTL_DATES', 90),
+        'exam-sessions' => (int) env('T2HUB_CACHE_TTL_SESSIONS', 45),
     ],
+    'empty_sessions_ttl' => (int) env('T2HUB_CACHE_TTL_EMPTY_SESSIONS', 8),
 
     'debug' => filter_var(env('T2HUB_DEBUG', false), FILTER_VALIDATE_BOOL),
 

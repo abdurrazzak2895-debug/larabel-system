@@ -779,9 +779,13 @@ class BookingController extends Controller
                 ->with('error', 'Your account is not assigned to an agency yet. Please contact the administrator to create bookings.');
         }
 
-        $token = $this->ensureSvpToken($request);
-
         // Wallet + currently active candidates synced from SVP profile after login.
+        // Catalogue browsing must not wait for an e-mail OTP. The hold/confirm
+        // endpoints retain their existing authenticated SVP behaviour.
+        $token = config('t2hub.data_source') === 't2hub'
+            ? $request->session()->get('svp_token')
+            : $this->ensureSvpToken($request);
+
         $wallet = $this->userWallet->getWallet((int) Auth::id());
         $candidates = Candidate::where('user_id', Auth::id())
             ->where('agency_id', $agencyId)
@@ -950,7 +954,9 @@ class BookingController extends Controller
             $availabilitySource = 'portal_availability';
             $fallback = false;
 
-            if (filled($data['date'] ?? null) && $centers === []) {
+            // An empty T2Hub date is not an SVP authentication failure. Never
+            // start an OTP login just to render an empty centre list.
+            if (config('t2hub.data_source') !== 't2hub' && filled($data['date'] ?? null) && $centers === []) {
                 $token = $this->ensureSvpToken($request);
                 if ($token) {
                     $direct = $this->directAvailability->centersForDate($token, [
@@ -1000,11 +1006,39 @@ class BookingController extends Controller
                 }
             }
 
+            $sessionsByCenter = [];
+            if (config('t2hub.data_source') === 't2hub' && filled($data['date'] ?? null) && $centers !== []) {
+                // The centre lookup already loaded this category/city/date from
+                // T2Hub. Return the same snapshot's sessions alongside its
+                // centres rather than making the browser fetch each centre.
+                $activeCenterIds = array_fill_keys(array_map(
+                    static fn (array $center): string => (string) ($center['test_center_id'] ?? $center['id'] ?? ''),
+                    array_filter($centers, 'is_array'),
+                ), true);
+                foreach (app(\App\Services\T2Hub\T2HubBookingData::class)->sessionRows(
+                    $data['category_id'], $data['city'], $data['date'],
+                ) as $session) {
+                    $centerId = (string) ($session['test_center_id'] ?? '');
+                    if ($centerId !== '' && isset($activeCenterIds[$centerId])) {
+                        // Do not send the raw upstream payload to the browser.
+                        $sessionsByCenter[$centerId][] = array_intersect_key($session, array_flip([
+                            'id', 'exam_session_id', 'test_center_id', 'center_name', 'exam_date',
+                            'exam_time', 'test_time', 'time', 'session_name', 'label',
+                            'available_seats', 'status', 'city', 'source',
+                        ]));
+                    }
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'availability_source' => $availabilitySource,
                 'fallback' => $fallback,
-                'data' => ['test_centers' => $centers],
+                'data' => [
+                    'test_centers' => $centers,
+                    'sessions_by_center' => $sessionsByCenter,
+                    'sessions_bundled' => config('t2hub.data_source') === 't2hub' && filled($data['date'] ?? null),
+                ],
             ]);
         } catch (\Throwable $e) {
             Log::error('Portal lookup test-centers failed', ['error' => $e->getMessage()]);
@@ -1019,15 +1053,17 @@ class BookingController extends Controller
                 'city' => 'required|string',
                 'category_id' => 'required|string',
                 'test_center_id' => 'required|string',
-                'exam_date' => 'nullable|date_format:Y-m-d',
+                'exam_date' => 'required|date_format:Y-m-d',
             ]);
 
-            $sessions = app(\App\Services\T2Hub\T2HubBookingData::class)->sessionRows(
-                $data['category_id'],
-                $data['city'],
-                $data['exam_date'] ?? null,
-                $data['test_center_id'],
-            );
+            try {
+                $sessions = app(\App\Services\T2Hub\T2HubBookingData::class)->sessionRows(
+                    $data['category_id'], $data['city'], $data['exam_date'], $data['test_center_id'],
+                );
+            } catch (\Throwable $e) {
+                Log::warning('T2Hub lookup sessions failed', ['error' => $e->getMessage()]);
+                return response()->json(['success' => false, 'error' => 'Unable to load live sessions.'], 503);
+            }
 
             return response()->json([
                 'success' => true,
