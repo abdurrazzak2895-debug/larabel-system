@@ -889,6 +889,39 @@ class BookingController extends Controller
                 }
             }
 
+            // Remember the live sessions behind each returned centre slot so the
+            // hold endpoint can validate the exact session this browser saw. The
+            // entries are keyed exactly like the hold request (category + city +
+            // centre), which is what makes the hold resolvable without depending
+            // on a separate sessions round-trip.
+            if (is_array($centers) && $centers !== [] && filled($data['date'] ?? null)) {
+                foreach ($centers as $center) {
+                    if (! is_array($center)) {
+                        continue;
+                    }
+                    $centerId = (string) ($center['test_center_id'] ?? $center['id'] ?? '');
+                    if ($centerId === '') {
+                        continue;
+                    }
+                    $sessionIds = array_values(array_filter(array_map(
+                        static fn ($id): string => trim((string) $id),
+                        (array) ($center['session_ids'] ?? []),
+                    )));
+                    $this->holds->rememberSessionLookup($request, [
+                        'category_id' => (string) $data['category_id'],
+                        'city' => (string) $data['city'],
+                        'test_center_id' => $centerId,
+                    ], [
+                        'sessions' => array_map(static fn (string $id): array => [
+                            'id' => $id,
+                            'exam_session_id' => $id,
+                            'test_center_id' => $centerId,
+                            'exam_date' => (string) $data['date'],
+                        ], $sessionIds),
+                    ]);
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'availability_source' => $availabilitySource,

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\BookingService;
 use App\Services\SvpOtp\SvpAutoSession;
 use App\Services\SvpSessionVerifier;
+use App\Services\T2Hub\T2HubBookingData;
 use App\Services\SvpTemporaryHoldService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ class SvpHoldController extends Controller
         private SvpTemporaryHoldService $holds,
         private SvpSessionVerifier $sessionVerifier,
         private SvpAutoSession $autoSession,
+        private T2HubBookingData $t2hub,
     ) {
     }
 
@@ -70,6 +72,24 @@ class SvpHoldController extends Controller
                 $data['exam_session_id'],
                 $data['exam_date']
             );
+            // The browser snapshot is the primary source. When it is missing
+            // (for example after a cache clear or a fresh tab), re-read the live
+            // centre-scoped T2Hub list so a session the user just selected is
+            // still resolvable instead of failing with a misleading error.
+            if ($selectedSession === null && $this->t2hub->enabled()) {
+                try {
+                    $selectedSession = $this->t2hub->sessionSnapshot(
+                        $data['category_id'],
+                        $data['city'],
+                        $data['exam_date'],
+                        $data['test_center_id'],
+                        $data['exam_session_id'],
+                    );
+                } catch (\Throwable $e) {
+                    $selectedSession = null;
+                }
+            }
+
             $selectedSessionDate = $this->sessionDate($selectedSession);
             $resolvedSessionId = (string) ($selectedSession['id'] ?? '');
 

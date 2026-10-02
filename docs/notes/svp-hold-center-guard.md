@@ -67,3 +67,34 @@ Read-only probes used for this investigation:
 * `probes/t2hub-svp-one.php` - pairs one live T2Hub session with its SVP detail
 * `probes/t2hub-session-shape.php`, `probes/t2hub-centre-cities.php` - payload shape
 * `probes/svp-login-shape.php` - login/OTP envelope with masked values
+
+## Follow-up: the hold itself returned 422
+
+After the centre guard started passing, clicking **Create temporary hold** answered:
+
+> No available SVP session remains at the selected test center on or after the requested date.
+
+Cause: `SvpTemporaryHoldService::resolveCenterSession()` resolves the selected
+session from the per-browser snapshot written by `rememberSessionLookup()`. With
+the T2Hub data source the wizard builds its session list from the
+`/lookup/test-centers` payload and never called `/lookup/sessions`, so the
+snapshot was always empty and every hold failed.
+
+Fix:
+
+1. `lookupTestCenters` (user + agency) now writes one snapshot entry per returned
+   centre slot, keyed exactly like the hold request (category + city + centre),
+   so the session the browser saw is the one the hold validates.
+2. `SvpHoldController` additionally falls back to a live, centre-scoped T2Hub
+   lookup (`T2HubBookingData::sessionSnapshot()`) when the browser snapshot is
+   missing (cache clear, fresh tab), instead of failing with that message.
+
+### Live verification (real SVP account, 2026-10-02)
+
+```
+Occupation Barber (50) · City Rajshahi · Category Barber · Language Bengali
+Date 2026-10-06 · Centre Rajshahi Technical Training Centre (id 54) · 10:00 AM
+=> Hold #5759354 created — expires 02/10/2026 00:28
+```
+
+No booking confirmation and no payment was made.
