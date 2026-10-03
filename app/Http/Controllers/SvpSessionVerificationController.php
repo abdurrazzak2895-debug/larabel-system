@@ -133,7 +133,6 @@ class SvpSessionVerificationController extends Controller
                 ],
                 'checks' => [
                     't2hub_snapshot_confirmed' => true,
-                    'source' => 't2hub',
                 ],
             ]);
         }

@@ -1197,7 +1197,7 @@ class BookingController extends Controller
                         $sessionsByCenter[$centerId][] = array_intersect_key($session, array_flip([
                             'id', 'exam_session_id', 'test_center_id', 'center_name', 'exam_date',
                             'exam_time', 'test_time', 'time', 'session_name', 'label',
-                            'available_seats', 'status', 'city', 'source',
+                            'available_seats', 'status', 'city',
                         ]));
                     }
                 }
@@ -1208,7 +1208,10 @@ class BookingController extends Controller
                 'availability_source' => $availabilitySource,
                 'fallback' => $fallback,
                 'data' => [
-                    'test_centers' => $centers,
+                    'test_centers' => array_map(static function (array $center): array {
+                        unset($center['source']);
+                        return $center;
+                    }, $centers),
                     'sessions_by_center' => $sessionsByCenter,
                     'sessions_bundled' => config('t2hub.data_source') === 't2hub' && filled($data['date'] ?? null),
                 ],
@@ -1233,6 +1236,10 @@ class BookingController extends Controller
                 $sessions = app(\App\Services\T2Hub\T2HubBookingData::class)->sessionRows(
                     $data['category_id'], $data['city'], $data['exam_date'], $data['test_center_id'],
                 );
+                $sessions = array_map(static function (array $session): array {
+                    unset($session['source']);
+                    return $session;
+                }, $sessions);
             } catch (\Throwable $e) {
                 Log::warning('T2Hub lookup sessions failed', ['error' => $e->getMessage()]);
                 return response()->json(['success' => false, 'error' => 'Unable to load live sessions.'], 503);
@@ -1244,7 +1251,6 @@ class BookingController extends Controller
                 'data' => [
                     'sessions' => $sessions,
                     'exam_sessions' => $sessions,
-                    'source' => 't2hub',
                 ],
             ]);
         }
