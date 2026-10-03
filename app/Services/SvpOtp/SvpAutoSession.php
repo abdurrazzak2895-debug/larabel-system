@@ -67,25 +67,27 @@ final class SvpAutoSession
      */
     public function ensure(Request $request, bool $force = false): ?string
     {
-        $shared = $this->sharedToken();
         $token = $request->session()->get('svp_token');
         $token = is_string($token) ? trim($token) : '';
+        $shared = $this->sharedToken();
 
-        // One live SVP session serves the whole portal: SVP invalidates the
-        // previous token on every new sign-in, so reusing the shared bearer
-        // token is both faster and the only way to stop login churn.
+        // Prefer the token from the current manual login. A stale shared token
+        // may still be locally unexpired even though SVP invalidated it when a
+        // different login completed, which previously caused hold 401s.
+        if (! $force && $token !== '' && ! $this->expired($token)) {
+            $this->publishSharedToken($token);
+
+            return $token;
+        }
+
+        // Fall back to the shared token only when this session has no usable
+        // token of its own.
         if (! $force && $shared !== '') {
             if ($token !== $shared) {
                 $this->storeInSession($request, $shared);
             }
 
             return $shared;
-        }
-
-        if (! $force && $token !== '' && ! $this->expired($token)) {
-            $this->publishSharedToken($token);
-
-            return $token;
         }
 
         if (Cache::has(self::BLOCK_KEY)) {
@@ -130,6 +132,19 @@ final class SvpAutoSession
         }
 
         return $token;
+    }
+
+    /** Publish a manually verified token as the current shared portal token. */
+    public function publish(string $token): void
+    {
+        $this->publishSharedToken($token);
+        Cache::forget(self::BLOCK_KEY);
+    }
+
+    /** Remove a shared token after SVP rejects it as unauthorized. */
+    public function forgetShared(): void
+    {
+        Cache::forget(self::SHARED_KEY);
     }
 
     /**

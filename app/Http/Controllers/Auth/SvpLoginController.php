@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\ProfileService;
 use App\Services\SvpApiService;
 use App\Services\SvpOtp\OtpAutoVerifier;
+use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -19,7 +20,11 @@ use Illuminate\Validation\ValidationException;
  */
 class SvpLoginController extends Controller
 {
-    public function __construct(protected SvpApiService $svp, protected ProfileService $profile)
+    public function __construct(
+        protected SvpApiService $svp,
+        protected ProfileService $profile,
+        protected SvpAutoSession $autoSession,
+    )
     {
     }
 
@@ -220,6 +225,7 @@ class SvpLoginController extends Controller
         $request->session()->put('svp_token', $token);
         $request->session()->put('svp_csrf', data_get($result['body'], 'access_payload.csrf'));
         $request->session()->forget('svp_login');
+        $this->autoSession->publish($token);
 
         // Auto-create / update candidate from SVP profile after successful login.
         // Some SVP deployments intermittently fail the follow-up profile request,
