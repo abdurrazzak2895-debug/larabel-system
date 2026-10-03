@@ -9,7 +9,7 @@ use App\Models\BookingLog;
 use App\Models\DepositRequest;
 use App\Models\RefundRequest;
 use App\Models\User;
-use App\Models\WalletTransaction;
+use App\Models\UserWallet;
 use App\Services\ReportService;
 use Illuminate\Http\Request;
 
@@ -22,7 +22,9 @@ class DashboardController extends Controller
         return view('admin.dashboard', [
             'totalAgencies'     => Agency::count(),
             'activeUsers'       => User::where('status', true)->count(),
-            'totalWalletBalance' => WalletTransaction::sum('amount'),
+            // User balances live in user_wallets; wallet_transactions is an
+            // immutable ledger and does not contain imported opening balances.
+            'totalWalletBalance' => UserWallet::sum('available_balance'),
             'dailyBookings'     => Booking::whereDate('created_at', today())->count(),
             'failedBookings'    => Booking::where('booking_status', 'failed')->whereDate('created_at', today())->count(),
             'queueStatus'       => \Illuminate\Support\Facades\Queue::size(),
