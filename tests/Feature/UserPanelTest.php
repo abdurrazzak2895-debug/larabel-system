@@ -315,6 +315,16 @@ class UserPanelTest extends TestCase
                 'exam_reservation' => [
                     'id' => 5370113,
                     'exam_result' => 'failed',
+                    'exam_session' => [
+                        'start_date_in_browser_time_zone' => '2026-08-26T09:00:00+06:00',
+                        'test_center' => [
+                            'data' => [
+                                'attributes' => [
+                                    'name' => 'Bangladesh German TTC',
+                                ],
+                            ],
+                        ],
+                    ],
                     'can_be_canceled' => false,
                     'can_be_rescheduled' => false,
                 ],
@@ -326,6 +336,15 @@ class UserPanelTest extends TestCase
                         'status' => 'completed',
                         'exam_result' => 'passed',
                         'exam_date' => '2026-08-25',
+                        'exam_session' => [
+                            'test_center' => [
+                                'data' => [
+                                    'attributes' => [
+                                        'name' => 'Bangladesh Korea TTC Dhaka',
+                                    ],
+                                ],
+                            ],
+                        ],
                         'can_be_canceled' => true,
                         'can_be_rescheduled' => true,
                         'category' => ['english_name' => 'Kitchen Workers'],
@@ -334,7 +353,6 @@ class UserPanelTest extends TestCase
                         'id' => 5370113,
                         'status' => 'completed',
                         'exam_result' => 'failed',
-                        'exam_date' => '2026-08-26',
                         'can_be_canceled' => false,
                         'can_be_rescheduled' => false,
                         'category' => ['english_name' => 'Electrician'],
@@ -384,6 +402,10 @@ class UserPanelTest extends TestCase
         $page->assertOk()
             ->assertSee('SVP My Bookings')
             ->assertSee('5370112')
+            ->assertSee('2026-08-25')
+            ->assertSee('Bangladesh Korea TTC Dhaka')
+            ->assertSee('2026-08-26')
+            ->assertSee('Bangladesh German TTC')
             ->assertSee('Result: Passed')
             ->assertSee('Result: Failed')
             ->assertSee('Cancel Reservation')

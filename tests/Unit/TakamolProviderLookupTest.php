@@ -674,7 +674,7 @@ class TakamolProviderLookupTest extends TestCase
         });
     }
 
-    public function test_temporary_seat_uses_the_official_array_body_and_locale(): void
+    public function test_temporary_seat_uses_the_live_verified_body_and_locale(): void
     {
         Http::fake([
             'https://svp.test/*' => Http::response([
@@ -700,9 +700,9 @@ class TakamolProviderLookupTest extends TestCase
                 && str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/api/v1/individual_labor_space/temporary_seats')
                 && parse_url($request->url(), PHP_URL_QUERY) === 'locale=en'
                 && $request->hasHeader('Authorization', 'Bearer test-token')
-                && ($body['exam_session_id'] ?? null) === [1536060]
-                && ($body['methodology'] ?? null) === 'in_person'
-                && ! array_key_exists('test_center_id', $body);
+                && ($body['exam_session_id'] ?? null) === 1536060
+                && ($body['test_center_id'] ?? null) === 223
+                && ! array_key_exists('methodology', $body);
         });
     }
 

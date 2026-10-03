@@ -253,6 +253,13 @@ class SvpLoginController extends Controller
         if ($loginSvpUserId !== '' && $this->extractSvpUserId($profile) === '') {
             $profile['svp_user_id'] = $loginSvpUserId;
         }
+        // Some successful OTP responses contain only access_payload.user.id;
+        // /profile may be empty or unauthorized even though the token is valid.
+        // Still sync/reactivate the existing local candidate so the booking
+        // dropdown is not empty after a successful SVP login.
+        if ($profile === [] && $loginSvpUserId !== '') {
+            $profile = ['svp_user_id' => $loginSvpUserId];
+        }
 
         if ($profile !== []) {
             try {

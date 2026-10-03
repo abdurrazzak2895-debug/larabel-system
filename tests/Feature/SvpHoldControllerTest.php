@@ -11,6 +11,17 @@ use Tests\TestCase;
 
 class SvpHoldControllerTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // These existing cases exercise the candidate-authenticated SVP
+        // detail-verification path. T2Hub-mode coverage belongs in a dedicated
+        // test because production T2Hub intentionally skips that cross-system
+        // detail lookup.
+        config()->set('t2hub.data_source', 'svp');
+    }
+
     public function test_live_style_hold_response_is_normalized_and_bound_to_the_session(): void
     {
         $booking = Mockery::mock(BookingService::class);
@@ -35,8 +46,8 @@ class SvpHoldControllerTest extends TestCase
         $booking->shouldReceive('temporarySeat')
             ->once()
             ->with('svp-token', [
-                'exam_session_id' => ['2'],
-                'methodology' => 'in_person',
+                'exam_session_id' => '2',
+                'test_center_id' => '403',
             ])
             ->andReturn(response()->json([
                 'id' => 5143290,
@@ -152,8 +163,8 @@ class SvpHoldControllerTest extends TestCase
         $booking->shouldReceive('temporarySeat')
             ->once()
             ->with('svp-token', [
-                'exam_session_id' => ['different-session-id'],
-                'methodology' => 'in_person',
+                'exam_session_id' => 'different-session-id',
+                'test_center_id' => '223',
             ])
             ->andReturn(response()->json([
                 'id' => 5144550,
@@ -435,8 +446,8 @@ class SvpHoldControllerTest extends TestCase
         $booking->shouldReceive('temporarySeat')
             ->once()
             ->with('svp-token', [
-                'exam_session_id' => ['german-ttc-session'],
-                'methodology' => 'in_person',
+                'exam_session_id' => 'german-ttc-session',
+                'test_center_id' => '45',
             ])
             ->andReturn(response()->json([
                 'id' => 5270002,
@@ -502,8 +513,8 @@ class SvpHoldControllerTest extends TestCase
         $booking->shouldReceive('temporarySeat')
             ->once()
             ->with('svp-token', [
-                'exam_session_id' => ['centerless-list-session'],
-                'methodology' => 'in_person',
+                'exam_session_id' => 'centerless-list-session',
+                'test_center_id' => '17',
             ])
             ->andReturn(response()->json([
                 'id' => 5270001,

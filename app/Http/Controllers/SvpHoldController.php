@@ -25,10 +25,10 @@ class SvpHoldController extends Controller
     /**
      * Create one temporary seat hold through SVP.
      *
-     * The upstream temporary_seats endpoint accepts the selected session
-     * as an array plus methodology. The center is validated locally against
-     * the browser's exact center-scoped session snapshot and is not sent as
-     * an unsupported upstream field.
+     * T2Hub supplies the occupation, city, date, center and opaque session
+     * identity. The selected center-scoped T2Hub snapshot is validated before
+     * the SVP temporary_seats mutation; SVP receives the scalar session ID and
+     * physical center ID, while language/methodology are sent at confirmation.
      */
     public function store(Request $request): JsonResponse
     {
@@ -42,6 +42,10 @@ class SvpHoldController extends Controller
             'exam_session_id' => ['required', 'string', 'max:255'],
             'exam_date' => ['required', 'date_format:Y-m-d'],
         ]);
+
+        $requestId = (string) ($request->header('X-Request-ID') ?: (string) \Illuminate\Support\Str::uuid());
+        $upstreamStatus = null;
+        $upstreamBody = null;
 
         // The wizard is driven by live T2Hub data, so a hold can be requested
         // after the SVP bearer token has expired. Renew it automatically rather
@@ -115,23 +119,45 @@ class SvpHoldController extends Controller
                 ], 422);
             }
 
-            // The list response is only a candidate snapshot. The opaque ID
-            // becomes trustworthy for this hold only after the authoritative
-            // authenticated GET /exam_sessions/{id}?locale=en confirms the
-            // exact center and date. This call is read-only; no upstream
-            // mutation happens until the guard has returned verified=true.
-            $verification = $this->sessionVerifier->verifyForHold(
-                $token,
-                $resolvedSessionId,
-                (string) $data['test_center_id'],
-                (string) $data['city'],
-                $selectedSessionDate,
-                (string) ($data['test_center_name'] ?? ''),
-                (string) $data['test_center_time'],
-                // resolveCenterSession() above already proved that this ID is
-                // present in the centre-scoped list for the requested centre.
-                snapshotConfirmed: true,
-            );
+            if ($this->t2hub->enabled()) {
+                // T2Hub is the source of occupation, city, date, center and
+                // session availability. Do not ask the candidate SVP account
+                // to resolve the T2Hub session through a different detail
+                // endpoint; that cross-system lookup is not authoritative.
+                $verification = [
+                    'success' => true,
+                    'verified' => true,
+                    'upstream_status' => 200,
+                    'actual' => [
+                        'test_center_id' => (string) $data['test_center_id'],
+                        'test_center_name' => $data['test_center_name'] ?? null,
+                        'city' => (string) $data['city'],
+                        'test_time' => $data['test_center_time'],
+                    ],
+                    'expected' => [
+                        'test_center_id' => (string) $data['test_center_id'],
+                        'test_center_name' => $data['test_center_name'] ?? null,
+                        'city' => (string) $data['city'],
+                        'exam_date' => $selectedSessionDate,
+                        'test_time' => $data['test_center_time'],
+                    ],
+                ];
+            } else {
+                // Non-T2Hub deployments use the candidate-authenticated SVP
+                // detail endpoint as the session authority.
+                $verification = $this->sessionVerifier->verifyForHold(
+                    $token,
+                    $resolvedSessionId,
+                    (string) $data['test_center_id'],
+                    (string) $data['city'],
+                    $selectedSessionDate,
+                    (string) ($data['test_center_name'] ?? ''),
+                    (string) $data['test_center_time'],
+                    // The local browser snapshot is not a T2Hub authority in
+                    // this legacy path; only T2Hub mode may bypass SVP detail.
+                    snapshotConfirmed: false,
+                );
+            }
 
             if (! $verification['success']) {
                 if ((int) ($verification['upstream_status'] ?? 0) === 401) {
@@ -164,14 +190,31 @@ class SvpHoldController extends Controller
             }
 
             $response = $this->booking->temporarySeat($token, [
-                // PACC's official contract accepts an array even for a
-                // one-session final-only hold attempt.
-                'exam_session_id' => [$resolvedSessionId],
-                'methodology' => config('svp.default_methodology', 'in_person'),
+                // The live-verified PACC hold contract accepts one opaque
+                // session id plus the selected physical center id. The
+                // methodology is sent later with exam_reservations.
+                'exam_session_id' => $resolvedSessionId,
+                'test_center_id' => (string) $data['test_center_id'],
             ]);
+
+            $upstreamStatus = $response->getStatusCode();
+            $upstreamBody = $this->safeResponseBody($response);
 
             $payload = $response->getData(true);
             $hold = $this->extractHold($payload);
+
+            if ($response->getStatusCode() === 401
+                || $response->getStatusCode() < 200
+                || $response->getStatusCode() >= 300
+                || $hold === null) {
+                Log::warning('SVP temporary hold upstream response was unusable', [
+                    'request_id' => $requestId,
+                    'test_center_id' => $data['test_center_id'],
+                    'exam_session_id' => $data['exam_session_id'],
+                    'upstream_status' => $upstreamStatus,
+                    'upstream_response_body' => $upstreamBody,
+                ]);
+            }
 
             if ($response->getStatusCode() === 401) {
                 return response()->json([
@@ -185,7 +228,11 @@ class SvpHoldController extends Controller
             if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300 || $hold === null) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'SVP did not return a valid temporary hold.',
+                    'request_id' => $requestId,
+                    'error' => $this->describeUpstreamFailure(
+                        is_array($payload) ? $payload : [],
+                        $response->getStatusCode()
+                    ),
                 ], $response->getStatusCode() >= 400 ? $response->getStatusCode() : 502);
             }
 
@@ -216,16 +263,101 @@ class SvpHoldController extends Controller
             ], $response->getStatusCode());
         } catch (\Throwable $e) {
             Log::error('SVP temporary hold failed', [
+                'request_id' => $requestId,
                 'test_center_id' => $data['test_center_id'],
                 'exam_session_id' => $data['exam_session_id'],
+                'upstream_status' => $upstreamStatus,
+                'upstream_response_body' => $upstreamBody,
                 'error' => $e->getMessage(),
             ]);
 
             return response()->json([
                 'success' => false,
+                'request_id' => $requestId,
                 'error' => 'Unable to create a temporary SVP hold.',
             ], 503);
         }
+    }
+
+    /**
+     * Capture the complete upstream response body for diagnostics while
+     * redacting fields that could contain credentials, tokens, or payment data.
+     */
+    private function safeResponseBody(JsonResponse $response): mixed
+    {
+        try {
+            $body = $response->getData(true);
+        } catch (\Throwable) {
+            $body = $response->getContent();
+        }
+
+        return $this->redactSensitive($body);
+    }
+
+    private function redactSensitive(mixed $value): mixed
+    {
+        $sensitiveKeys = [
+            'authorization', 'access_token', 'refresh_token', 'token', 'bearer',
+            'password', 'passwd', 'secret', 'otp', 'cookie', 'set-cookie',
+            'card_number', 'cardNumber', 'cvv', 'cvc', 'iban',
+        ];
+
+        if (is_array($value)) {
+            $redacted = [];
+            foreach ($value as $key => $item) {
+                $normalizedKey = strtolower(str_replace(['-', '_'], '', (string) $key));
+                $isSensitive = in_array($normalizedKey, array_map(
+                    static fn (string $s): string => strtolower(str_replace(['-', '_'], '', $s)),
+                    $sensitiveKeys
+                ), true);
+                $redacted[$key] = $isSensitive ? '[REDACTED]' : $this->redactSensitive($item);
+            }
+
+            return $redacted;
+        }
+
+        if (is_string($value)) {
+            return preg_replace(
+                '/(Bearer\s+)[^\s,]+/i',
+                '$1[REDACTED]',
+                $value
+            ) ?? $value;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Keep the useful SVP validation reason while avoiding a generic UI error.
+     * This is especially important for an already-active temporary hold.
+     */
+    private function describeUpstreamFailure(array $payload, int $status): string
+    {
+        $messages = [];
+        $errors = $payload['errors'] ?? null;
+
+        if (is_array($errors)) {
+            foreach ($errors as $field => $fieldMessages) {
+                foreach ((array) $fieldMessages as $message) {
+                    if (is_scalar($message)) {
+                        $messages[] = is_string($field)
+                            ? $field . ': ' . (string) $message
+                            : (string) $message;
+                    }
+                }
+            }
+        }
+
+        foreach (['message', 'detail', 'error'] as $key) {
+            if (isset($payload[$key]) && is_scalar($payload[$key]) && trim((string) $payload[$key]) !== '') {
+                $messages[] = (string) $payload[$key];
+            }
+        }
+
+        $messages = array_values(array_unique(array_filter(array_map('trim', $messages))));
+        return $messages === []
+            ? 'SVP did not return a valid temporary hold (HTTP ' . $status . ').'
+            : 'SVP rejected the temporary hold (HTTP ' . $status . '): ' . implode(' ', array_slice($messages, 0, 3));
     }
 
     private function sessionCenterId(?array $session): string

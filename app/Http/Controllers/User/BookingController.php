@@ -237,6 +237,7 @@ class BookingController extends Controller
 
         return array_map(function ($item): array {
             $reservation = (array) $item;
+            $reservation = $this->normalizeSvpReservationDisplayFields($reservation);
             $result = $this->normalizeSvpResult($reservation);
             $reservation['_result_state'] = $result['state'];
             $reservation['_result_label'] = $result['label'];
@@ -244,6 +245,148 @@ class BookingController extends Controller
 
             return $reservation;
         }, $items);
+    }
+
+    /**
+     * The list endpoint can return only reservation id, exam and session id.
+     * Fetch each reservation's authoritative detail when display metadata is
+     * absent, then normalize the merged row for the Blade view.
+     *
+     * @param array<int, array<string, mixed>> $reservations
+     * @return array<int, array<string, mixed>>
+     */
+    private function enrichSvpReservationDetails(string $token, array $reservations): array
+    {
+        return array_map(function (array $reservation) use ($token): array {
+            $reservation = $this->normalizeSvpReservationDisplayFields($reservation);
+            $hasDate = is_string($reservation['exam_date'] ?? null) && trim($reservation['exam_date']) !== '';
+            $hasCenter = is_string($reservation['test_center_name'] ?? null) && trim($reservation['test_center_name']) !== '';
+            $reservationId = $reservation['id'] ?? null;
+
+            if (($hasDate && $hasCenter) || ! is_scalar($reservationId) || trim((string) $reservationId) === '') {
+                return $reservation;
+            }
+
+            try {
+                $detailResponse = $this->booking->reservation($token, (string) $reservationId);
+                if ($detailResponse->getStatusCode() >= 200 && $detailResponse->getStatusCode() < 300) {
+                    $detail = $this->svpReservationData($detailResponse->getData(true));
+                    if ($detail !== []) {
+                        $reservation = array_replace_recursive($detail, $reservation);
+                        $reservation = $this->normalizeSvpReservationDisplayFields($reservation);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::notice('SVP reservation detail enrichment skipped', [
+                    'reservation_id' => (string) $reservationId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            return $reservation;
+        }, $reservations);
+    }
+
+    /**
+     * SVP has returned reservation metadata in several shapes over time:
+     * direct fields, nested exam_session/test_center objects, and JSON:API
+     * data.attributes wrappers. Flatten the useful display fields once so the
+     * Blade view does not have to know about every upstream response variant.
+     *
+     * @param array<string, mixed> $reservation
+     * @return array<string, mixed>
+     */
+    private function normalizeSvpReservationDisplayFields(array $reservation): array
+    {
+        $date = $this->firstReservationScalar($reservation, [
+            'exam_date',
+            'test_date',
+            'date',
+            'start_date_in_browser_time_zone',
+            'start_date_in_tc_time_zone',
+            'attributes.exam_date',
+            'attributes.test_date',
+            'attributes.start_date_in_browser_time_zone',
+            'attributes.start_date_in_tc_time_zone',
+            'exam_session.exam_date',
+            'exam_session.test_date',
+            'exam_session.date',
+            'exam_session.start_date_in_browser_time_zone',
+            'exam_session.start_date_in_tc_time_zone',
+            'exam_session.attributes.exam_date',
+            'exam_session.attributes.start_date_in_browser_time_zone',
+            'exam_session.data.attributes.exam_date',
+            'exam_session.data.attributes.start_date_in_browser_time_zone',
+            'examSession.exam_date',
+            'examSession.date',
+            'examSession.start_date_in_browser_time_zone',
+            'examSession.data.attributes.exam_date',
+            'session.exam_date',
+            'session.date',
+            'session.start_date_in_browser_time_zone',
+        ]);
+
+        $centerName = $this->firstReservationScalar($reservation, [
+            'test_center_name',
+            'center_name',
+            'site_name',
+            'test_center.english_name',
+            'test_center.name',
+            'test_center.attributes.english_name',
+            'test_center.attributes.name',
+            'test_center.data.attributes.english_name',
+            'test_center.data.attributes.name',
+            'testCenter.english_name',
+            'testCenter.name',
+            'testCenter.data.attributes.name',
+            'site.english_name',
+            'site.name',
+            'site.data.attributes.name',
+            'exam_session.test_center.english_name',
+            'exam_session.test_center.name',
+            'exam_session.test_center.data.attributes.name',
+            'exam_session.site.name',
+            'exam_session.site.data.attributes.name',
+            'examSession.test_center.name',
+            'examSession.test_center.data.attributes.name',
+            'session.test_center.name',
+            'session.test_center.data.attributes.name',
+        ]);
+
+        if ($date !== null) {
+            $reservation['exam_date'] = $this->normalizeReservationDate($date);
+        }
+
+        if ($centerName !== null) {
+            $reservation['test_center_name'] = $centerName;
+        }
+
+        return $reservation;
+    }
+
+    /**
+     * @param array<string, mixed> $reservation
+     * @param array<int, string> $paths
+     */
+    private function firstReservationScalar(array $reservation, array $paths): ?string
+    {
+        foreach ($paths as $path) {
+            $value = data_get($reservation, $path);
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return trim((string) $value);
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeReservationDate(string $value): string
+    {
+        $value = trim($value);
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}/', $value) === 1
+            ? substr($value, 0, 10)
+            : $value;
     }
 
     private function certificateFilename(array $reservation, string $reservationId, bool $passed = true): string
@@ -423,6 +566,7 @@ class BookingController extends Controller
                     $svpError = 'Could not load live reservations from SVP.';
                 } else {
                     $svpReservations = $this->normalizeSvpReservations($svpResponse->getData(true));
+                    $svpReservations = $this->enrichSvpReservationDetails($svpToken, $svpReservations);
                 }
             } catch (\Throwable $e) {
                 Log::warning('User SVP reservations fetch failed', [
@@ -792,6 +936,35 @@ class BookingController extends Controller
             ->where('is_active', true)
             ->latest()
             ->get();
+
+        // A prior portal logout intentionally deactivates candidates. If the
+        // same SVP account is still authenticated in this browser session,
+        // repair that local state before rendering the new-booking dropdown.
+        if ($candidates->isEmpty()) {
+            $sessionSvpUserId = trim((string) $request->session()->get('svp_user_id', ''));
+            if ($sessionSvpUserId !== '') {
+                $staleCandidate = Candidate::where('user_id', Auth::id())
+                    ->where('agency_id', $agencyId)
+                    ->where('svp_user_id', $sessionSvpUserId)
+                    ->latest()
+                    ->first();
+
+                if ($staleCandidate) {
+                    Candidate::where('user_id', Auth::id())->update(['is_active' => false]);
+                    $staleCandidate->update(['is_active' => true]);
+                    Log::info('SVP candidate self-heal reactivated candidate for booking form', [
+                        'user_id' => Auth::id(),
+                        'candidate_id' => $staleCandidate->id,
+                        'svp_user_id' => $sessionSvpUserId,
+                    ]);
+                    $candidates = Candidate::where('user_id', Auth::id())
+                        ->where('agency_id', $agencyId)
+                        ->where('is_active', true)
+                        ->latest()
+                        ->get();
+                }
+            }
+        }
 
         $occupations = [];
         $categories  = [];

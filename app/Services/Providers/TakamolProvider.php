@@ -794,21 +794,27 @@ class TakamolProvider implements BookingProviderInterface
 
     public function temporarySeat(array $payload): JsonResponse
     {
-        // The official PACC contract requires locale=en, a one-or-more-item
-        // exam_session_id array, and methodology. The Laravel wizard performs
-        // center validation before this call; test_center_id is intentionally
-        // not sent because it is not part of the upstream hold contract.
-        $rawSessionIds = $payload['exam_session_id'] ?? [];
-        $sessionIds = is_array($rawSessionIds) ? $rawSessionIds : [$rawSessionIds];
-        $sessionIds = array_values(array_filter(array_map(
-            static fn ($id): mixed => is_numeric($id) ? (int) $id : trim((string) $id),
-            $sessionIds
-        ), static fn ($id): bool => $id !== '' && $id !== null));
+        // Live-verified SVP contract: one scalar opaque session id plus the
+        // selected physical center id. Do not send the reservation methodology
+        // here; methodology belongs to the later exam_reservations request.
+        $rawSessionId = $payload['exam_session_id'] ?? '';
+        if (is_array($rawSessionId)) {
+            $rawSessionId = $rawSessionId[0] ?? '';
+        }
 
-        return $this->dispatch('POST', '/individual_labor_space/temporary_seats?locale=en', [
-            'exam_session_id' => $sessionIds,
-            'methodology' => $payload['methodology'] ?? config('svp.default_methodology', 'in_person'),
-        ]);
+        $requestPayload = [
+            'exam_session_id' => is_numeric($rawSessionId)
+                ? (int) $rawSessionId
+                : trim((string) $rawSessionId),
+        ];
+
+        if (array_key_exists('test_center_id', $payload) && $payload['test_center_id'] !== null) {
+            $requestPayload['test_center_id'] = is_numeric($payload['test_center_id'])
+                ? (int) $payload['test_center_id']
+                : trim((string) $payload['test_center_id']);
+        }
+
+        return $this->dispatch('POST', '/individual_labor_space/temporary_seats?locale=en', $requestPayload);
     }
 
     public function validateReservation(): JsonResponse
@@ -1369,13 +1375,19 @@ class TakamolProvider implements BookingProviderInterface
                     'path' => $url,
                     'status' => $response->status(),
                     'response_keys' => is_array($response->json()) ? array_keys($response->json()) : [],
+                    'response_body' => substr($response->body(), 0, 20000),
                     'response_errors' => substr((string) json_encode(
                         is_array($response->json()) ? ($response->json()['errors'] ?? null) : null
                     ), 0, 1200),
                 ]);
             }
 
-            return response()->json($response->json(), $response->status());
+            $body = $response->json();
+            if (! is_array($body)) {
+                $body = ['_raw_body' => $response->body()];
+            }
+
+            return response()->json($body, $response->status());
         } catch (ConnectionException $e) {
             Log::error('SVP API connection error', [
                 'method' => $method,

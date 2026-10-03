@@ -57,23 +57,6 @@ class SvpSessionVerificationController extends Controller
             'category_id' => ['nullable', 'string', 'max:100'],
         ]);
 
-        // The wizard reads live T2Hub data without an SVP login, so the first
-        // hold click can arrive with no (or an expired) SVP bearer token. Log
-        // the candidate in automatically instead of failing the request with a
-        // bare validation error, which the UI used to render as "unknown
-        // center" even though the centre and date were correct.
-        $token = $this->autoSession->ensure($request);
-        if (! is_string($token) || trim($token) === '') {
-            return response()->json([
-                'success' => false,
-                'verified' => false,
-                'read_only' => true,
-                'requires_svp_login' => true,
-                'login_url' => route('svp.login.form', ['force' => 1]),
-                'error' => 'SVP session expired and automatic sign-in is unavailable. Sign in with SVP again, then retry the hold.',
-            ], 401);
-        }
-
         // Establish the provenance of the submitted session ID server-side: it
         // must be present in the live, centre-scoped session list for the
         // requested city and date. SVP sometimes returns no test centre at all
@@ -101,6 +84,72 @@ class SvpSessionVerificationController extends Controller
                 $snapshotConfirmed = false;
                 $centerCity = null;
             }
+        }
+
+        // T2Hub is the catalogue authority for this deployment. Its opaque
+        // session IDs are intentionally not re-read through the candidate's
+        // SVP account: the two systems can expose different session-detail
+        // endpoints while the same T2Hub session ID remains valid for SVP hold.
+        if ($this->t2hub->enabled()) {
+            if (! $snapshotConfirmed) {
+                return response()->json([
+                    'success' => false,
+                    'verified' => false,
+                    'read_only' => true,
+                    'error' => 'The selected T2Hub session is no longer available at the selected center and date. Refresh availability and try again.',
+                ], 422);
+            }
+
+            $snapshotTime = trim((string) (
+                data_get($snapshotRow, 'test_time')
+                ?? data_get($snapshotRow, 'exam_time')
+                ?? data_get($snapshotRow, 'time')
+                ?? ''
+            ));
+
+            return response()->json([
+                'success' => true,
+                'verified' => true,
+                'read_only' => true,
+                'upstream_status' => 200,
+                'session' => [
+                    'id' => $data['exam_session_id'],
+                    'exam_date' => $data['expected_exam_date'] ?? null,
+                    'test_time' => $snapshotTime !== '' ? $snapshotTime : null,
+                    'methodology' => null,
+                ],
+                'expected' => [
+                    'test_center_id' => $data['expected_test_center_id'],
+                    'test_center_name' => $data['expected_test_center_name'] ?? null,
+                    'city' => $data['expected_city'] ?? null,
+                    'exam_date' => $data['expected_exam_date'] ?? null,
+                    'test_time' => $data['expected_test_time'] ?? null,
+                ],
+                'actual' => [
+                    'test_center_id' => $data['expected_test_center_id'],
+                    'test_center_name' => $data['expected_test_center_name'] ?? null,
+                    'city' => $data['expected_city'] ?? null,
+                    'test_time' => $snapshotTime !== '' ? $snapshotTime : null,
+                ],
+                'checks' => [
+                    't2hub_snapshot_confirmed' => true,
+                    'source' => 't2hub',
+                ],
+            ]);
+        }
+
+        // Non-T2Hub deployments use the candidate-authenticated SVP detail
+        // endpoint as their session authority.
+        $token = $this->autoSession->ensure($request);
+        if (! is_string($token) || trim($token) === '') {
+            return response()->json([
+                'success' => false,
+                'verified' => false,
+                'read_only' => true,
+                'requires_svp_login' => true,
+                'login_url' => route('svp.login.form', ['force' => 1]),
+                'error' => 'SVP session expired and automatic sign-in is unavailable. Sign in with SVP again, then retry the hold.',
+            ], 401);
         }
 
         try {

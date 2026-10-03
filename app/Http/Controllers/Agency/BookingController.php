@@ -202,6 +202,34 @@ class BookingController extends Controller
             ->latest()
             ->get();
 
+        // Recover a candidate deactivated by a previous SVP logout when the
+        // current browser session still proves the same SVP identity.
+        if ($candidates->isEmpty()) {
+            $sessionSvpUserId = trim((string) $request->session()->get('svp_user_id', ''));
+            if ($sessionSvpUserId !== '') {
+                $staleCandidate = Candidate::where('user_id', Auth::id())
+                    ->where('agency_id', $agencyId)
+                    ->where('svp_user_id', $sessionSvpUserId)
+                    ->latest()
+                    ->first();
+
+                if ($staleCandidate) {
+                    Candidate::where('user_id', Auth::id())->update(['is_active' => false]);
+                    $staleCandidate->update(['is_active' => true]);
+                    Log::info('SVP candidate self-heal reactivated candidate for agency booking form', [
+                        'user_id' => Auth::id(),
+                        'candidate_id' => $staleCandidate->id,
+                        'svp_user_id' => $sessionSvpUserId,
+                    ]);
+                    $candidates = Candidate::where('user_id', Auth::id())
+                        ->where('agency_id', $agencyId)
+                        ->where('is_active', true)
+                        ->latest()
+                        ->get();
+                }
+            }
+        }
+
         $occupations = [];
         $cities      = [];
         $categories  = [];
