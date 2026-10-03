@@ -32,6 +32,7 @@
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Agency</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Wallet Balance</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -43,6 +44,7 @@
                         <td class="px-6 py-4 font-medium text-slate-700">{{ $user->name }}</td>
                         <td class="px-6 py-4 text-slate-500">{{ $user->email }}</td>
                         <td class="px-6 py-4 text-slate-600">{{ $user->agency?->name ?? '—' }}</td>
+                        <td class="px-6 py-4 font-semibold text-emerald-700">{{ number_format((float) ($user->wallet?->available_balance ?? 0), 2) }} BDT</td>
                         <td class="px-6 py-4">
                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border {{ $user->status ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200' }}">
                                 <span class="w-1.5 h-1.5 rounded-full {{ $user->status ? 'bg-emerald-500' : 'bg-slate-400' }}"></span>
@@ -64,7 +66,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center">
+                        <td colspan="7" class="px-6 py-12 text-center">
                             <p class="text-sm text-slate-400">No users yet.</p>
                             <a href="{{ route('admin.users.create') }}" class="text-xs font-medium text-brand-600 hover:text-brand-700">Create the first user →</a>
                         </td>
