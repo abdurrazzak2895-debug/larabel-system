@@ -620,7 +620,6 @@ class BookingController extends Controller
 
             return response()->json([
                 'success' => true,
-                'availability_source' => 't2hub_agent_catalogue',
                 'data' => [
                     'sessions' => $sessions,
                     'exam_sessions' => $sessions,
