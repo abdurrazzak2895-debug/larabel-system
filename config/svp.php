@@ -107,6 +107,15 @@ return [
     'otp_auto_verify' => filter_var(env('SVP_OTP_AUTO_VERIFY', false), FILTER_VALIDATE_BOOL),
     'otp_auto_timeout' => (int) env('SVP_OTP_AUTO_TIMEOUT', 90),
     'otp_auto_poll_seconds' => (int) env('SVP_OTP_AUTO_POLL_SECONDS', 5),
+    // Local/testing-only mock authentication. The service also checks the
+    // Laravel environment, so this cannot bypass real SVP auth in production.
+    'mock_login' => [
+        'enabled' => filter_var(env('SVP_MOCK_LOGIN', false), FILTER_VALIDATE_BOOL),
+        'email' => env('SVP_MOCK_EMAIL', 'mock@example.test'),
+        'password' => env('SVP_MOCK_PASSWORD', 'mock-password'),
+        'otp' => (string) env('SVP_MOCK_OTP', '123456'),
+        'user_id' => (string) env('SVP_MOCK_USER_ID', 'MOCK-SVP-USER'),
+    ],
     'otp_mailbox' => [
         // dakbox | imap | none
         'driver' => env('SVP_OTP_MAILBOX_DRIVER', 'none'),

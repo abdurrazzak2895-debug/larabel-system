@@ -34,6 +34,9 @@ class SvpApiService
      */
     public function login(string $email, string $password, string $otpMethod = 'email'): array
     {
+        if ($this->mockLoginEnabled()) {
+            return $this->mockLogin($email, $password);
+        }
         $payload = [
             'user' => [
                 'login'    => $email,
@@ -54,6 +57,9 @@ class SvpApiService
      */
     public function verifyOtp(string $email, string $password, string $otpCode, string $otpMethod = 'email'): array
     {
+        if ($this->mockLoginEnabled()) {
+            return $this->mockVerifyOtp($email, $password, $otpCode);
+        }
         $payload = [
             'user' => [
                 'login'      => $email,
@@ -65,6 +71,47 @@ class SvpApiService
         ];
 
         return $this->post('/api/v1/sessions/otp', $payload);
+    }
+
+    private function mockLoginEnabled(): bool
+    {
+        return (bool) config('svp.mock_login.enabled', false)
+            && app()->environment(['local', 'testing']);
+    }
+
+    private function mockLogin(string $email, string $password): array
+    {
+        if (! hash_equals((string) config('svp.mock_login.email'), $email)
+            || ! hash_equals((string) config('svp.mock_login.password'), $password)) {
+            return ['status' => 401, 'body' => ['message' => 'Mock SVP credentials rejected.']];
+        }
+
+        return ['status' => 200, 'body' => ['required_2fa' => true]];
+    }
+
+    private function mockVerifyOtp(string $email, string $password, string $otpCode): array
+    {
+        if (! hash_equals((string) config('svp.mock_login.email'), $email)
+            || ! hash_equals((string) config('svp.mock_login.password'), $password)
+            || ! hash_equals((string) config('svp.mock_login.otp'), $otpCode)) {
+            return ['status' => 422, 'body' => ['message' => 'Mock SVP OTP is invalid.']];
+        }
+
+        return [
+            'status' => 200,
+            'body' => [
+                'access_token' => 'mock-svp-token-'.sha1($email),
+                'access_payload' => [
+                    'csrf' => 'mock-svp-csrf',
+                    'user' => ['id' => (string) config('svp.mock_login.user_id')],
+                ],
+                'profile' => [
+                    'id' => (string) config('svp.mock_login.user_id'),
+                    'full_name' => 'Local Mock SVP User',
+                    'email' => $email,
+                ],
+            ],
+        ];
     }
 
     private function containsTokenKey(array $payload): bool
