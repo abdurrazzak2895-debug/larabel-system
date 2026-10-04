@@ -839,18 +839,36 @@ class BookingController extends Controller
 
             $candidate = Candidate::where('user_id', Auth::id())->findOrFail($data['candidate_id']);
 
-            // Re-verify the exact opaque session immediately before the
-            // reschedule mutation. The earlier temporary hold check protects
-            // hold creation, but a session can rotate between hold and confirm.
-            // Never let SVP choose a different physical center silently.
-            $sessionVerification = $this->sessionVerifier->verify(
-                $token,
-                (string) $data['exam_session_id'],
-                (string) $data['test_center_id'],
-                (string) $data['city'],
-                (string) $data['exam_date'],
-                (string) $data['test_center_name'],
-            );
+            // T2Hub is the authority for the live date/centre/session list in
+            // this deployment. Candidate-SVP session detail can omit the
+            // physical centre, so using it here incorrectly rejected valid
+            // sessions immediately before reschedule.
+            if (config('t2hub.data_source') === 't2hub') {
+                $snapshot = app(\App\Services\T2Hub\T2HubBookingData::class)->sessionSnapshot(
+                    (string) $context['category_id'],
+                    (string) $data['city'],
+                    (string) $data['exam_date'],
+                    (string) $data['test_center_id'],
+                    (string) $data['exam_session_id'],
+                );
+                $sessionVerification = [
+                    'success' => $snapshot !== null,
+                    'verified' => $snapshot !== null,
+                    'upstream_status' => 200,
+                    'session' => ['id' => (string) $data['exam_session_id']],
+                ];
+            } else {
+                // Non-T2Hub deployments use the candidate-authenticated SVP
+                // detail endpoint as the authoritative session source.
+                $sessionVerification = $this->sessionVerifier->verify(
+                    $token,
+                    (string) $data['exam_session_id'],
+                    (string) $data['test_center_id'],
+                    (string) $data['city'],
+                    (string) $data['exam_date'],
+                    (string) $data['test_center_name'],
+                );
+            }
             $verifiedSessionId = (string) data_get($sessionVerification, 'session.id', '');
             if ((int) ($sessionVerification['upstream_status'] ?? 0) === 401) {
                 return redirect()->route('svp.login.form', ['force' => 1])
