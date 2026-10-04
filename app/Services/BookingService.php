@@ -123,7 +123,7 @@ class BookingService
         );
     }
     public function occupations(string $token) { return $this->provider->withToken($token)->occupations(); }
-    public function occupationsSearch(string $token, ?string $search = null, int $page = 1, int $perPage = 1000) { return $this->provider->withToken($token)->occupationsSearch($search, $page, $perPage); }
+    public function occupationsSearch(string $token, ?string $search = null, int $page = 1, int $perPage = 10000) { return $this->provider->withToken($token)->occupationsSearch($search, $page, $perPage); }
     public function cities(string $token, ?string $categoryId = null) { return $this->provider->withToken($token)->cities($categoryId); }
     public function testCenters(string $token, ?string $city = null, ?string $categoryId = null) { return $this->provider->withToken($token)->testCentersForFilters($city, $categoryId); }
     public function categories(string $token) { return $this->provider->withToken($token)->categories(); }

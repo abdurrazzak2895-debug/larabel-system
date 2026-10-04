@@ -923,7 +923,7 @@ class TakamolProvider implements BookingProviderInterface
         return $this->dispatch('GET', '/individual_labor_space/occupations');
     }
 
-    public function occupationsSearch(?string $search = null, int $page = 1, int $perPage = 1000): JsonResponse
+    public function occupationsSearch(?string $search = null, int $page = 1, int $perPage = 10000): JsonResponse
     {
         $params = [];
         if ($search) {

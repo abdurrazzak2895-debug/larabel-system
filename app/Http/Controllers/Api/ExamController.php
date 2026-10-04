@@ -132,7 +132,7 @@ class ExamController
     {
         $search = $request->query('search');
         $page = (int) $request->query('page', 1);
-        $perPage = (int) $request->query('per_page', 1000);
+        $perPage = (int) $request->query('per_page', 10000);
 
         return $this->booking->occupationsSearch($this->svpToken($request), $search, $page, $perPage);
     }

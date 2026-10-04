@@ -157,7 +157,7 @@ class SvpOccupationResolver
                 return [];
             }
 
-            $response = $this->provider->withToken($token)->occupationsSearch(null, 1, 1000);
+            $response = $this->provider->withToken($token)->occupationsSearch(null, 1, 10000);
             $payload = (array) $response->getData(true);
             $rows = data_get($payload, 'data.data')
                 ?? data_get($payload, 'data')

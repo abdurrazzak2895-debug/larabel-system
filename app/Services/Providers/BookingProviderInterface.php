@@ -34,7 +34,7 @@ interface BookingProviderInterface
     public function rescheduleReservation(string $id, array $payload): JsonResponse;
     public function useReservationCredit(array $payload): JsonResponse;
     public function occupations(): JsonResponse;
-    public function occupationsSearch(?string $search = null, int $page = 1, int $perPage = 1000): JsonResponse;
+    public function occupationsSearch(?string $search = null, int $page = 1, int $perPage = 10000): JsonResponse;
     public function cities(?string $categoryId = null): JsonResponse;
     public function countries(): JsonResponse;
     public function testCentersForFilters(?string $city = null, ?string $categoryId = null): JsonResponse;

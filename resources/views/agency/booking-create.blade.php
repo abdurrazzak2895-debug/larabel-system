@@ -882,7 +882,7 @@
             seedOccupationsFromServer();
             occupationsLoading = true;
             try {
-                const url = "{{ route('agency.bookings.lookup.occupations') }}?page=1" + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');
+                const url = "{{ route('agency.bookings.lookup.occupations') }}?page=1&per_page=10000" + (searchTerm ? '&search=' + encodeURIComponent(searchTerm) : '');
                 const data = await fetchJSON(url);
                 const occupations = data.data?.occupations || data.data || data.occupations || [];
                 mergeOccupationRecords(occupations);
