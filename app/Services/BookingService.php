@@ -559,6 +559,36 @@ class BookingService
                 return $this->handleBookingFailure($booking, $attempt, $providerResponse, $centerValidation['error']);
             }
 
+            // SVP may complete a reschedule immediately and return `paid: true`.
+            // In that case there is no new checkout to create or verify; trying
+            // to create one produces a misleading 404 and incorrectly marks the
+            // already-rescheduled local booking as failed.
+            if (filter_var(data_get($reschedulePayload, 'paid'), FILTER_VALIDATE_BOOLEAN)) {
+                $booking->update([
+                    'reservation_id' => (string) $reservationId,
+                    'booking_status' => 'booked',
+                ]);
+                $attempt->update([
+                    'status' => 'success',
+                    'provider_response' => $providerResponse,
+                ]);
+                $this->finalizePortalBookingFee($booking);
+                $this->logEvent($booking, 'svp_reschedule_completed_paid', [
+                    'reservation_id' => $reservationId,
+                ], $providerResponse);
+                $this->audit->log((int) $booking->agency_id, 'booking', [
+                    'booking_id' => $booking->id,
+                    'action' => 'reschedule_completed_paid',
+                    'reservation_id' => $reservationId,
+                ]);
+
+                return [
+                    'booking' => $booking,
+                    'response' => $rescheduleResponse,
+                    'success' => true,
+                ];
+            }
+
             $methodology = $data['methodology'] ?? config('svp.default_methodology', 'in_person');
             $creditStatus = $this->credits->statusForUser(
                 $token,
