@@ -833,18 +833,20 @@
             if (!item || typeof item !== 'object') return null;
             const id = String(item.id ?? item.occupation_id ?? '').trim();
             const name = String(item.name ?? item.english_name ?? item.arabic_name ?? item.title ?? id).trim();
-            return id && name ? { id: id, name: name } : null;
+            const labelKey = name.toLowerCase().replace(/\s+/g, ' ').trim();
+            const key = String(item.occupation_key ?? item.key ?? (id + '|' + labelKey)).trim();
+            return id && name ? { id: id, name: name, key: key || (id + '|' + labelKey) } : null;
         }
 
         function mergeOccupationRecords(items) {
             const merged = new Map((occupationsCache || []).map(function (occupation) {
-                return [String(occupation.id), occupation];
+                return [String(occupation.key || (occupation.id + '|' + occupation.name)), occupation];
             }));
             (Array.isArray(items) ? items : []).forEach(function (item) {
                 const occupation = normalizeOccupationRecord(item);
                 if (!occupation) return;
-                const existing = merged.get(occupation.id) || {};
-                merged.set(occupation.id, { ...existing, ...occupation });
+                const existing = merged.get(occupation.key) || {};
+                merged.set(occupation.key, { ...existing, ...occupation });
             });
             occupationsCache = Array.from(merged.values());
         }
@@ -858,7 +860,7 @@
             occupationSelect.querySelectorAll('option').forEach(function (opt) {
                 const name = opt.textContent.trim();
                 if (opt.value && name && name.toLowerCase() !== 'load' && name.toLowerCase() !== 'loading') {
-                    seeded.push({ id: opt.value, name: name });
+                    seeded.push({ id: opt.value, name: name, key: opt.value + '|' + name.toLowerCase().replace(/\s+/g, ' ').trim() });
                 }
             });
             mergeOccupationRecords(seeded);

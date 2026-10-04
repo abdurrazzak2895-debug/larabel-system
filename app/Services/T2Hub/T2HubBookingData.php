@@ -58,15 +58,20 @@ final class T2HubBookingData
             }
 
             $languageCode = strtoupper(trim((string) ($occupation['language_code'] ?? '')));
+            $occupationKey = trim((string) ($occupation['occupation_key'] ?? ''));
+            $nameKey = Str::of($name)->lower()->replaceMatches('/\s+/', ' ')->trim()->toString();
+            // T2Hub can return multiple occupation labels for one category id.
+            // Keep each label; the numeric id remains the booking value.
+            $rowKey = $id.'|'.($occupationKey !== '' ? $occupationKey : $nameKey);
 
-            $rows[$id] = [
+            $rows[$rowKey] = [
                 'id' => $id,
                 'occupation_id' => $id,
                 'category_id' => $id,
                 'name' => $name,
                 'english_name' => $name,
                 'category_name' => trim((string) ($occupation['category_name'] ?? $name)) ?: $name,
-                'occupation_key' => trim((string) ($occupation['occupation_key'] ?? '')),
+                'occupation_key' => $occupationKey !== '' ? $occupationKey : $nameKey,
                 'language_code' => $languageCode,
                 'languages' => $languageCode === '' ? [] : [[
                     'code' => $languageCode,
