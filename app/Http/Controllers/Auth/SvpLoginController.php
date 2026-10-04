@@ -38,8 +38,8 @@ class SvpLoginController extends Controller
         // The booking page can link here with ?force=1 after an external API
         // authentication failure; no credentials are persisted beyond the OTP step.
         if ($request->boolean('force')) {
-            $request->session()->forget(['svp_token', 'svp_csrf', 'svp_login', 'svp_user_id']);
-        } elseif ($request->session()->has('svp_token')) {
+            $this->autoSession->forget($request);
+        } elseif ($request->session()->has(SvpAutoSession::sessionKey('token', $request))) {
             $user = Auth::guard('web')->user();
             if ($user instanceof User) {
                 return redirect()->route($user->agency_id !== null ? 'agency.dashboard' : 'user.dashboard');
@@ -83,7 +83,7 @@ class SvpLoginController extends Controller
         }
 
         // Store credentials in session for OTP step (never persist).
-        $request->session()->put('svp_login', [
+        $request->session()->put(SvpAutoSession::sessionKey('login', $request), [
             'email'    => $credentials['email'],
             'password' => $credentials['password'],
             'otp_method' => $request->input('otp_method', 'email'),
@@ -121,7 +121,7 @@ class SvpLoginController extends Controller
             return redirect()->route('login')->with('status', 'Sign in to the portal before verifying your SVP account.');
         }
 
-        if (! $request->session()->has('svp_login')) {
+        if (! $request->session()->has(SvpAutoSession::sessionKey('login', $request))) {
             return redirect()->route('svp.login.form');
         }
 
@@ -137,7 +137,7 @@ class SvpLoginController extends Controller
             return redirect()->route('login')->with('status', 'Sign in to the portal before resending the SVP OTP.');
         }
 
-        $svpLogin = $request->session()->get('svp_login');
+        $svpLogin = $request->session()->get(SvpAutoSession::sessionKey('login', $request));
         if (! $svpLogin) {
             return redirect()->route('svp.login.form');
         }
@@ -176,7 +176,7 @@ class SvpLoginController extends Controller
             return redirect()->route('login')->with('status', 'Sign in to the portal before connecting your SVP account.');
         }
 
-        $svpLogin = $request->session()->get('svp_login');
+        $svpLogin = $request->session()->get(SvpAutoSession::sessionKey('login', $request));
         if (! $svpLogin) {
             return redirect()->route('svp.login.form');
         }
@@ -222,10 +222,13 @@ class SvpLoginController extends Controller
         // The external SVP identity is stored on that user's Candidate record; it
         // must never create a local User, Agency, or Agency wallet.
         $request->session()->regenerate();
-        $request->session()->put('svp_token', $token);
-        $request->session()->put('svp_csrf', data_get($result['body'], 'access_payload.csrf'));
-        $request->session()->forget('svp_login');
-        $this->autoSession->publish($token);
+        $this->autoSession->store(
+            $request,
+            $token,
+            data_get($result['body'], 'access_payload.csrf'),
+            (string) ($this->extractSvpUserId($result['body']) ?? '')
+        );
+        $request->session()->forget(SvpAutoSession::sessionKey('login', $request));
 
         // Auto-create / update candidate from SVP profile after successful login.
         // Some SVP deployments intermittently fail the follow-up profile request,
@@ -245,7 +248,7 @@ class SvpLoginController extends Controller
         $loginProfile = $this->extractProfileRecord($loginPayload);
         $loginSvpUserId = $this->extractSvpUserId($loginPayload);
         if ($loginSvpUserId !== '') {
-            $request->session()->put('svp_user_id', $loginSvpUserId);
+            $request->session()->put(SvpAutoSession::sessionKey('user_id', $request), $loginSvpUserId);
         }
 
         // The live /profile response contains the complete personal profile but

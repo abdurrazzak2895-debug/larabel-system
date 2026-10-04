@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\PortalAvailabilityCredential;
 use App\Models\TestCenter;
 use App\Models\User;
+use App\Services\SvpOtp\SvpAutoSession;
 use App\Contracts\PortalAvailabilityProviderInterface;
 use App\Services\UserWalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -1347,7 +1348,7 @@ class UserPanelTest extends TestCase
         $this->assertTrue($languagePosition < $availabilityPosition);
         $this->assertTrue($availabilityPosition < $centerPosition);
         $this->assertTrue($centerPosition < $sessionPosition);
-        $this->assertNull(session('svp_token'));
+        $this->assertNull(session(SvpAutoSession::sessionKey('token')));
     }
 
     public function test_user_svp_cancel_surfaces_upstream_404_without_success(): void

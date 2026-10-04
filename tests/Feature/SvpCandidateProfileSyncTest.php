@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\SvpLoginController;
 use App\Models\Agency;
 use App\Models\Candidate;
 use App\Models\User;
+use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use ReflectionMethod;
@@ -113,7 +114,7 @@ class SvpCandidateProfileSyncTest extends TestCase
         $response = $this->actingAs($user, 'web')
             ->withSession([
                 '_token' => $csrfToken,
-                'svp_login' => [
+                'svp:session:none:'.$user->id.':login' => [
                     'email' => 'svp-candidate@example.test',
                     'password' => 'secret',
                     'otp_method' => 'email',
@@ -131,7 +132,7 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertSame($agencyCount, Agency::count());
         $this->assertNull($user->agency_id);
         $this->assertSame('SVP-OTP-USER', $candidate->svp_user_id);
-        $this->assertSame('svp-otp-token', session('svp_token'));
+        $this->assertSame('svp-otp-token', session(SvpAutoSession::sessionKey('token')));
     }
 
     public function test_svp_logout_deactivates_candidates_without_deleting_admin_history(): void

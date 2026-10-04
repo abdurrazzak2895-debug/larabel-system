@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\TestCenter;
 use App\Services\BookingService;
 use Illuminate\Http\Request;
+use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -52,7 +53,7 @@ class TestCenterController extends Controller
      */
     public function sync(Request $request)
     {
-        $token = $request->session()->get('svp_token');
+        $token = app(SvpAutoSession::class)->token($request);
 
         if (! is_string($token) || $token === '') {
             return back()->with('error', 'No SVP session found. Please sign in with your SVP account first.');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Candidate;
 use App\Models\User;
+use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -14,7 +15,7 @@ class LoginController extends Controller
     public function showLoginForm(Request $request)
     {
         // If user already has a valid SVP token, skip straight to the booking page.
-        if ($request->session()->has('svp_token')) {
+        if ($request->session()->has(SvpAutoSession::sessionKey('token', $request))) {
             return redirect()->route('user.bookings.create');
         }
 
@@ -32,11 +33,11 @@ class LoginController extends Controller
         $password = $credentials['password'];
         $remember = $request->boolean('remember');
 
-        // Drop any previous session identity so guards can never bleed into
-        // each other (e.g. an old agency login masking the admin login).
+        // Drop the previous user's scoped SVP session before logging out;
+        // otherwise the authenticated identity needed to derive its scope is gone.
+        app(SvpAutoSession::class)->forget($request);
         Auth::guard('web')->logout();
         Auth::guard('admin')->logout();
-        $request->session()->forget(['svp_token', 'svp_csrf', 'svp_login', 'svp_user_id']);
 
         // 1) Platform admin — match by email or display name.
         $admin = \App\Models\Admin::query()

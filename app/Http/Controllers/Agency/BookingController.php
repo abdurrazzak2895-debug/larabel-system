@@ -21,7 +21,7 @@ use Illuminate\Validation\ValidationException;
  *
  * Every request that talks to the external SVP API must carry the
  * bearer token that the agency obtained through the SVP login flow
- * (stored in the session as `svp_token`). If it is missing we send
+ * (stored in the current user/agency-scoped session). If it is missing we send
  * the user through the SVP login again instead of failing 500.
  */
 class BookingController extends Controller
@@ -45,7 +45,7 @@ class BookingController extends Controller
      */
     private function ensureSvpToken(Request $request): ?string
     {
-        $token = $request->session()->get('svp_token');
+        $token = $this->autoSession->token($request);
 
         if (! is_string($token) || $token === '') {
             return null;
@@ -89,7 +89,7 @@ class BookingController extends Controller
 
     private function forgetSvpSession(Request $request): void
     {
-        $request->session()->forget(['svp_token', 'svp_csrf', 'svp_login', 'svp_user_id']);
+        $this->autoSession->forget($request);
     }
 
     private function expiredSvpResponse(Request $request, mixed $response)
@@ -189,7 +189,7 @@ class BookingController extends Controller
         // Read-only T2Hub catalogues must open immediately; hold/confirm still
         // use the existing authenticated SVP path when the operator acts.
         $token = config('t2hub.data_source') === 't2hub'
-            ? $request->session()->get('svp_token')
+            ? $this->autoSession->token($request)
             : $this->ensureSvpToken($request);
         $agencyId = (int) Auth::user()->agency_id;
 
@@ -205,7 +205,7 @@ class BookingController extends Controller
         // Recover a candidate deactivated by a previous SVP logout when the
         // current browser session still proves the same SVP identity.
         if ($candidates->isEmpty()) {
-            $sessionSvpUserId = trim((string) $request->session()->get('svp_user_id', ''));
+            $sessionSvpUserId = trim((string) $this->autoSession->svpUserId($request));
             if ($sessionSvpUserId !== '') {
                 $staleCandidate = Candidate::where('user_id', Auth::id())
                     ->where('agency_id', $agencyId)

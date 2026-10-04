@@ -18,7 +18,7 @@
     @if ($svpError)
         <div class="mb-6 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-sm">
             {{ $svpError }}
-            @if (! session('svp_token'))
+            @if (! ($svpToken ?? null))
                 <a href="{{ route('svp.login.form') }}" class="ml-2 underline font-semibold">Sign in with SVP</a>
             @endif
         </div>

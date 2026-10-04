@@ -217,7 +217,6 @@ class SvpHoldController extends Controller
             }
 
             if ($response->getStatusCode() === 401) {
-                $this->autoSession->forgetShared();
                 $this->autoSession->forget($request);
                 return response()->json([
                     'success' => false,

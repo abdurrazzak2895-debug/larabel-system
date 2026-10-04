@@ -8,7 +8,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Session;
+use App\Services\SvpOtp\SvpAutoSession;
 use App\Services\ResponseService;
 
 class TakamolProvider implements BookingProviderInterface
@@ -48,7 +48,7 @@ class TakamolProvider implements BookingProviderInterface
                 static fn ($exception) => $exception instanceof ConnectionException
             );
 
-        if ($csrf = Session::get('svp_csrf')) {
+        if ($csrf = session(SvpAutoSession::sessionKey('csrf'))) {
             $this->client = $this->client->withHeader('X-CSRF-Token', $csrf);
         }
     }

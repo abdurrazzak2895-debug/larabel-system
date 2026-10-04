@@ -104,7 +104,7 @@ class BookingController extends Controller
 
     private function ensureSvpToken(Request $request): ?string
     {
-        $token = $request->session()->get('svp_token');
+        $token = $this->autoSession->token($request);
 
         if (is_string($token) && $token !== '' && ! $this->svpTokenExpired($token)) {
             return $token;
@@ -151,7 +151,7 @@ class BookingController extends Controller
 
     private function forgetSvpSession(Request $request): void
     {
-        $request->session()->forget(['svp_token', 'svp_csrf', 'svp_login', 'svp_user_id']);
+        $this->autoSession->forget($request);
     }
 
     private function expiredSvpResponse(Request $request, mixed $response)
@@ -927,7 +927,7 @@ class BookingController extends Controller
         // Catalogue browsing must not wait for an e-mail OTP. The hold/confirm
         // endpoints retain their existing authenticated SVP behaviour.
         $token = config('t2hub.data_source') === 't2hub'
-            ? $request->session()->get('svp_token')
+            ? $this->autoSession->token($request)
             : $this->ensureSvpToken($request);
 
         $wallet = $this->userWallet->getWallet((int) Auth::id());
@@ -941,7 +941,7 @@ class BookingController extends Controller
         // same SVP account is still authenticated in this browser session,
         // repair that local state before rendering the new-booking dropdown.
         if ($candidates->isEmpty()) {
-            $sessionSvpUserId = trim((string) $request->session()->get('svp_user_id', ''));
+            $sessionSvpUserId = trim((string) $this->autoSession->svpUserId($request));
             if ($sessionSvpUserId !== '') {
                 $staleCandidate = Candidate::where('user_id', Auth::id())
                     ->where('agency_id', $agencyId)
