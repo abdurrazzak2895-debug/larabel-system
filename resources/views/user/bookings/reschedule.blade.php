@@ -167,7 +167,7 @@
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div>
                         <p class="text-sm font-semibold text-amber-900">Temporary SVP seat hold</p>
-                        <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">Create a temporary hold before confirming this reschedule.</p>
+                        <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">A temporary hold is not required for an existing reservation.</p>
                     </div>
                     <button type="button" id="create-temporary-hold" disabled class="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition">Create temporary hold</button>
                 </div>
@@ -302,7 +302,9 @@
         confirmButton.disabled = true;
         holdButton.disabled = true;
         if (message) holdStatus.textContent = message;
-        holdPanel.classList.toggle('hidden', !session.value);
+        // Existing reservations are rescheduled directly through SVP; a new
+        // temporary seat would conflict with the reservation's labor hold.
+        holdPanel.classList.add('hidden');
     }
 
     function canCreateHold() {
@@ -311,7 +313,7 @@
 
     function syncActionButtons() {
         if (!holdId.value) holdButton.disabled = !canCreateHold();
-        confirmButton.disabled = !(holdId.value && candidate.value);
+        confirmButton.disabled = !(candidate.value && city.value && center.value && centerName.value && centerTime.value && session.value && date.value && language.value);
     }
 
     function renderAvailableDates() {
@@ -630,7 +632,7 @@
             if (!id) throw new Error('SVP returned no temporary hold ID.');
             holdId.value = id;
             holdExpiry.value = hold.expired_at || hold.expires_at || '';
-            holdStatus.textContent = 'Hold #' + id + ' created' + (holdExpiry.value ? ' — expires ' + new Date(holdExpiry.value).toLocaleString() : '') + '. You may now confirm the reschedule.';
+            holdStatus.textContent = 'Optional hold #' + id + ' created' + (holdExpiry.value ? ' — expires ' + new Date(holdExpiry.value).toLocaleString() : '') + '.';
             holdStatus.classList.remove('text-red-700');
             syncActionButtons();
         }).catch(error => {
@@ -739,8 +741,7 @@
         sessionName.value = option?.dataset?.name || '';
         session.dataset.name = option?.dataset?.name || session.dataset.name || '';
         date.value = selectedDate || sessionDateValue || '';
-        if (session.value) holdPanel.classList.remove('hidden');
-        resetHold('Create a temporary hold for this exact session and date before confirming.');
+        resetHold('The selected live session is verified at confirmation; no temporary hold is required for rescheduling.');
         syncActionButtons();
     });
 
@@ -751,11 +752,6 @@
             holdPanel.classList.remove('hidden');
             holdStatus.textContent = 'Select a candidate profile before confirming the reschedule.';
             return;
-        }
-        if (!holdId.value) {
-            event.preventDefault();
-            holdPanel.classList.remove('hidden');
-            holdStatus.textContent = 'Create a live SVP temporary hold before confirming the reschedule.';
         }
     });
     holdButton.addEventListener('click', createHold);

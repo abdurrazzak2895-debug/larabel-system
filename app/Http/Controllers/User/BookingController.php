@@ -798,7 +798,9 @@ class BookingController extends Controller
             'exam_session_id' => ['required', 'string', 'max:255'],
             'exam_session_name' => ['nullable', 'string', 'max:255'],
             'exam_date' => ['required', 'date_format:Y-m-d'],
-            'temporary_hold_id' => ['required', 'string', 'max:100'],
+            // An existing SVP reservation must not request a second labor
+            // hold; SVP rejects that with temporaryseat.labor_id taken.
+            'temporary_hold_id' => ['nullable', 'string', 'max:100'],
             'language_code' => ['required', 'string', 'max:20'],
             'methodology' => ['nullable', 'string', 'max:40'],
             'notes' => ['nullable', 'string', 'max:500'],
@@ -861,12 +863,11 @@ class BookingController extends Controller
                 return back()->withInput()->with('error', 'SVP returned a different session than the one selected. Refresh the live sessions and try again.');
             }
 
-            $hold = $this->holds->consumeMatching($request, $data);
-            if ($hold === null) {
-                return back()->withInput()->withErrors([
-                    'temporary_hold_id' => 'Create a new temporary SVP hold for the selected city, center, session, and date before confirming the reschedule.',
-                ]);
-            }
+            // The verified reservation ID authorizes the reschedule mutation.
+            // Do not create or consume a fresh temporary seat here: the
+            // active reservation already occupies the candidate's labor and
+            // SVP rejects a second hold as `labor_id has already been taken`.
+            $hold = null;
 
             $result = $this->booking->completeReschedule($token, $reservation, [
                 'agency_id' => $agencyId,
@@ -882,8 +883,8 @@ class BookingController extends Controller
                 'exam_session_id' => $data['exam_session_id'],
                 'exam_session_name' => $data['exam_session_name'] ?? null,
                 'exam_date' => $data['exam_date'],
-                'temporary_hold_id' => $hold['id'],
-                'temporary_hold_expires_at' => $hold['expires_at'] ?? null,
+                'temporary_hold_id' => null,
+                'temporary_hold_expires_at' => null,
                 'language_code' => strtoupper(trim($data['language_code'])),
                 'methodology' => $data['methodology'] ?? ($context['methodology'] ?? config('svp.default_methodology', 'in_person')),
                 'notes' => $data['notes'] ?? null,
