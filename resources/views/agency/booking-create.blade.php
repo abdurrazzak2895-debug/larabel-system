@@ -834,8 +834,11 @@
             const id = String(item.id ?? item.occupation_id ?? '').trim();
             const name = String(item.name ?? item.english_name ?? item.arabic_name ?? item.title ?? id).trim();
             const labelKey = name.toLowerCase().replace(/\s+/g, ' ').trim();
-            const key = String(item.occupation_key ?? item.key ?? (id + '|' + labelKey)).trim();
-            return id && name ? { id: id, name: name, key: key || (id + '|' + labelKey) } : null;
+            // The server-seeded row and live T2Hub row can expose different
+            // auxiliary occupation_key values for the same selectable record.
+            // Use the actual identity (ID + label) for deduplication instead.
+            const key = id + '|' + labelKey;
+            return id && name ? { id: id, name: name, key: key } : null;
         }
 
         function mergeOccupationRecords(items) {
