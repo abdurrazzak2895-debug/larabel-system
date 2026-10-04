@@ -801,10 +801,19 @@ class BookingController extends Controller
             // An existing SVP reservation must not request a second labor
             // hold; SVP rejects that with temporaryseat.labor_id taken.
             'temporary_hold_id' => ['nullable', 'string', 'max:100'],
-            'language_code' => ['required', 'string', 'max:20'],
+            'language_code' => ['nullable', 'string', 'max:20'],
             'methodology' => ['nullable', 'string', 'max:40'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
+
+        // The language select can briefly remain disabled while the live
+        // catalogue finishes refreshing. SVP requires this field, and this
+        // deployment's advertised default language is LOABB, so never send
+        // an empty language_code to the upstream reschedule endpoint.
+        $data['language_code'] = strtoupper(trim((string) ($data['language_code'] ?? '')));
+        if ($data['language_code'] === '') {
+            $data['language_code'] = strtoupper((string) config('svp.default_language_code', 'LOABB'));
+        }
 
         $token = $this->ensureSvpToken($request);
         if (! $token) {
