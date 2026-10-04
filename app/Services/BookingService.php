@@ -527,6 +527,7 @@ class BookingService
             $rescheduleResponse = $provider->rescheduleReservation($reservationId, array_filter([
                 'exam_session_id' => (string) $data['exam_session_id'],
                 'exam_date' => (string) $data['exam_date'],
+                'language_code' => strtoupper(trim((string) ($data['language_code'] ?? config('svp.default_language_code', 'LOABB')))),
                 'site_id' => isset($data['test_center_id'])
                     ? $this->numericOrString($data['test_center_id'])
                     : null,
