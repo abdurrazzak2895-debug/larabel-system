@@ -48,12 +48,14 @@ final class T2HubBookingData
                 continue;
             }
 
-            // T2Hub uses one id for the occupation and for the exam search, so
-            // the page can send it back as either occupation_id or category_id.
-            $id = trim((string) ($occupation['id'] ?? ''));
+            // T2Hub returns the category id in `id` and the actual occupation
+            // id separately. Keep both: language/occupation lookups use the
+            // occupation id, while availability searches use the category id.
+            $categoryId = trim((string) ($occupation['id'] ?? ''));
+            $occupationId = trim((string) ($occupation['occupation_id'] ?? $categoryId));
             $name = trim((string) ($occupation['english_name'] ?? $occupation['category_name'] ?? ''));
 
-            if ($id === '' || $name === '') {
+            if ($categoryId === '' || $occupationId === '' || $name === '') {
                 continue;
             }
 
@@ -62,12 +64,12 @@ final class T2HubBookingData
             $nameKey = Str::of($name)->lower()->replaceMatches('/\s+/', ' ')->trim()->toString();
             // T2Hub can return multiple occupation labels for one category id.
             // Keep each label; the numeric id remains the booking value.
-            $rowKey = $id.'|'.($occupationKey !== '' ? $occupationKey : $nameKey);
+            $rowKey = $occupationId.'|'.$categoryId.'|'.($occupationKey !== '' ? $occupationKey : $nameKey);
 
             $rows[$rowKey] = [
-                'id' => $id,
-                'occupation_id' => $id,
-                'category_id' => $id,
+                'id' => $occupationId,
+                'occupation_id' => $occupationId,
+                'category_id' => $categoryId,
                 'name' => $name,
                 'english_name' => $name,
                 'category_name' => trim((string) ($occupation['category_name'] ?? $name)) ?: $name,
