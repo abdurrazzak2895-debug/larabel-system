@@ -11,6 +11,7 @@ use App\Services\SvpTemporaryHoldService;
 use App\Services\PortalAvailabilityService;
 use App\Services\SvpDirectAvailabilityService;
 use App\Services\SvpPaymentHistoryService;
+use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -32,7 +33,8 @@ class BookingController extends Controller
         private SvpTemporaryHoldService $holds,
         private PortalAvailabilityService $portalAvailability,
         private SvpDirectAvailabilityService $directAvailability,
-        private SvpPaymentHistoryService $paymentHistory
+        private SvpPaymentHistoryService $paymentHistory,
+        private SvpAutoSession $autoSession
     ) {
     }
 
