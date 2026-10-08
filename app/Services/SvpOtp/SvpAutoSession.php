@@ -103,6 +103,7 @@ final class SvpAutoSession
     /** @return array<int, int> */
     public function connectedCandidateIds(Request $request): array
     {
+        $this->migrateLegacySession($request);
         $userId = $request->user('web')?->getAuthIdentifier();
         if ($userId === null) {
             return [];
@@ -273,7 +274,7 @@ final class SvpAutoSession
             return $candidateId;
         }
 
-        return $this->activeCandidateId($request);
+        return $this->activeCandidateId($request) ?? $this->migrateLegacySession($request);
     }
 
     private function candidateForUser(Request $request, int $candidateId): ?Candidate
@@ -294,6 +295,40 @@ final class SvpAutoSession
         }
 
         return CandidateSvpSession::query()->where('user_id', $userId)->where('candidate_id', $candidateId)->first();
+    }
+
+    private function migrateLegacySession(Request $request): ?int
+    {
+        $token = $request->session()->get(self::sessionKey('token', $request));
+        $svpUserId = trim((string) $request->session()->get(self::sessionKey('user_id', $request), ''));
+        $userId = $request->user('web')?->getAuthIdentifier();
+
+        if (! is_string($token) || trim($token) === '' || $this->expired($token) || $svpUserId === '' || $userId === null) {
+            return null;
+        }
+
+        $candidate = Candidate::query()->where('user_id', $userId)->where('svp_user_id', $svpUserId)->first();
+        if (! $candidate) {
+            return null;
+        }
+
+        $session = CandidateSvpSession::updateOrCreate(
+            ['candidate_id' => $candidate->id],
+            [
+                'user_id' => $candidate->user_id,
+                'agency_id' => $candidate->agency_id,
+                'svp_user_id' => $svpUserId,
+                'access_token' => $token,
+                'csrf_token' => $request->session()->get(self::sessionKey('csrf', $request)),
+                'expires_at' => $this->expiry($token),
+                'last_used_at' => now(),
+            ],
+        );
+
+        $request->session()->put(self::sessionKey(self::ACTIVE_CANDIDATE_FIELD, $request), $candidate->id);
+        $this->syncLegacySession($request, $session);
+
+        return $candidate->id;
     }
 
     private function putLegacySession(Request $request, string $token, mixed $csrf, string $userId): void
