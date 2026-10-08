@@ -21,9 +21,9 @@ use Illuminate\Validation\ValidationException;
  * Agency-facing booking module UI.
  *
  * Every request that talks to the external SVP API must carry the
- * bearer token that the agency obtained through the SVP login flow
- * (stored in the current user/agency-scoped session). If it is missing we send
- * the user through the SVP login again instead of failing 500.
+ * bearer token for the selected candidate profile. Each profile is stored in
+ * its own encrypted user/agency-scoped session. If it is missing we send the
+ * user through the SVP login again instead of failing 500.
  */
 class BookingController extends Controller
 {
@@ -91,7 +91,7 @@ class BookingController extends Controller
 
     private function forgetSvpSession(Request $request): void
     {
-        $this->autoSession->forget($request);
+        $this->autoSession->forgetCurrent($request);
     }
 
     private function expiredSvpResponse(Request $request, mixed $response)

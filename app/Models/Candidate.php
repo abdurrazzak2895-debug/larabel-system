@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Auto-generated candidate profile synced from the SVP / Takamol API.
@@ -50,5 +51,10 @@ class Candidate extends Model
     public function agency(): BelongsTo
     {
         return $this->belongsTo(Agency::class);
+    }
+
+    public function svpSession(): HasOne
+    {
+        return $this->hasOne(CandidateSvpSession::class);
     }
 }

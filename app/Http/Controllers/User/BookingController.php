@@ -63,9 +63,9 @@ class BookingController extends Controller
     }
 
     /**
-     * SVP keeps one active bearer token per account, so any parallel sign-in
-     * (or our own renewal) invalidates the previous one. Read paths therefore
-     * renew once and repeat the exact same call instead of surfacing a 401.
+     * Each selected SVP profile has its own bearer token. If the same external
+     * account is signed in elsewhere, SVP may invalidate that profile token;
+     * read paths therefore retry only through the same selected profile.
      */
     private function withFreshSvpToken(Request $request, callable $call, ?string $token = null): mixed
     {
@@ -151,7 +151,7 @@ class BookingController extends Controller
 
     private function forgetSvpSession(Request $request): void
     {
-        $this->autoSession->forget($request);
+        $this->autoSession->forgetCurrent($request);
     }
 
     private function expiredSvpResponse(Request $request, mixed $response)
@@ -841,7 +841,10 @@ class BookingController extends Controller
                 return back()->withInput()->with('error', 'Your account is not assigned to an agency yet. Please contact the administrator.');
             }
 
-            $candidate = Candidate::where('user_id', Auth::id())->findOrFail($data['candidate_id']);
+            $candidate = Candidate::where('user_id', Auth::id())
+                ->where('agency_id', $agencyId)
+                ->where('is_active', true)
+                ->findOrFail($data['candidate_id']);
 
             // T2Hub is the authority for the live date/centre/session list in
             // this deployment. Candidate-SVP session detail can omit the
@@ -960,9 +963,8 @@ class BookingController extends Controller
             ->latest()
             ->get();
 
-        // A prior portal logout intentionally deactivates candidates. If the
-        // same SVP account is still authenticated in this browser session,
-        // repair that local state before rendering the new-booking dropdown.
+        // If a verified profile is still present in the current request context,
+        // repair its local active flag before rendering the booking dropdown.
         if ($candidates->isEmpty()) {
             $sessionSvpUserId = trim((string) $this->autoSession->svpUserId($request));
             if ($sessionSvpUserId !== '') {

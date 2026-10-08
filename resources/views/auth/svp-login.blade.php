@@ -70,7 +70,7 @@
                 </h1>
                 <p class="text-slate-400 leading-relaxed mb-10 max-w-md">
                     Authenticate with your real SVP account. An OTP will be sent to your email.
-                    Once verified, your Bearer token is stored securely in your session.
+                    Once verified, this account gets its own encrypted session and can be switched from your dashboard.
                 </p>
                 <div class="glass-card rounded-2xl p-4 inline-flex items-center gap-3">
                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -87,6 +87,12 @@
 
                 <h2 class="text-2xl font-bold mb-1">SVP Account Login</h2>
                 <p class="text-slate-400 text-sm mb-8">Step 1 of 2 — enter your SVP credentials</p>
+
+                @if (request()->boolean('connect'))
+                    <div class="mb-6 rounded-xl bg-indigo-500/10 border border-indigo-400/30 p-4 text-sm text-indigo-100">
+                        Connect another SVP account without signing out your existing profiles. Each verified account keeps its own encrypted session.
+                    </div>
+                @endif
 
                 @if ($errors->any())
                     <div class="mb-6 rounded-xl bg-red-500/10 border border-red-500/30 p-4 text-sm text-red-200">

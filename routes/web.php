@@ -29,6 +29,7 @@ use App\Http\Controllers\User\DashboardController as UserDashboardController;
 use App\Http\Controllers\User\DepositController as UserDepositController;
 use App\Http\Controllers\User\NotificationController as UserNotificationController;
 use App\Http\Controllers\User\RefundController as UserRefundController;
+use App\Http\Controllers\User\SvpProfileController as UserSvpProfileController;
 use App\Http\Controllers\User\WalletController as UserWalletController;
 use Illuminate\Support\Facades\Route;
 
@@ -237,6 +238,12 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
 // -------------------------------
 Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi'])->group(function () {
     Route::get('/dashboard', [UserDashboardController::class, 'index'])->name('dashboard');
+
+    Route::prefix('svp-profiles')->name('svp-profiles.')->group(function () {
+        Route::post('/{candidate}/switch', [UserSvpProfileController::class, 'select'])->name('switch');
+        Route::post('/{candidate}/activate', [UserSvpProfileController::class, 'activate'])->name('activate');
+        Route::post('/{candidate}/deactivate', [UserSvpProfileController::class, 'deactivate'])->name('deactivate');
+    });
 
     // Bookings
     Route::prefix('bookings')->name('bookings.')->group(function () {

@@ -135,7 +135,7 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertSame('svp-otp-token', session(SvpAutoSession::sessionKey('token')));
     }
 
-    public function test_svp_logout_deactivates_candidates_without_deleting_admin_history(): void
+    public function test_svp_logout_preserves_saved_profiles_without_deleting_history(): void
     {
         $agency = Agency::create([
             'name' => 'Logout Isolation Agency',
@@ -159,11 +159,11 @@ class SvpCandidateProfileSyncTest extends TestCase
 
         $response->assertRedirect(route('login'));
         $candidate->refresh();
-        $this->assertFalse($candidate->is_active);
+        $this->assertTrue($candidate->is_active);
         $this->assertDatabaseHas('candidates', ['id' => $candidate->id]);
     }
 
-    public function test_fresh_svp_login_reactivates_only_current_candidate(): void
+    public function test_fresh_svp_login_keeps_other_saved_profiles_active(): void
     {
         $agency = Agency::create([
             'name' => 'Fresh Login Agency',
@@ -193,7 +193,7 @@ class SvpCandidateProfileSyncTest extends TestCase
             ->where('svp_user_id', 'SVP-NEW-USER')
             ->firstOrFail();
 
-        $this->assertFalse($oldCandidate->is_active);
+        $this->assertTrue($oldCandidate->is_active);
         $this->assertTrue($newCandidate->is_active);
         $this->assertSame(2, Candidate::where('user_id', $user->id)->count());
     }

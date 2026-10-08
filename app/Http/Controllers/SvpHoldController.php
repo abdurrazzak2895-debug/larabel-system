@@ -217,7 +217,7 @@ class SvpHoldController extends Controller
             }
 
             if ($response->getStatusCode() === 401) {
-                $this->autoSession->forget($request);
+                $this->autoSession->forgetCurrent($request);
                 return response()->json([
                     'success' => false,
                     'requires_svp_login' => true,

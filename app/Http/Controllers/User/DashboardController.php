@@ -5,14 +5,21 @@ namespace App\Http\Controllers\User;
 use App\Http\Controllers\Controller;
 use App\Models\AgencyWallet;
 use App\Models\Booking;
+use App\Models\Candidate;
 use App\Models\DepositRequest;
 use App\Models\Notification;
 use App\Models\WalletTransaction;
+use App\Services\SvpOtp\SvpAutoSession;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function __construct(private SvpAutoSession $autoSession)
+    {
+    }
+
+    public function index(Request $request)
     {
         $userId = Auth::id();
         $user = Auth::user();
@@ -32,6 +39,19 @@ class DashboardController extends Controller
                 ->whereIn('booking_status', ['pending', 'processing'])->count(),
             'failed'    => Booking::where('user_id', $userId)->where('booking_status', 'failed')->count(),
         ];
+
+        $activeCandidateId = $this->autoSession->activeCandidateId($request);
+        $connectedIds = $this->autoSession->connectedCandidateIds($request);
+        if ($activeCandidateId === null && $connectedIds !== []) {
+            $activeCandidateId = (int) $connectedIds[0];
+            $this->autoSession->setActiveCandidate($request, $activeCandidateId);
+        }
+        $connectedCandidateIds = array_flip($connectedIds);
+        $candidates = Candidate::where('user_id', $userId)->latest()->get();
+        $candidates->each(function (Candidate $candidate) use ($activeCandidateId, $connectedCandidateIds): void {
+            $candidate->setAttribute('is_connected', isset($connectedCandidateIds[$candidate->id]));
+            $candidate->setAttribute('is_selected', (int) $candidate->id === (int) $activeCandidateId);
+        });
 
         return view('user.dashboard', [
             'wallet'             => $wallet,
@@ -54,6 +74,7 @@ class DashboardController extends Controller
                 ? WalletTransaction::whereHas('wallet', fn ($q) => $q->where('agency_id', $agencyId))
                     ->latest()->take(5)->get()
                 : collect(),
+            'candidates'         => $candidates,
         ]);
     }
 }

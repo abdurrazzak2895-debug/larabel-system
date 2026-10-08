@@ -36,6 +36,72 @@
         </div>
     </div>
 
+    {{-- ===================== Connected SVP profiles ===================== --}}
+    <div id="svp-profiles" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 sm:px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7zM19 8v6m3-3h-6"/></svg>
+                    </span>
+                    <h3 class="text-sm font-semibold text-slate-800">SVP Profiles</h3>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Connect multiple SVP accounts and switch between encrypted sessions.</p>
+            </div>
+            <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-xs font-semibold shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Connect another SVP account
+            </a>
+        </div>
+        <div class="divide-y divide-slate-100">
+            @forelse ($candidates as $candidate)
+                <div class="px-5 sm:px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 {{ $candidate->is_selected ? 'bg-indigo-50/40' : '' }}">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-9 h-9 shrink-0 rounded-full {{ $candidate->is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400' }} flex items-center justify-center text-xs font-bold">
+                            {{ strtoupper(substr($candidate->full_name ?: 'S', 0, 1)) }}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <p class="text-sm font-semibold text-slate-800 truncate">{{ $candidate->full_name ?: 'SVP Candidate' }}</p>
+                                @if ($candidate->is_selected)
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold">Selected</span>
+                                @endif
+                                <span class="inline-flex items-center gap-1 text-[10px] font-semibold {{ $candidate->is_active ? 'text-emerald-600' : 'text-slate-400' }}"><span class="w-1.5 h-1.5 rounded-full {{ $candidate->is_active ? 'bg-emerald-500' : 'bg-slate-300' }}"></span>{{ $candidate->is_active ? 'Active' : 'Deactive' }}</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-0.5">SVP ID: {{ $candidate->svp_user_id ?: 'Not synced' }} · {{ $candidate->is_connected ? 'Encrypted session ready' : 'Reconnect required' }}</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 md:justify-end">
+                        @if ($candidate->is_active && $candidate->is_connected && ! $candidate->is_selected)
+                            <form method="POST" action="{{ route('user.svp-profiles.switch', $candidate) }}">
+                                @csrf
+                                <button type="submit" class="px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition">Switch to this profile</button>
+                            </form>
+                        @elseif ($candidate->is_active && ! $candidate->is_connected)
+                            <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition">Reconnect</a>
+                        @elseif (! $candidate->is_active)
+                            <form method="POST" action="{{ route('user.svp-profiles.activate', $candidate) }}">
+                                @csrf
+                                <button type="submit" class="px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition">Activate</button>
+                            </form>
+                        @endif
+                        @if ($candidate->is_active)
+                            <form method="POST" action="{{ route('user.svp-profiles.deactivate', $candidate) }}">
+                                @csrf
+                                <button type="submit" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:border-red-200 hover:bg-red-50 hover:text-red-700 transition">Deactivate</button>
+                            </form>
+                        @endif
+                    </div>
+                </div>
+            @empty
+                <div class="px-5 sm:px-6 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <p class="text-sm text-slate-500">No SVP profiles connected yet.</p>
+                    <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="text-xs font-semibold text-brand-600 hover:text-brand-700">Connect your first account →</a>
+                </div>
+            @endforelse
+        </div>
+    </div>
+
     {{-- ===================== Stat cards ===================== --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-start gap-4">
@@ -210,4 +276,3 @@
     </div>
 </div>
 @endsection
-

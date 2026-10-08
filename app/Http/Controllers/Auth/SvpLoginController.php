@@ -38,8 +38,8 @@ class SvpLoginController extends Controller
         // The booking page can link here with ?force=1 after an external API
         // authentication failure; no credentials are persisted beyond the OTP step.
         if ($request->boolean('force')) {
-            $this->autoSession->forget($request);
-        } elseif ($request->session()->has(SvpAutoSession::sessionKey('token', $request))) {
+            $this->autoSession->forgetCurrent($request);
+        } elseif (! $request->boolean('connect') && $this->autoSession->token($request) !== null) {
             $user = Auth::guard('web')->user();
             if ($user instanceof User) {
                 return redirect()->route($user->agency_id !== null ? 'agency.dashboard' : 'user.dashboard');
@@ -270,12 +270,23 @@ class SvpLoginController extends Controller
             $profile = ['svp_user_id' => $loginSvpUserId];
         }
 
+        $candidate = null;
         if ($profile !== []) {
             try {
-                $this->syncCandidateFromProfile($user, $profile);
+                $candidate = $this->syncCandidateFromProfile($user, $profile);
             } catch (\Throwable $e) {
                 Log::warning('SVP candidate persistence after login failed', ['error' => $e->getMessage()]);
             }
+        }
+
+        if ($candidate instanceof Candidate) {
+            $this->autoSession->storeForCandidate(
+                $request,
+                $candidate->id,
+                $token,
+                data_get($result['body'], 'access_payload.csrf'),
+                $loginSvpUserId !== '' ? $loginSvpUserId : (string) $candidate->svp_user_id,
+            );
         }
 
         // Agency staff land on the agency panel; standalone SVP users on the user panel.
@@ -330,7 +341,7 @@ class SvpLoginController extends Controller
         return null;
     }
 
-    private function syncCandidateFromProfile(User $user, array $profile): void
+    private function syncCandidateFromProfile(User $user, array $profile): Candidate
     {
         $svpUserId = $this->extractSvpUserId($profile);
         $candidate = $svpUserId !== ''
@@ -346,11 +357,6 @@ class SvpLoginController extends Controller
             ->latest('id')
             ->first();
         $candidate ??= new Candidate(['user_id' => $user->id]);
-
-        // A portal account can have historical SVP candidate rows, but only
-        // the candidate from the currently connected SVP account is visible
-        // to User/Agency booking flows. Admin views keep every row.
-        Candidate::where('user_id', $user->id)->update(['is_active' => false]);
 
         $candidate->fill([
             'agency_id'   => $user->agency_id,
@@ -370,6 +376,8 @@ class SvpLoginController extends Controller
         ]);
         $candidate->user_id = $user->id;
         $candidate->save();
+
+        return $candidate;
     }
 
     /**

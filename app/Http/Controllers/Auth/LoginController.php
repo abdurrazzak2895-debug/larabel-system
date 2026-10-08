@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\Candidate;
-use App\Models\User;
 use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -77,13 +75,6 @@ class LoginController extends Controller
 
     public function logout(Request $request)
     {
-        $portalUser = Auth::guard('web')->user();
-        if ($portalUser instanceof User) {
-            // Keep historical rows for Admin, but hide this account's SVP
-            // candidates until that same portal account connects SVP again.
-            Candidate::where('user_id', $portalUser->id)->update(['is_active' => false]);
-        }
-
         Auth::guard('web')->logout();
         Auth::guard('admin')->logout();
 
