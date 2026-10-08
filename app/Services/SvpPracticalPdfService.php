@@ -117,10 +117,13 @@ final class SvpPracticalPdfService
 
         $codes = $this->firstValue($category, ['prometric_codes']);
         if (is_array($codes)) {
-            $codes = implode(', ', array_values(array_filter(array_map(
-                fn ($item): string => $this->scalar($item) ?? '',
+            $codeValues = array_values(array_filter(array_map(
+                fn ($item): string => is_array($item)
+                    ? ($this->first($item, ['code', 'prometric_code', 'name', 'id']) ?? '')
+                    : ($this->scalar($item) ?? ''),
                 $codes,
-            ))));
+            )));
+            $codes = implode(', ', $codeValues);
         }
         $field($lines, 'Prometric codes', $this->scalar($codes));
         $blank($lines);

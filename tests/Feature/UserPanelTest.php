@@ -316,7 +316,7 @@ class UserPanelTest extends TestCase
                         'practical_weight' => 75,
                         'cbt_weight' => 25,
                         'practical_exam_weight_non_targeted' => 0,
-                        'prometric_codes' => ['KW-01', 'KW-02'],
+                        'prometric_codes' => [['code' => 'KW-01'], ['code' => 'KW-02']],
                         'occupations' => ['Kitchen Worker'],
                     ],
                 ],
