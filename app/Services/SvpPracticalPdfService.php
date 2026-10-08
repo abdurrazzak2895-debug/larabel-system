@@ -98,7 +98,7 @@ final class SvpPracticalPdfService
             'exam_session.test_center.city', 'exam_session.test_center.city.name',
         ]);
         $examDate = $this->first($reservation, [
-            'exam_date', 'test_date', 'date', 'exam_session.exam_date',
+            'exam_date', 'test_date', 'date', 'exam_session.test_date', 'exam_session.exam_date',
             'exam_session.start_date_in_browser_time_zone', 'examSession.exam_date',
         ]);
 
