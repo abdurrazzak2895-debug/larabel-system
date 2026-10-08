@@ -18,173 +18,285 @@
         ?? data_get($reservationData, 'category.english_name')
         ?? data_get($reservationData, 'category.title')
         ?? 'Category '.$context['category_id'];
+    $currentExamDate = $context['current_exam_date'] ?? data_get($reservationData, 'exam_date') ?? data_get($reservationData, 'test_date') ?? 'Not available';
 @endphp
 
 @section('content')
-<div class="max-w-3xl">
-    <div class="flex items-center gap-3 mb-6">
-        <a href="{{ route('user.bookings.index') }}" class="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:text-slate-900 hover:border-slate-300 transition" aria-label="Back to bookings">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-        </a>
-        <div>
-            <h2 class="text-xl font-bold text-slate-900">Reschedule SVP Reservation #{{ $reservation }}</h2>
-            <p class="text-sm text-slate-500 mt-0.5">Same reservation ID</p>
+<div id="reschedule-wizard" class="max-w-6xl">
+    <div class="flex items-start justify-between gap-4 mb-6">
+        <div class="flex items-start gap-3">
+            <a href="{{ route('user.bookings.index') }}" class="w-10 h-10 shrink-0 rounded-xl border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:text-slate-900 hover:border-slate-300 transition" aria-label="Back to bookings">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </a>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-brand-600">Reservation update</p>
+                <h2 class="text-2xl font-bold text-slate-900 mt-1">Reschedule reservation #{{ $reservation }}</h2>
+                <p class="text-sm text-slate-500 mt-1">Choose a new city, test center, date, and session without changing the reservation identity.</p>
+            </div>
         </div>
     </div>
 
     @if ($svpError)
-        <div class="mb-6 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-sm">{{ $svpError }}</div>
+        <div class="mb-6 flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-sm">
+            <svg class="w-5 h-5 shrink-0 text-amber-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86l-7.21 12.5A2 2 0 004.81 19h14.38a2 2 0 001.73-2.64l-7.21-12.5a2 2 0 00-3.46 0z"/></svg>
+            <span>{{ $svpError }}</span>
+            @if (! ($svpToken ?? null))
+                <a href="{{ route('svp.login.form') }}" class="ml-auto underline font-semibold whitespace-nowrap">Sign in with SVP</a>
+            @endif
+        </div>
     @endif
 
-    <div class="mb-6 rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
-        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-indigo-500">Reservation identity</p>
-                <p class="mt-1 text-lg font-bold text-indigo-950">{{ $candidateName }}</p>
-                <p class="text-sm text-indigo-800">{{ $occupationName }} · {{ $categoryName }}</p>
-            </div>
-            <div class="md:text-right text-sm text-indigo-800">
-                <p>Current exam date</p>
-                <p class="font-semibold text-indigo-950">—</p>
-                <p class="mt-2 text-xs">Fixed</p>
-            </div>
+    <div class="mb-6 rounded-2xl border border-slate-200 bg-white px-4 sm:px-6 py-4 shadow-sm">
+        <div class="flex items-center justify-between gap-2 overflow-x-auto">
+            @foreach ([1 => 'Reservation details', 2 => 'Choose a new slot', 3 => 'Review & reschedule'] as $step => $label)
+                <div data-reschedule-progress="{{ $step }}" class="flex items-center gap-2 shrink-0 text-xs text-slate-400">
+                    <span data-reschedule-progress-circle class="w-7 h-7 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-bold">{{ $step }}</span>
+                    <span data-reschedule-progress-label>{{ $label }}</span>
+                    @if ($step < 3)
+                        <span class="hidden sm:block w-8 lg:w-16 h-px bg-slate-200 mx-1"></span>
+                    @endif
+                </div>
+            @endforeach
         </div>
     </div>
 
-    <form method="POST" action="{{ route('user.bookings.svp-reschedule.submit', ['reservation' => $reservation]) }}" class="space-y-6" id="reschedule-form">
-        @csrf
-        <input type="hidden" name="occupation_id" id="occupation_id" value="{{ old('occupation_id', $context['occupation_id']) }}">
-        <input type="hidden" name="category_id" id="category_id" value="{{ old('category_id', $context['category_id']) }}">
-        <input type="hidden" name="methodology" id="methodology" value="{{ old('methodology', $context['methodology'] ?? config('svp.default_methodology', 'in_person')) }}">
+    <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_290px] gap-6 items-start">
+        <form method="POST" action="{{ route('user.bookings.svp-reschedule.submit', ['reservation' => $reservation]) }}" class="space-y-5" id="reschedule-form">
+            @csrf
+            <input type="hidden" name="occupation_id" id="occupation_id" value="{{ old('occupation_id', $context['occupation_id']) }}">
+            <input type="hidden" name="category_id" id="category_id" value="{{ old('category_id', $context['category_id']) }}">
+            <input type="hidden" name="methodology" id="methodology" value="{{ old('methodology', $context['methodology'] ?? config('svp.default_methodology', 'in_person')) }}">
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Portal wallet balance</p>
-                <p class="text-2xl font-bold text-slate-900">{{ number_format($wallet?->available_balance ?? 0, 2) }} <span class="text-sm font-medium text-slate-500">BDT</span></p>
-                <p class="text-xs text-slate-500 mt-3">Separate fee</p>
-            </div>
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <label for="candidate_id" class="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Candidate / SVP profile</label>
-                <select name="candidate_id" id="candidate_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <option value="">Select candidate…</option>
-                    @foreach ($candidates as $candidate)
-                        <option value="{{ $candidate->id }}" {{ old('candidate_id', $selectedCandidateId) == $candidate->id ? 'selected' : '' }}>{{ $candidate->full_name ?: ('Candidate #'.$candidate->id) }}{{ $candidate->svp_user_id ? ' · SVP '.$candidate->svp_user_id : '' }}</option>
-                    @endforeach
-                </select>
-                @error('candidate_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                @if ($candidates->isEmpty())
-                    <p class="text-xs text-amber-600 mt-2">Log in to sync</p>
-                @endif
-            </div>
-        </div>
-
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Fixed exam identity</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <p class="text-xs text-slate-500 mb-1">Occupation</p>
-                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800">{{ $occupationName }} <span class="text-slate-400">(ID {{ $context['occupation_id'] }})</span></div>
-                </div>
-                <div>
-                    <p class="text-xs text-slate-500 mb-1">Category</p>
-                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800">{{ $categoryName }} <span class="text-slate-400">(ID {{ $context['category_id'] }})</span></div>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">New SVP location</p>
-            <div>
-                <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1">City</label>
-                <select name="city" id="city_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <option value="">Loading live cities…</option>
-                </select>
-                @error('city')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-            </div>
-        </div>
-
-        <div class="rounded-xl border border-slate-200 bg-white p-4">
-            <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">Language</label>
-            <select name="language_code" id="language_code" required disabled class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
-                <option value="">Select language</option>
-            </select>
-            <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
-            <p class="text-xs text-slate-400 mt-1">Live list</p>
-        </div>
-
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Available Sessions — date-first PACC reschedule</p>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
-                @include('user.bookings.partials.svp-calendar', ['calendarId' => 'reschedule-availability-calendar'])
-                <select id="available_session_date" aria-hidden="true" tabindex="-1"
-                    class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <option value="">Select date</option>
-                </select>
-                <p id="date-hint" class="text-xs text-slate-400 mt-1">Live dates only</p>
-            </div>
-
-            <div id="test-center-section" style="display:none;" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div class="mb-2 flex items-center justify-between gap-3">
-                    <span class="text-sm font-medium text-slate-700">Test center slot</span>
-                </div>
-                <input type="hidden" name="test_center_id" id="test_center_id" value="{{ old('test_center_id') }}">
-                <input type="hidden" name="test_center_name" id="test_center_name" value="{{ old('test_center_name') }}">
-                <input type="hidden" name="test_center_time" id="test_center_time" value="{{ old('test_center_time') }}">
-                <p id="center-summary" class="text-xs text-slate-500 mt-1">Pick a date</p>
-                @include('user.bookings.partials.pacc-availability-response', [
-                    'componentId' => 'reschedule-center-response',
-                    'mode' => 'centers',
-                    'centerSelectId' => 'test_center_id',
-                    'centerTimeInputId' => 'test_center_time',
-                    'sessionSelectId' => 'exam_session_id',
-                ])
-                @error('test_center_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-            </div>
-
-            <div>
-                <input type="hidden" name="exam_session_id" id="exam_session_id" value="{{ old('exam_session_id') }}">
-                <input type="hidden" name="exam_session_name" id="exam_session_name" value="{{ old('exam_session_name') }}">
-                <input type="hidden" name="exam_date" id="exam_date" value="{{ old('exam_date') }}">
-                <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="{{ old('temporary_hold_id') }}">
-                <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
-                @include('user.bookings.partials.pacc-availability-response', [
-                    'componentId' => 'reschedule-session-response',
-                    'mode' => 'sessions',
-                    'centerSelectId' => 'test_center_id',
-                    'sessionSelectId' => 'exam_session_id',
-                    'sessionNameInputId' => 'exam_session_name',
-                    'dateInputId' => 'exam_date',
-                ])
-                <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
-                <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
-                @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                @error('exam_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-            </div>
-
-            <div id="temporary-hold-panel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div>
-                        <p class="text-sm font-semibold text-amber-900">Temporary SVP seat hold</p>
-                        <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">A temporary hold is not required for an existing reservation.</p>
+            {{-- Step 1: reservation details --}}
+            <section id="reschedule-step-1" data-reschedule-step-panel="1" class="space-y-5">
+                <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div class="px-5 sm:px-6 py-5 border-b border-slate-100 flex items-start gap-3">
+                        <span class="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center text-sm font-bold shrink-0">1</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Confirm reservation details</h3>
+                            <p class="text-xs text-slate-500 mt-1">Occupation and category stay fixed; only the new exam location and schedule will change.</p>
+                        </div>
                     </div>
-                    <button type="button" id="create-temporary-hold" disabled class="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition">Create temporary hold</button>
+                    <div class="p-5 sm:p-6 space-y-5">
+                        <div>
+                            <label for="candidate_id" class="block text-sm font-semibold text-slate-800 mb-1.5">Candidate / SVP profile</label>
+                            <select name="candidate_id" id="candidate_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                <option value="">Select candidate…</option>
+                                @foreach ($candidates as $candidate)
+                                    <option value="{{ $candidate->id }}" {{ old('candidate_id', $selectedCandidateId) == $candidate->id ? 'selected' : '' }}>{{ $candidate->full_name ?: ('Candidate #'.$candidate->id) }}{{ $candidate->svp_user_id ? ' · SVP '.$candidate->svp_user_id : '' }}</option>
+                                @endforeach
+                            </select>
+                            @error('candidate_id')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                            @if ($candidates->isEmpty())
+                                <p class="text-xs text-amber-600 mt-2">No candidate is connected yet. Sign in with SVP to sync one.</p>
+                            @endif
+                        </div>
+
+                        <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wider text-indigo-500">Reservation identity</p>
+                                    <p class="text-base font-bold text-indigo-950 mt-1">{{ $candidateName }}</p>
+                                    <p class="text-sm text-indigo-800 mt-0.5">{{ $occupationName }} · {{ $categoryName }}</p>
+                                </div>
+                                <div class="text-right text-xs text-indigo-800">
+                                    <p>Current exam date</p>
+                                    <p class="font-semibold text-indigo-950 mt-1">{{ $currentExamDate }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-sm font-medium text-slate-700 mb-1.5">Occupation</p>
+                                <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800">{{ $occupationName }} <span class="text-slate-400">(ID {{ $context['occupation_id'] }})</span></div>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-slate-700 mb-1.5">Category</p>
+                                <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800">{{ $categoryName }} <span class="text-slate-400">(ID {{ $context['category_id'] }})</span></div>
+                            </div>
+                            <div>
+                                <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1.5">New city</label>
+                                <select name="city" id="city_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option value="">Loading live cities…</option>
+                                </select>
+                                @error('city')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                            </div>
+                            <div>
+                                <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1.5">Exam language</label>
+                                <select name="language_code" id="language_code" required disabled class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option value="">Select a live SVP exam language…</option>
+                                </select>
+                                <p id="language-error" class="hidden text-red-600 text-xs mt-1.5"></p>
+                            </div>
+                        </div>
+
+                        <p id="reschedule-step-1-error" class="hidden rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800"></p>
+                        <div class="flex justify-end pt-1">
+                            <button type="button" id="reschedule-next-1" disabled class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold shadow-sm hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                                Continue to slot selection
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {{-- Step 2: live slot selection --}}
+            <section id="reschedule-step-2" data-reschedule-step-panel="2" class="hidden space-y-5">
+                <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div class="px-5 sm:px-6 py-5 border-b border-slate-100 flex items-start gap-3">
+                        <span class="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center text-sm font-bold shrink-0">2</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Choose a new slot</h3>
+                            <p class="text-xs font-medium uppercase tracking-wider text-slate-400 mt-1">Available Sessions — date-first PACC reschedule</p>
+                            <p class="text-xs text-slate-500 mt-1">Choose a new city, test center, date, and session from live SVP availability.</p>
+                        </div>
+                    </div>
+                    <div class="p-5 sm:p-6 space-y-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-800 mb-2">New exam date</label>
+                            @include('user.bookings.partials.svp-calendar', ['calendarId' => 'reschedule-availability-calendar'])
+                            <select id="available_session_date" aria-hidden="true" tabindex="-1" class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500"><option value="">Select date</option></select>
+                            <p id="date-hint" class="text-xs text-slate-400 mt-2">Only live Portal Availability dates are shown.</p>
+                        </div>
+
+                        <div id="test-center-section" style="display:none;" class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div class="flex items-start justify-between gap-3 mb-3">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-800">Choose a test center</p>
+                                    <p id="center-summary" class="text-xs text-slate-500 mt-1">Pick a test center to load its open exam dates.</p>
+                                </div>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Live</span>
+                            </div>
+                            <input type="hidden" name="test_center_id" id="test_center_id" value="{{ old('test_center_id') }}">
+                            <input type="hidden" name="test_center_name" id="test_center_name" value="{{ old('test_center_name') }}">
+                            <input type="hidden" name="test_center_time" id="test_center_time" value="{{ old('test_center_time') }}">
+                            @include('user.bookings.partials.pacc-availability-response', [
+                                'componentId' => 'reschedule-center-response',
+                                'mode' => 'centers',
+                                'centerSelectId' => 'test_center_id',
+                                'centerTimeInputId' => 'test_center_time',
+                                'sessionSelectId' => 'exam_session_id',
+                            ])
+                            @error('test_center_id')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                        </div>
+
+                        <div>
+                            <input type="hidden" name="exam_session_id" id="exam_session_id" value="{{ old('exam_session_id') }}">
+                            <input type="hidden" name="exam_session_name" id="exam_session_name" value="{{ old('exam_session_name') }}">
+                            <input type="hidden" name="exam_date" id="exam_date" value="{{ old('exam_date') }}">
+                            <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="{{ old('temporary_hold_id') }}">
+                            <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
+                            @include('user.bookings.partials.pacc-availability-response', [
+                                'componentId' => 'reschedule-session-response',
+                                'mode' => 'sessions',
+                                'centerSelectId' => 'test_center_id',
+                                'sessionSelectId' => 'exam_session_id',
+                                'sessionNameInputId' => 'exam_session_name',
+                                'dateInputId' => 'exam_date',
+                            ])
+                            <p id="session-summary" class="hidden text-xs text-slate-500 mt-2"></p>
+                            <p id="session-center-error" class="hidden mt-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700"></p>
+                            <p id="date-error" class="hidden text-red-600 text-xs mt-1.5"></p>
+                            @error('exam_session_id')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                            @error('exam_date')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                            @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                        </div>
+
+                        <div id="temporary-hold-panel" class="hidden rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                    <p class="text-sm font-semibold text-amber-900">Optional temporary seat hold</p>
+                                    <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">A temporary hold is not required for an existing reservation.</p>
+                                </div>
+                                <button type="button" id="create-temporary-hold" disabled class="inline-flex items-center justify-center px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition whitespace-nowrap">Create temporary hold</button>
+                            </div>
+                        </div>
+
+                        <div id="svp-credit-panel" class="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                            <p class="text-sm font-semibold text-sky-900">SVP reservation payment routing</p>
+                            <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Live credit is checked for the selected candidate.</p>
+                            <p class="text-xs text-sky-700 mt-2">A new payment is only requested if the SVP account requires it.</p>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3 pt-2">
+                            <button type="button" id="reschedule-back-2" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12H5m6 6-6-6 6-6"/></svg>
+                                Back
+                            </button>
+                            <button type="button" id="reschedule-next-2" disabled class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold shadow-sm hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                                Review reschedule
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {{-- Step 3: review and submit --}}
+            <section id="reschedule-step-3" data-reschedule-step-panel="3" class="hidden space-y-5">
+                <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div class="px-5 sm:px-6 py-5 border-b border-slate-100 flex items-start gap-3">
+                        <span class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-sm font-bold shrink-0">3</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Review before rescheduling</h3>
+                            <p class="text-xs text-slate-500 mt-1">Confirm the new live slot while keeping the same reservation, occupation, and category.</p>
+                        </div>
+                    </div>
+                    <div class="p-5 sm:p-6">
+                        <div class="rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                            @foreach ([['reservation', 'Reservation'], ['candidate', 'Candidate'], ['occupation', 'Occupation'], ['category', 'Category'], ['city', 'New city'], ['language', 'Language'], ['date', 'New exam date'], ['center', 'Test center'], ['session', 'Session']] as [$key, $label])
+                                <div class="flex items-start justify-between gap-5 px-4 py-3 bg-white">
+                                    <span class="text-xs text-slate-500">{{ $label }}</span>
+                                    <span data-reschedule-summary="{{ $key }}" class="text-xs font-semibold text-slate-400 text-right">Not selected</span>
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex items-start gap-3">
+                            <svg class="w-5 h-5 shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0z"/></svg>
+                            <span>The reservation ID stays the same; only the exam location and schedule will be updated.</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 pt-6">
+                            <button type="button" id="reschedule-back-3" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12H5m6 6-6-6 6-6"/></svg>
+                                Change slot
+                            </button>
+                            <button type="submit" id="confirm-reschedule-button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
+                                Confirm reschedule
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </form>
+
+        <aside class="space-y-4 lg:sticky lg:top-24">
+            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-5">
+                <div class="flex items-center justify-between gap-3">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Reschedule summary</p>
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Live</span>
+                </div>
+                <div class="mt-4 rounded-xl bg-slate-50 p-3">
+                    <p class="text-[11px] text-slate-400">Portal wallet balance</p>
+                    <p class="text-xl font-bold text-slate-900 mt-1">{{ number_format($wallet?->available_balance ?? 0, 2) }} <span class="text-xs font-medium text-slate-500">BDT</span></p>
+                </div>
+                <div class="mt-4 space-y-3">
+                    @foreach ([['reservation', 'Reservation'], ['candidate', 'Candidate'], ['city', 'New city'], ['date', 'New date'], ['center', 'Center'], ['session', 'Session']] as [$key, $label])
+                        <div class="flex items-start justify-between gap-3">
+                            <span class="text-xs text-slate-400">{{ $label }}</span>
+                            <span data-reschedule-summary="{{ $key }}" class="max-w-[165px] text-right text-xs font-semibold text-slate-400">Not selected</span>
+                        </div>
+                    @endforeach
                 </div>
             </div>
-
-            <div id="svp-credit-panel" class="rounded-xl border border-sky-200 bg-sky-50 p-4">
-                <p class="text-sm font-semibold text-sky-900">SVP reservation payment routing</p>
-                <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Live credit</p>
-                <p class="text-xs text-sky-700 mt-2">Live list</p>
+            <div class="rounded-2xl border border-brand-100 bg-brand-50 p-5">
+                <p class="text-sm font-semibold text-brand-900">What stays unchanged?</p>
+                <p class="text-xs leading-5 text-brand-800 mt-1.5">Your reservation ID, occupation, and category stay fixed. Only the new city, center, date, and session are updated.</p>
             </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-            <button type="submit" id="confirm-reschedule-button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">Confirm &amp; Reschedule</button>
-            <a href="{{ route('user.bookings.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition">Cancel</a>
-        </div>
-    </form>
+        </aside>
+    </div>
 </div>
 
 <script>
@@ -759,8 +871,118 @@
     centerSection.style.display = 'none';
     sessionSummary?.classList.add('hidden');
     loadCredit();
-    loadLiveLanguages();
-    loadCities();
+    Promise.all([loadLiveLanguages(), loadCities()]).then(function () {
+        if (typeof refreshRescheduleWizard === 'function') refreshRescheduleWizard();
+    });
+    const rescheduleStepPanels = Array.from(document.querySelectorAll('[data-reschedule-step-panel]'));
+    const rescheduleProgressItems = Array.from(document.querySelectorAll('[data-reschedule-progress]'));
+    const rescheduleSummary = {
+        reservation: document.querySelectorAll('[data-reschedule-summary="reservation"]'),
+        candidate: document.querySelectorAll('[data-reschedule-summary="candidate"]'),
+        occupation: document.querySelectorAll('[data-reschedule-summary="occupation"]'),
+        category: document.querySelectorAll('[data-reschedule-summary="category"]'),
+        city: document.querySelectorAll('[data-reschedule-summary="city"]'),
+        language: document.querySelectorAll('[data-reschedule-summary="language"]'),
+        date: document.querySelectorAll('[data-reschedule-summary="date"]'),
+        center: document.querySelectorAll('[data-reschedule-summary="center"]'),
+        session: document.querySelectorAll('[data-reschedule-summary="session"]'),
+    };
+
+    function setRescheduleSummary(target, value, fallback = 'Not selected') {
+        if (!target) return;
+        target.forEach(function (node) {
+            node.textContent = String(value || fallback);
+            node.classList.toggle('text-slate-400', !value);
+            node.classList.toggle('text-slate-800', !!value);
+        });
+    }
+
+    function selectedRescheduleLabel(select) {
+        if (!select || !select.value) return '';
+        const option = select.options[select.selectedIndex];
+        return option ? option.textContent.trim() : '';
+    }
+
+    function updateRescheduleSummary() {
+        setRescheduleSummary(rescheduleSummary.reservation, '{{ $reservation }}');
+        setRescheduleSummary(rescheduleSummary.candidate, selectedRescheduleLabel(candidate) || '{{ $candidateName }}');
+        setRescheduleSummary(rescheduleSummary.occupation, '{{ $occupationName }}');
+        setRescheduleSummary(rescheduleSummary.category, '{{ $categoryName }}');
+        setRescheduleSummary(rescheduleSummary.city, selectedRescheduleLabel(city));
+        setRescheduleSummary(rescheduleSummary.language, selectedRescheduleLabel(language));
+        setRescheduleSummary(rescheduleSummary.date, date?.value);
+        setRescheduleSummary(rescheduleSummary.center, String(centerName?.value || center?.dataset?.name || '').trim());
+        setRescheduleSummary(rescheduleSummary.session, sessionName?.value || selectedRescheduleLabel(session));
+    }
+
+    function updateRescheduleProgress(step) {
+        rescheduleProgressItems.forEach(function (item) {
+            const itemStep = Number(item.dataset.rescheduleProgress || 0);
+            const active = itemStep === step;
+            const complete = itemStep < step;
+            const circle = item.querySelector('[data-reschedule-progress-circle]');
+            const label = item.querySelector('[data-reschedule-progress-label]');
+            item.classList.toggle('text-brand-600', active || complete);
+            item.classList.toggle('text-slate-400', !active && !complete);
+            circle?.classList.toggle('bg-brand-600', active || complete);
+            circle?.classList.toggle('text-white', active || complete);
+            circle?.classList.toggle('bg-slate-100', !active && !complete);
+            circle?.classList.toggle('text-slate-400', !active && !complete);
+            label?.classList.toggle('font-semibold', active);
+        });
+    }
+
+    function openRescheduleStep(step) {
+        const nextStep = Math.min(3, Math.max(1, Number(step) || 1));
+        rescheduleStepPanels.forEach(function (panel) {
+            panel.classList.toggle('hidden', Number(panel.dataset.rescheduleStepPanel) !== nextStep);
+        });
+        updateRescheduleProgress(nextStep);
+        updateRescheduleSummary();
+        document.getElementById('reschedule-wizard')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+
+    function rescheduleStepOneReady() {
+        return Boolean(candidate?.value && city?.value && language?.value);
+    }
+
+    function rescheduleSlotReady() {
+        return Boolean(candidate?.value && city?.value && language?.value && center?.value && centerName?.value && centerTime?.value && session?.value && date?.value);
+    }
+
+    function refreshRescheduleWizard() {
+        updateRescheduleSummary();
+        const nextOne = document.getElementById('reschedule-next-1');
+        const nextTwo = document.getElementById('reschedule-next-2');
+        if (nextOne) nextOne.disabled = !rescheduleStepOneReady();
+        if (nextTwo) nextTwo.disabled = !rescheduleSlotReady();
+        if (confirmButton && !rescheduleSlotReady()) confirmButton.disabled = true;
+    }
+
+    document.getElementById('reschedule-next-1')?.addEventListener('click', function () {
+        if (rescheduleStepOneReady()) {
+            document.getElementById('reschedule-step-1-error')?.classList.add('hidden');
+            openRescheduleStep(2);
+        } else {
+            const error = document.getElementById('reschedule-step-1-error');
+            if (error) {
+                error.textContent = 'Choose a candidate, city, and live exam language before selecting a new slot.';
+                error.classList.remove('hidden');
+            }
+        }
+    });
+    document.getElementById('reschedule-back-2')?.addEventListener('click', function () { openRescheduleStep(1); });
+    document.getElementById('reschedule-next-2')?.addEventListener('click', function () {
+        if (rescheduleSlotReady()) openRescheduleStep(3);
+    });
+    document.getElementById('reschedule-back-3')?.addEventListener('click', function () { openRescheduleStep(2); });
+
+    [candidate, city, language, availableDate, center, session]
+        .filter(Boolean)
+        .forEach(function (element) { element.addEventListener('change', refreshRescheduleWizard); });
+    refreshRescheduleWizard();
+    updateRescheduleProgress(1);
+
 })();
 </script>
 @endsection
