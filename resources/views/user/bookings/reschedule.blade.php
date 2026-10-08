@@ -899,7 +899,7 @@
 
     function selectedRescheduleLabel(select) {
         if (!select || !select.value) return '';
-        const option = select.options[select.selectedIndex];
+        const option = select.options ? select.options[select.selectedIndex] : null;
         return option ? option.textContent.trim() : '';
     }
 
@@ -956,7 +956,7 @@
         const nextTwo = document.getElementById('reschedule-next-2');
         if (nextOne) nextOne.disabled = !rescheduleStepOneReady();
         if (nextTwo) nextTwo.disabled = !rescheduleSlotReady();
-        if (confirmButton && !rescheduleSlotReady()) confirmButton.disabled = true;
+        if (confirmButton) confirmButton.disabled = !rescheduleSlotReady();
     }
 
     document.getElementById('reschedule-next-1')?.addEventListener('click', function () {
