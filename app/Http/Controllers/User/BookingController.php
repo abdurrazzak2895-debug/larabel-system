@@ -529,33 +529,6 @@ class BookingController extends Controller
     {
         $userId = Auth::id();
 
-        $query = Booking::with('credential')->where('user_id', $userId);
-
-        if ($request->filled('status')) {
-            $query->where('booking_status', $request->query('status'));
-        }
-
-        if ($request->filled('q')) {
-            $term = trim($request->query('q'));
-            $query->where(function ($q) use ($term) {
-                $q->where('booking_reference', 'like', "%{$term}%")
-                    ->orWhere('exam_session_id', 'like', "%{$term}%")
-                    ->orWhere('notes', 'like', "%{$term}%");
-            });
-        }
-
-        $bookings = $query->latest()->paginate(10)->withQueryString();
-
-        $counts = [
-            'all'        => Booking::where('user_id', $userId)->count(),
-            'pending'    => Booking::where('user_id', $userId)->where('booking_status', 'pending')->count(),
-            'processing' => Booking::where('user_id', $userId)->where('booking_status', 'processing')->count(),
-            'booked'     => Booking::where('user_id', $userId)->where('booking_status', 'booked')->count(),
-            'failed'     => Booking::where('user_id', $userId)->where('booking_status', 'failed')->count(),
-            'cancelled'  => Booking::where('user_id', $userId)->where('booking_status', 'cancelled')->count(),
-            'refunded'   => Booking::where('user_id', $userId)->where('booking_status', 'refunded')->count(),
-        ];
-
         $svpReservations = null;
         $svpError = null;
         $svpToken = $this->ensureSvpToken($request);
@@ -587,10 +560,6 @@ class BookingController extends Controller
         }
 
         return view('user.bookings.index', [
-            'bookings'        => $bookings,
-            'counts'          => $counts,
-            'filter'          => $request->query('status', 'all'),
-            'search'          => $request->query('q', ''),
             'svpReservations' => $svpReservations,
             'svpError'        => $svpError,
             'hasSvpToken'     => (bool) $svpToken,
