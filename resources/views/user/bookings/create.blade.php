@@ -4,199 +4,298 @@
 @section('page-title', 'New Booking')
 
 @section('content')
-<div class="max-w-3xl">
-    <div class="flex items-center gap-3 mb-6">
-        <a href="{{ route('user.bookings.index') }}" class="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:text-slate-900 hover:border-slate-300 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-        </a>
-        <div>
-            <h2 class="text-xl font-bold text-slate-900">New Booking</h2>
-            <p class="text-sm text-slate-500 mt-0.5">—</p>
+<div id="booking-wizard" class="max-w-6xl">
+    <div class="flex items-start justify-between gap-4 mb-6">
+        <div class="flex items-start gap-3">
+            <a href="{{ route('user.bookings.index') }}" class="w-10 h-10 shrink-0 rounded-xl border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:text-slate-900 hover:border-slate-300 transition" aria-label="Back to My Bookings">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </a>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-brand-600">New booking</p>
+                <h2 class="text-2xl font-bold text-slate-900 mt-1">Book your exam in 3 easy steps</h2>
+                <p class="text-sm text-slate-500 mt-1">Choose the exam, pick a live slot, then review before confirming.</p>
+            </div>
         </div>
     </div>
 
     @if ($svpError)
-        <div class="mb-6 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-sm">
-            {{ $svpError }}
+        <div class="mb-6 flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-sm">
+            <svg class="w-5 h-5 shrink-0 text-amber-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86l-7.21 12.5A2 2 0 004.81 19h14.38a2 2 0 001.73-2.64l-7.21-12.5a2 2 0 00-3.46 0z"/></svg>
+            <span>{{ $svpError }}</span>
             @if (! ($svpToken ?? null))
-                <a href="{{ route('svp.login.form') }}" class="ml-2 underline font-semibold">Sign in with SVP</a>
+                <a href="{{ route('svp.login.form') }}" class="ml-auto underline font-semibold whitespace-nowrap">Sign in with SVP</a>
             @endif
         </div>
     @endif
 
-    <form method="POST" action="{{ route('user.bookings.store') }}" class="space-y-6" id="booking-form">
-        @csrf
-
-        {{-- Wallet + candidate row --}}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Wallet Balance</p>
-                <p class="text-2xl font-bold text-slate-900">{{ number_format($wallet?->available_balance ?? 0, 2) }} <span class="text-sm font-medium text-slate-500">BDT</span></p>
-            </div>
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <label for="candidate_id" class="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Candidate</label>
-                <select name="candidate_id" id="candidate_id" required
-                    class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                    <option value="">Select candidate…</option>
-                    @foreach ($candidates as $c)
-                        <option value="{{ $c->id }}" {{ old('candidate_id') == $c->id ? 'selected' : '' }}>{{ $c->full_name ?? $c->name ?? ('Credential #' . $c->id) }}</option>
-                    @endforeach
-                </select>
-                @error('candidate_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                @if ($candidates->isEmpty())
-                    <p class="text-xs text-amber-600 mt-2">Log in to sync</p>
-                @endif
-            </div>
+    <div class="mb-6 rounded-2xl border border-slate-200 bg-white px-4 sm:px-6 py-4 shadow-sm">
+        <div class="flex items-center justify-between gap-2 overflow-x-auto">
+            @foreach ([1 => 'Exam details', 2 => 'Choose a slot', 3 => 'Review & confirm'] as $step => $label)
+                <div data-booking-progress="{{ $step }}" class="flex items-center gap-2 shrink-0 text-xs text-slate-400">
+                    <span data-booking-progress-circle class="w-7 h-7 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-bold">{{ $step }}</span>
+                    <span data-booking-progress-label>{{ $label }}</span>
+                    @if ($step < 3)
+                        <span class="hidden sm:block w-8 lg:w-16 h-px bg-slate-200 mx-1"></span>
+                    @endif
+                </div>
+            @endforeach
         </div>
+    </div>
 
-        {{-- Lookups: Occupation / City / Category --}}
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Exam Lookups</p>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <label for="occupation-search" class="block text-sm font-medium text-slate-700 mb-1">Occupation</label>
-                    <div class="relative" id="occupation-combobox">
-                        <input type="text" id="occupation-search" placeholder="Search occupation..."
-                            class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500 pl-10 pr-9" autocomplete="off"
-                            role="combobox" aria-expanded="false" aria-controls="occupation-dropdown" aria-autocomplete="list">
-                        <select name="occupation_id" id="occupation_id" required
-                            class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;" tabindex="-1" aria-hidden="true">
-                            <option value="">Select…</option>
-                            @php
-                                $occ = data_get($occupations, 'data.occupations')
-                                    ?? data_get($occupations, 'data')
-                                    ?? data_get($occupations, 'occupations')
-                                    ?? $occupations;
-                                if (!is_array($occ) && !($occ instanceof \Traversable)) $occ = [];
-                                $occ = collect($occ)->filter(fn($item) => is_array($item) || is_object($item))->values();
-                            @endphp
-                            @foreach ($occ as $o)
-                                @php $o = is_array($o) ? $o : (array) $o; @endphp
-                                <option value="{{ $o['id'] ?? $o['occupation_id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? $o['occupation_id'] ?? '') ? 'selected' : '' }}>{{ $o['name'] ?? $o['english_name'] ?? $o['category_name'] ?? '' }}</option>
+    <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_290px] gap-6 items-start">
+        <form method="POST" action="{{ route('user.bookings.store') }}" class="space-y-5" id="booking-form">
+            @csrf
+
+            {{-- Step 1: exam details --}}
+            <section id="booking-step-1" data-booking-step-panel="1" class="space-y-5">
+                <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div class="px-5 sm:px-6 py-5 border-b border-slate-100 flex items-start gap-3">
+                        <span class="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center text-sm font-bold shrink-0">1</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Tell us about the exam</h3>
+                            <p class="text-xs text-slate-500 mt-1">Start with the candidate and the occupation they will be tested for.</p>
+                        </div>
+                    </div>
+                    <div class="p-5 sm:p-6 space-y-5">
+                        <div>
+                            <label for="candidate_id" class="block text-sm font-semibold text-slate-800 mb-1.5">Who is taking the exam?</label>
+                            <select name="candidate_id" id="candidate_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                <option value="">Select candidate…</option>
+                                @foreach ($candidates as $c)
+                                    <option value="{{ $c->id }}" {{ old('candidate_id') == $c->id ? 'selected' : '' }}>{{ $c->full_name ?? $c->name ?? ('Credential #' . $c->id) }}</option>
+                                @endforeach
+                            </select>
+                            @error('candidate_id')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                            @if ($candidates->isEmpty())
+                                <p class="text-xs text-amber-600 mt-2">No candidate is connected yet. Sign in with SVP to sync one.</p>
+                            @endif
+                        </div>
+
+                        <div>
+                            <label for="occupation-search" class="block text-sm font-semibold text-slate-800 mb-1.5">What is the occupation?</label>
+                            <div class="relative" id="occupation-combobox">
+                                <input type="text" id="occupation-search" placeholder="Search occupation…" class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500 pl-10 pr-9" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="occupation-dropdown" aria-autocomplete="list">
+                                <select name="occupation_id" id="occupation_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500" style="display:none;" tabindex="-1" aria-hidden="true">
+                                    <option value="">Select…</option>
+                                    @php
+                                        $occ = data_get($occupations, 'data.occupations') ?? data_get($occupations, 'data') ?? data_get($occupations, 'occupations') ?? $occupations;
+                                        if (!is_array($occ) && !($occ instanceof \Traversable)) $occ = [];
+                                        $occ = collect($occ)->filter(fn($item) => is_array($item) || is_object($item))->values();
+                                    @endphp
+                                    @foreach ($occ as $o)
+                                        @php $o = is_array($o) ? $o : (array) $o; @endphp
+                                        <option value="{{ $o['id'] ?? $o['occupation_id'] ?? '' }}" {{ old('occupation_id') == ($o['id'] ?? $o['occupation_id'] ?? '') ? 'selected' : '' }}>{{ $o['name'] ?? $o['english_name'] ?? $o['category_name'] ?? '' }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M9.75 9.75c0 1.568 1.273 2.84 2.84 2.84s2.84-1.273 2.84-2.84-1.273-2.84-2.84-2.84S9.75 8.182 9.75 9.75z"/></svg></div>
+                                <button type="button" id="occupation-clear" tabindex="-1" aria-label="Clear occupation selection" class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-200 text-slate-500 text-xs leading-5 text-center hover:bg-slate-300">×</button>
+                                <div id="occupation-dropdown" class="hidden absolute z-30 left-0 right-0 mt-1 rounded-xl border border-slate-200 bg-white shadow-xl max-h-64 overflow-y-auto">
+                                    <p id="occupation-dropdown-status" class="px-3 py-2 text-xs text-slate-500 border-b border-slate-100"></p>
+                                    <ul id="occupation-dropdown-list" class="py-1"></ul>
+                                </div>
+                            </div>
+                            <p id="occupation-error" class="hidden text-red-600 text-xs mt-1.5"></p>
+                            <p class="text-xs text-slate-400 mt-1.5">Type a few letters and choose the matching live occupation.</p>
+                            @error('occupation_id')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                        </div>
+
+                        <div class="pt-5 border-t border-slate-100">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Exam options</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="category_id" class="block text-sm font-medium text-slate-700 mb-1.5">Exam category</label>
+                                    <select name="category_id" id="category_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                        <option value="">Select category…</option>
+                                        @php $cats = data_get($categories, 'data', []); if (!is_array($cats) && !($cats instanceof \Traversable)) $cats = []; @endphp
+                                        @foreach ($cats as $c)
+                                            @php $c = is_array($c) ? $c : (array) $c; @endphp
+                                            <option value="{{ $c['id'] ?? '' }}" {{ old('category_id') == ($c['id'] ?? '') ? 'selected' : '' }}>{{ $c['name'] ?? $c['title'] ?? $c['id'] ?? '' }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1.5">Preferred city</label>
+                                    <select name="city" id="city_id" required class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                        <option value="">Select city…</option>
+                                    </select>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1.5">Exam language</label>
+                            <select name="language_code" id="language_code" required disabled class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                        <option value="">Select a live SVP exam language…</option>
+                                    </select>
+                                    <p id="language-error" class="hidden text-red-600 text-xs mt-1.5"></p>
+                                    <p class="text-xs text-slate-400 mt-1.5">Languages are loaded for the selected occupation.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p id="booking-step-1-error" class="hidden rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800"></p>
+                        <div class="flex items-center justify-end pt-2">
+                            <button type="button" id="booking-next-1" disabled class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold shadow-sm hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                                Continue to slot selection
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {{-- Step 2: live slot selection --}}
+            <section id="booking-step-2" data-booking-step-panel="2" class="hidden space-y-5">
+                <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div class="px-5 sm:px-6 py-5 border-b border-slate-100 flex items-start gap-3">
+                        <span class="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center text-sm font-bold shrink-0">2</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Choose a live slot</h3>
+                            <p class="text-xs font-medium uppercase tracking-wider text-slate-400 mt-1">Available Sessions — date-first PACC booking</p>
+                            <p class="text-xs text-slate-500 mt-1">Pick an available date, center, and exact session from SVP.</p>
+                        </div>
+                    </div>
+                    <div class="p-5 sm:p-6 space-y-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-800 mb-2">Available exam date</label>
+                            @include('user.bookings.partials.svp-calendar', ['calendarId' => 'booking-availability-calendar'])
+                            <select id="available_session_date" aria-hidden="true" tabindex="-1" class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500"><option value="">Select date</option></select>
+                            <p class="text-xs text-slate-400 mt-2">Only live dates returned by the selected city are shown.</p>
+                        </div>
+
+                        <div id="test-center-section" style="display:none;" class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div class="flex items-start justify-between gap-3 mb-3">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-800">Choose a test center</p>
+                                    <p id="dhaka-center-summary" class="text-xs text-slate-500 mt-1">Pick a test center to load its open exam dates.</p>
+                                </div>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Live</span>
+                            </div>
+                            <input type="hidden" name="test_center_id" id="test_center_id" value="">
+                            <input type="hidden" name="test_center_name" id="test_center_name" value="">
+                            <input type="hidden" name="test_center_time" id="test_center_time" value="">
+                            @include('user.bookings.partials.pacc-availability-response', [
+                                'componentId' => 'user-center-response',
+                                'mode' => 'centers',
+                                'centerSelectId' => 'test_center_id',
+                                'centerTimeInputId' => 'test_center_time',
+                                'sessionSelectId' => 'exam_session_id',
+                            ])
+                        </div>
+
+                        <input type="hidden" name="exam_session_id" id="exam_session_id" value="">
+                        <input type="hidden" name="exam_session_name" id="exam_session_name" value="">
+                        <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="">
+                        <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
+                        <div>
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <p class="text-sm font-semibold text-slate-800">Choose an exact session</p>
+                                <span class="text-[11px] text-slate-400">Time and seats are live</span>
+                            </div>
+                            @include('user.bookings.partials.pacc-availability-response', [
+                                'componentId' => 'user-session-response',
+                                'mode' => 'sessions',
+                                'centerSelectId' => 'test_center_id',
+                                'sessionSelectId' => 'exam_session_id',
+                                'sessionNameInputId' => 'exam_session_name',
+                                'dateInputId' => 'exam_date',
+                            ])
+                            <p id="session-center-error" class="hidden mt-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700"></p>
+                            @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                            @error('exam_session_id')<p class="text-red-600 text-xs mt-1.5">{{ $message }}</p>@enderror
+                        </div>
+
+                        <input type="hidden" name="exam_date" id="exam_date" value="">
+                        <p id="date-error" class="hidden text-red-600 text-xs"></p>
+
+                        <div id="temporary-hold-panel" class="hidden rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                    <p class="text-sm font-semibold text-amber-900">Reserve this slot temporarily</p>
+                                    <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">Select a session to continue.</p>
+                                </div>
+                                <button type="button" id="create-temporary-hold" disabled class="inline-flex items-center justify-center px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition whitespace-nowrap">Check &amp; reserve slot</button>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
+                        <div id="svp-credit-panel" class="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                            <p class="text-sm font-semibold text-sky-900">Reservation credit</p>
+                            <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Select a candidate and occupation to check live SVP credit.</p>
+                            <p class="text-xs text-sky-700 mt-2">SVP sets the amount; no local price is added here.</p>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3 pt-2">
+                            <button type="button" id="booking-back-2" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12H5m6 6-6-6 6-6"/></svg>
+                                Back
+                            </button>
+                            <span class="text-xs text-slate-400 text-right">After the hold is verified, review will open automatically.</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {{-- Step 3: review and confirm --}}
+            <section id="booking-step-3" data-booking-step-panel="3" class="hidden space-y-5">
+                <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div class="px-5 sm:px-6 py-5 border-b border-slate-100 flex items-start gap-3">
+                        <span class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-sm font-bold shrink-0">3</span>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Review before confirming</h3>
+                            <p class="text-xs text-slate-500 mt-1">Everything looks good? Confirm to continue with the official SVP booking flow.</p>
+                        </div>
+                    </div>
+                    <div class="p-5 sm:p-6">
+                        <div id="booking-review-card" class="rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                            @foreach ([['candidate', 'Candidate'], ['occupation', 'Occupation'], ['category', 'Category'], ['city', 'City'], ['language', 'Language'], ['date', 'Exam date'], ['center', 'Test center'], ['session', 'Session']] as [$key, $label])
+                                <div class="flex items-start justify-between gap-5 px-4 py-3 bg-white">
+                                    <span class="text-xs text-slate-500">{{ $label }}</span>
+                                    <span data-booking-summary="{{ $key }}" class="text-xs font-semibold text-slate-400 text-right">Not selected</span>
+                                </div>
                             @endforeach
-                        </select>
-                        <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M9.75 9.75c0 1.568 1.273 2.84 2.84 2.84s2.84-1.273 2.84-2.84-1.273-2.84-2.84-2.84S9.75 8.182 9.75 9.75z"/></svg>
                         </div>
-                        <button type="button" id="occupation-clear" tabindex="-1" aria-label="Clear occupation selection"
-                            class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-200 text-slate-500 text-xs leading-5 text-center hover:bg-slate-300">×</button>
-                        <div id="occupation-dropdown" class="hidden absolute z-20 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg max-h-64 overflow-y-auto">
-                            <p id="occupation-dropdown-status" class="px-3 py-2 text-xs text-slate-500 border-b border-slate-100"></p>
-                            <ul id="occupation-dropdown-list" class="py-1"></ul>
+                        <div class="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex items-start gap-3">
+                            <svg class="w-5 h-5 shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0z"/></svg>
+                            <span id="booking-confirmation-note">Your live SVP slot is temporarily held. Confirm below to submit the booking.</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 pt-6">
+                            <button type="button" id="booking-back-3" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12H5m6 6-6-6 6-6"/></svg>
+                                Change slot
+                            </button>
+                            <button type="submit" id="confirm-booking-button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
+                                Confirm booking
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                            </button>
                         </div>
                     </div>
-                    <p id="occupation-error" class="hidden text-red-600 text-xs mt-1"></p>
-                    <p id="occupation-hint" class="hidden text-xs text-slate-400 mt-1">Type to search, then pick an occupation from the list.</p>
-                    @error('occupation_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
-                <div>
-                    <label for="city_id" class="block text-sm font-medium text-slate-700 mb-1">City</label>
-                    <select name="city" id="city_id" class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select…</option>
-                    </select>
+            </section>
+        </form>
+
+        <aside class="space-y-4 lg:sticky lg:top-24">
+            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-5">
+                <div class="flex items-center justify-between gap-3">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Your booking</p>
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Live</span>
                 </div>
-                <div>
-                    <label for="category_id" class="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                    <select name="category_id" id="category_id" class="w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select…</option>
-                        @php $cats = data_get($categories, 'data', []); if (!is_array($cats) && !($cats instanceof \Traversable)) $cats = []; @endphp
-                        @foreach ($cats as $c)
-                            @php $c = is_array($c) ? $c : (array) $c; @endphp
-                            <option value="{{ $c['id'] ?? '' }}" {{ old('category_id') == ($c['id'] ?? '') ? 'selected' : '' }}>{{ $c['name'] ?? $c['title'] ?? $c['id'] ?? '' }}</option>
-                        @endforeach
-                    </select>
+                <div class="mt-4 rounded-xl bg-slate-50 p-3">
+                    <p class="text-[11px] text-slate-400">Wallet balance</p>
+                    <p class="text-xl font-bold text-slate-900 mt-1">{{ number_format($wallet?->available_balance ?? 0, 2) }} <span class="text-xs font-medium text-slate-500">BDT</span></p>
                 </div>
-            </div>
-        </div>
-
-        <div class="rounded-xl border border-slate-200 bg-white p-4">
-            <label for="language_code" class="block text-sm font-medium text-slate-700 mb-1">Language</label>
-            <select name="language_code" id="language_code" required disabled class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-brand-500 focus:ring-brand-500">
-                <option value="">Select language</option>
-            </select>
-            <p id="language-error" class="hidden text-red-600 text-xs mt-1"></p>
-            <p class="text-xs text-slate-400 mt-1">Live list</p>
-        </div>
-
-        {{-- Session, date, and live SVP payment routing --}}
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Sessions</p>
-            <div class="grid grid-cols-1 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
-                    @include('user.bookings.partials.svp-calendar', ['calendarId' => 'booking-availability-calendar'])
-                    <select id="available_session_date" aria-hidden="true" tabindex="-1"
-                        class="hidden w-full rounded-xl border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                        <option value="">Select date</option>
-                    </select>
-                    <p class="text-xs text-slate-400 mt-1">Live dates only</p>
-
-                    <div id="test-center-section" style="display:none;" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <div class="mb-2 flex items-center justify-between gap-3">
-                            <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Center</span>
+                <div class="mt-4 space-y-3">
+                    @foreach ([['candidate', 'Candidate'], ['occupation', 'Occupation'], ['date', 'Date'], ['center', 'Center'], ['session', 'Session']] as [$key, $label])
+                        <div class="flex items-start justify-between gap-3">
+                            <span class="text-xs text-slate-400">{{ $label }}</span>
+                            <span data-booking-summary="{{ $key }}" class="max-w-[165px] text-right text-xs font-semibold text-slate-400">Not selected</span>
                         </div>
-                        <input type="hidden" name="test_center_id" id="test_center_id" value="">
-                        <input type="hidden" name="test_center_name" id="test_center_name" value="">
-                        <input type="hidden" name="test_center_time" id="test_center_time" value="">
-                        <p id="dhaka-center-summary" class="text-xs text-slate-400 mt-1">Pick a date</p>
-                        @include('user.bookings.partials.pacc-availability-response', [
-                            'componentId' => 'user-center-response',
-                            'mode' => 'centers',
-                            'centerSelectId' => 'test_center_id',
-                            'centerTimeInputId' => 'test_center_time',
-                            'sessionSelectId' => 'exam_session_id',
-                        ])
-                    </div>
-
-                    <input type="hidden" name="exam_session_id" id="exam_session_id" value="">
-                    <input type="hidden" name="exam_session_name" id="exam_session_name" value="">
-                    <input type="hidden" name="temporary_hold_id" id="temporary_hold_id" value="">
-                    <input type="hidden" name="temporary_hold_expires_at" id="temporary_hold_expires_at" value="">
-                    @include('user.bookings.partials.pacc-availability-response', [
-                        'componentId' => 'user-session-response',
-                        'mode' => 'sessions',
-                        'centerSelectId' => 'test_center_id',
-                        'sessionSelectId' => 'exam_session_id',
-                        'sessionNameInputId' => 'exam_session_name',
-                        'dateInputId' => 'exam_date',
-                    ])
-                    <p id="session-center-error" class="hidden mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"></p>
-                    @error('temporary_hold_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                    @error('exam_session_id')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                </div>
-                <input type="hidden" name="exam_date" id="exam_date" value="">
-                <p id="date-error" class="hidden text-red-600 text-xs mt-1"></p>
-            </div>
-            <div id="temporary-hold-panel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div>
-                        <p class="text-sm font-semibold text-amber-900">Temporary SVP seat hold</p>
-                        <p id="temporary-hold-status" class="text-xs text-amber-800 mt-1">Select a session</p>
-                    </div>
-                    <button type="button" id="create-temporary-hold" disabled
-                        class="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition">
-                        Create temporary hold
-                    </button>
+                    @endforeach
                 </div>
             </div>
-            <input type="hidden" name="methodology" value="{{ config('svp.default_methodology', 'in_person') }}">
-            <div id="svp-credit-panel" class="rounded-xl border border-sky-200 bg-sky-50 p-4">
-                <p class="text-sm font-semibold text-sky-900">SVP reservation credit</p>
-                <p id="svp-credit-status" class="text-xs text-sky-800 mt-1">Live credit</p>
-                <p class="text-xs text-sky-700 mt-2">SVP sets the amount</p>
+            <div class="rounded-2xl border border-brand-100 bg-brand-50 p-5">
+                <p class="text-sm font-semibold text-brand-900">Need help?</p>
+                <p class="text-xs leading-5 text-brand-800 mt-1.5">Complete each step in order. Live options appear only after the previous choice is ready.</p>
             </div>
-        </div>
-
-        {{-- Actions --}}
-        <div class="flex items-center gap-3">
-            <button type="submit" id="confirm-booking-button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
-                Complete booking
-            </button>
-            <a href="{{ route('user.bookings.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition">
-                Cancel
-            </a>
-        </div>
-    </form>
+        </aside>
+    </div>
 </div>
 
 <script>
@@ -704,6 +803,7 @@
             temporaryHoldExpiresInput.value = hold.expired_at || hold.expires_at || '';
             temporaryHoldStatus.classList.remove('text-red-700');
             confirmBookingButton.disabled = false;
+            if (typeof openBookingStep === 'function') openBookingStep(3);
             temporaryHoldStatus.textContent = 'Hold #' + holdId + ' created' + (temporaryHoldExpiresInput.value ? ' — expires ' + formatHoldExpiry(temporaryHoldExpiresInput.value) : '.') + ' You may now confirm the booking.';
         }).catch(error => {
             if (error.loginUrl && temporaryHoldStatus) {
@@ -1268,6 +1368,122 @@
             temporaryHoldButton.disabled = false;
         });
     }
+    const bookingStepPanels = Array.from(document.querySelectorAll('[data-booking-step-panel]'));
+    const bookingProgressItems = Array.from(document.querySelectorAll('[data-booking-progress]'));
+    const bookingSummary = {
+        candidate: document.querySelectorAll('[data-booking-summary="candidate"]'),
+        occupation: document.querySelectorAll('[data-booking-summary="occupation"]'),
+        category: document.querySelectorAll('[data-booking-summary="category"]'),
+        city: document.querySelectorAll('[data-booking-summary="city"]'),
+        language: document.querySelectorAll('[data-booking-summary="language"]'),
+        date: document.querySelectorAll('[data-booking-summary="date"]'),
+        center: document.querySelectorAll('[data-booking-summary="center"]'),
+        session: document.querySelectorAll('[data-booking-summary="session"]'),
+    };
+    let activeBookingStep = 1;
+
+    function selectedLabel(select) {
+        if (!select || !select.value) return '';
+        const option = select.options[select.selectedIndex];
+        return option ? option.textContent.trim() : '';
+    }
+
+    function setBookingSummary(target, value, fallback = 'Not selected') {
+        if (!target) return;
+        target.forEach(node => {
+            node.textContent = String(value || fallback);
+            node.classList.toggle('text-slate-400', !value);
+            node.classList.toggle('text-slate-800', !!value);
+        });
+    }
+
+    function updateBookingSummary() {
+        setBookingSummary(bookingSummary.candidate, selectedLabel(candidateSelect));
+        setBookingSummary(bookingSummary.occupation, selectedLabel(occupationSelect) || occupationSearchInput?.value);
+        setBookingSummary(bookingSummary.category, selectedLabel(categorySelect));
+        setBookingSummary(bookingSummary.city, selectedLabel(citySelect));
+        setBookingSummary(bookingSummary.language, selectedLabel(languageSelect));
+        setBookingSummary(bookingSummary.date, dateInput?.value);
+        setBookingSummary(bookingSummary.center, selectedTestCenterLabel());
+        setBookingSummary(bookingSummary.session, sessionNameInput?.value || selectedLabel(sessionSelect));
+    }
+
+    function updateBookingProgress(step) {
+        bookingProgressItems.forEach(item => {
+            const itemStep = Number(item.dataset.bookingProgress || 0);
+            const circle = item.querySelector('[data-booking-progress-circle]');
+            const label = item.querySelector('[data-booking-progress-label]');
+            const active = itemStep === step;
+            const complete = itemStep < step;
+            item.classList.toggle('text-brand-600', active || complete);
+            item.classList.toggle('text-slate-400', !active && !complete);
+            circle?.classList.toggle('bg-brand-600', active || complete);
+            circle?.classList.toggle('text-white', active || complete);
+            circle?.classList.toggle('bg-slate-100', !active && !complete);
+            circle?.classList.toggle('text-slate-400', !active && !complete);
+            label?.classList.toggle('font-semibold', active);
+        });
+    }
+
+    function openBookingStep(step) {
+        const nextStep = Math.min(3, Math.max(1, Number(step) || 1));
+        activeBookingStep = nextStep;
+        bookingStepPanels.forEach(panel => {
+            panel.classList.toggle('hidden', Number(panel.dataset.bookingStepPanel) !== nextStep);
+        });
+        updateBookingProgress(nextStep);
+        updateBookingSummary();
+        document.getElementById('booking-wizard')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+
+    function focusFirstMissingStepOneField() {
+        const checks = [
+            [candidateSelect, 'Choose a candidate first.'],
+            [occupationSelect, 'Search and choose an occupation first.'],
+            [categorySelect, 'Choose an exam category.'],
+            [citySelect, 'Choose a city.'],
+            [languageSelect, 'Choose an exam language.'],
+        ];
+        const missing = checks.find(([element]) => !element?.value);
+        const error = document.getElementById('booking-step-1-error');
+        if (missing) {
+            if (error) {
+                error.textContent = missing[1];
+                error.classList.remove('hidden');
+            }
+            missing[0]?.focus();
+            return false;
+        }
+        error?.classList.add('hidden');
+        return true;
+    }
+
+    function refreshBookingWizard() {
+        updateBookingSummary();
+        const stepOneReady = Boolean(candidateSelect?.value && occupationSelect?.value && categorySelect?.value && citySelect?.value && languageSelect?.value);
+        const nextStepOne = document.getElementById('booking-next-1');
+        if (nextStepOne) nextStepOne.disabled = !stepOneReady;
+        const holdReady = Boolean(temporaryHoldIdInput?.value);
+        const confirmButton = document.getElementById('confirm-booking-button');
+        if (confirmButton) confirmButton.disabled = !holdReady;
+    }
+
+    document.getElementById('booking-next-1')?.addEventListener('click', () => {
+        if (focusFirstMissingStepOneField()) openBookingStep(2);
+    });
+    document.getElementById('booking-back-2')?.addEventListener('click', () => openBookingStep(1));
+    document.getElementById('booking-back-3')?.addEventListener('click', () => openBookingStep(2));
+
+    [candidateSelect, occupationSelect, categorySelect, citySelect, languageSelect, availableDateSelect, testCenterSelect, sessionSelect]
+        .filter(Boolean)
+        .forEach(element => element.addEventListener('change', refreshBookingWizard));
+    occupationSearchInput?.addEventListener('input', refreshBookingWizard);
+    occupationSearchInput?.addEventListener('blur', () => setTimeout(refreshBookingWizard, 150));
+    temporaryHoldButton?.addEventListener('click', () => setTimeout(refreshBookingWizard, 100));
+
+    refreshBookingWizard();
+    updateBookingProgress(1);
+
     // Do not trigger an OTP login merely by opening a read-only T2Hub wizard.
     // The existing hold/confirm path still acquires SVP auth when needed.
 })();
