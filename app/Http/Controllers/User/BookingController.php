@@ -14,6 +14,7 @@ use App\Services\PortalAvailabilityService;
 use App\Services\SvpDirectAvailabilityService;
 use App\Services\SvpOtp\SvpAutoSession;
 use App\Services\SvpPaymentHistoryService;
+use App\Services\SvpPracticalPdfService;
 use App\Services\SvpSessionVerifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -661,6 +662,57 @@ class BookingController extends Controller
 
             return redirect()->route('user.bookings.index')
                 ->with('error', 'Could not verify the SVP result. Please try again.');
+        }
+    }
+
+    /**
+     * Generate a portal-owned PDF containing the practical-exam metadata
+     * returned by SVP, including form, weights and Prometric codes.
+     */
+    public function svpPracticalPdf(Request $request, string $reservation)
+    {
+        $token = $this->ensureSvpToken($request);
+
+        if (! $token) {
+            return redirect()->route('svp.login.form')
+                ->with('status', 'Please sign in with your SVP account to download practical details.');
+        }
+
+        abort_unless(ctype_digit($reservation), 404);
+
+        try {
+            $svpResponse = $this->booking->reservation($token, $reservation);
+
+            if ($svpResponse->getStatusCode() >= 400) {
+                return redirect()->route('user.bookings.index')
+                    ->with('error', 'SVP could not verify this reservation.');
+            }
+
+            $reservationData = $this->svpReservationData($svpResponse->getData(true));
+            $activeCandidateId = $this->autoSession->activeCandidateId($request);
+            $candidate = $activeCandidateId
+                ? Candidate::where('user_id', Auth::id())
+                    ->where('is_active', true)
+                    ->find($activeCandidateId)
+                : Candidate::where('user_id', Auth::id())
+                    ->where('is_active', true)
+                    ->latest()
+                    ->first();
+
+            if ($candidate && ! data_get($reservationData, 'full_name')) {
+                $reservationData['full_name'] = $candidate->full_name;
+            }
+
+            return app(SvpPracticalPdfService::class)->download($reservationData, $reservation);
+        } catch (\Throwable $e) {
+            Log::warning('SVP practical details PDF generation failed', [
+                'reservation_id' => $reservation,
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('user.bookings.index')
+                ->with('error', 'Could not generate the practical details PDF. Please try again.');
         }
     }
 

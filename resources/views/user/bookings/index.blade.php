@@ -146,6 +146,10 @@
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h5l4 4v11a2 2 0 01-2 2z"/></svg>
                                             {{ $resultPassed ? 'Download Certificate' : 'Download Ticket' }}
                                         </a>
+                                        <a href="{{ route('user.bookings.svp-practical-pdf', ['reservation' => $reservationId]) }}" class="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition" download>
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5l4 4v11a2 2 0 01-2 2z"/></svg>
+                                            Practical PDF
+                                        </a>
                                     @else
                                         <span class="text-xs text-slate-400">Ticket unavailable</span>
                                     @endif

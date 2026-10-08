@@ -310,6 +310,15 @@ class UserPanelTest extends TestCase
                         'english_name' => 'Kitchen Worker',
                         'name' => 'Kitchen Worker',
                     ],
+                    'category' => [
+                        'english_name' => 'Kitchen Workers',
+                        'practical_form_name' => 'Practical Form - L1',
+                        'practical_weight' => 75,
+                        'cbt_weight' => 25,
+                        'practical_exam_weight_non_targeted' => 0,
+                        'prometric_codes' => ['KW-01', 'KW-02'],
+                        'occupations' => ['Kitchen Worker'],
+                    ],
                 ],
             ], 200),
             'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations/5370113*' => Http::response([
@@ -420,6 +429,15 @@ class UserPanelTest extends TestCase
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'attachment; filename="Rifat_Ahmed_Kitchen_Worker_Certificate.pdf"')
             ->assertSee('%PDF-1.7');
+
+        $practicalPdf = $this->get(route('user.bookings.svp-practical-pdf', ['reservation' => 5370112]));
+
+        $practicalPdf->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('Content-Disposition', 'attachment; filename="Rifat_Ahmed_Kitchen_Worker_Practical_Details.pdf"')
+            ->assertSee('%PDF-1.4')
+            ->assertSee('Practical Form - L1')
+            ->assertSee('Prometric codes: KW-01, KW-02');
 
         $failedTicket = $this->get(route('user.bookings.svp-ticket', ['reservation' => 5370113]));
 

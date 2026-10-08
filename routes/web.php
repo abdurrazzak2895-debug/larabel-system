@@ -266,6 +266,9 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/svp-reservations/{reservation}/ticket', [UserBookingController::class, 'svpTicket'])
             ->whereNumber('reservation')
             ->name('svp-ticket');
+        Route::get('/svp-reservations/{reservation}/practical-pdf', [UserBookingController::class, 'svpPracticalPdf'])
+            ->whereNumber('reservation')
+            ->name('svp-practical-pdf');
         Route::post('/svp-reservations/{reservation}/cancel', [UserBookingController::class, 'svpCancel'])
             ->whereNumber('reservation')
             ->name('svp-cancel');
