@@ -54,16 +54,19 @@ final class SvpPracticalPdfService
      * @param array<string, mixed> $reservation
      * @param array<string, mixed> $category
      * @param array{label: string, passed: bool} $result
-     * @return list<array{text: string, size: int, bold: bool}>
+     * @return list<array{text: string, size: int, bold: bool, section: bool}>
      */
     private function reportLines(array $reservation, array $category, array $result, string $reservationId): array
     {
         $lines = [];
-        $add = static function (array &$target, string $text, int $size = 10, bool $bold = false): void {
-            $target[] = ['text' => $text, 'size' => $size, 'bold' => $bold];
+        $add = static function (array &$target, string $text, int $size = 10, bool $bold = false, bool $section = false): void {
+            $target[] = ['text' => $text, 'size' => $size, 'bold' => $bold, 'section' => $section];
         };
         $blank = static function (array &$target): void {
-            $target[] = ['text' => '', 'size' => 10, 'bold' => false];
+            $target[] = ['text' => '', 'size' => 10, 'bold' => false, 'section' => false];
+        };
+        $section = static function (array &$target, string $text) use ($add): void {
+            $add($target, $text, 11, true, true);
         };
         $field = static function (array &$target, string $label, ?string $value) use ($add): void {
             $add($target, $label.': '.(($value !== null && trim($value) !== '') ? trim($value) : 'Not provided'));
@@ -73,7 +76,7 @@ final class SvpPracticalPdfService
         $add($lines, 'System-generated reservation report', 9, false);
         $blank($lines);
 
-        $add($lines, 'Reservation', 12, true);
+        $section($lines, 'Reservation overview');
         $field($lines, 'Reservation ID', $reservationId);
         $field($lines, 'Candidate', $this->first($reservation, [
             'full_name', 'fullName', 'candidate_name', 'name',
@@ -93,7 +96,7 @@ final class SvpPracticalPdfService
         $field($lines, 'Methodology', $this->first($reservation, ['methodology', 'exam_methodology']));
         $blank($lines);
 
-        $add($lines, 'Occupation and category', 12, true);
+        $section($lines, 'Exam structure and occupation');
         $field($lines, 'Category', $this->first($category, ['english_name', 'name']));
         $field($lines, 'Exam type', $this->first($category, ['exam_type']));
         $field($lines, 'Non-targeted exam type', $this->first($category, ['exam_type_non_targeted']));
@@ -115,20 +118,9 @@ final class SvpPracticalPdfService
         }
         $field($lines, 'Category occupations', $occupationText);
 
-        $codes = $this->firstValue($category, ['prometric_codes']);
-        if (is_array($codes)) {
-            $codeValues = array_values(array_filter(array_map(
-                fn ($item): string => is_array($item)
-                    ? ($this->first($item, ['code', 'prometric_code', 'name', 'id']) ?? '')
-                    : ($this->scalar($item) ?? ''),
-                $codes,
-            )));
-            $codes = implode(', ', $codeValues);
-        }
-        $field($lines, 'Prometric codes', $this->scalar($codes));
         $blank($lines);
 
-        $add($lines, 'Notes', 12, true);
+        $section($lines, 'Notes');
         $add($lines, $result['passed']
             ? 'The reservation result is passed and the official certificate can be downloaded separately.'
             : 'This report contains the practical-exam metadata returned by the SVP reservation service.');
@@ -178,21 +170,27 @@ final class SvpPracticalPdfService
         return ['label' => 'Pending', 'passed' => false];
     }
 
-    /** @param list<array{text: string, size: int, bold: bool}> $lines */
+    /** @param list<array{text: string, size: int, bold: bool, section: bool}> $lines */
     private function buildPdf(array $lines): string
     {
         $wrapped = [];
         foreach ($lines as $line) {
+            $section = (bool) ($line['section'] ?? false);
             if ($line['text'] === '') {
-                $wrapped[] = $line;
+                $wrapped[] = ['text' => '', 'size' => 10, 'bold' => false, 'section' => false];
                 continue;
             }
             foreach (explode("\n", wordwrap($this->ascii($line['text']), 92, "\n", true)) as $part) {
-                $wrapped[] = ['text' => $part, 'size' => $line['size'], 'bold' => $line['bold']];
+                $wrapped[] = [
+                    'text' => $part,
+                    'size' => $line['size'],
+                    'bold' => $line['bold'],
+                    'section' => $section,
+                ];
             }
         }
 
-        $pages = array_chunk($wrapped, 43);
+        $pages = array_chunk($wrapped, 45);
         $pageCount = max(1, count($pages));
         $fontRegular = 3 + (2 * $pageCount);
         $fontBold = $fontRegular + 1;
@@ -207,22 +205,49 @@ final class SvpPracticalPdfService
         foreach ($pages as $index => $pageLines) {
             $pageId = 3 + (2 * $index);
             $contentId = $pageId + 1;
-            $stream = "q\nBT\n50 790 Td\n";
-            $first = true;
-            foreach ($pageLines as $line) {
-                $leading = $line['size'] >= 16 ? 25 : ($line['size'] >= 12 ? 20 : 15);
-                if (! $first) {
-                    $stream .= '0 -'.$leading." Td\n";
-                }
-                $first = false;
+            $stream = "q\n0.08 0.16 0.29 rg\n50 750 495 65 re f\nQ\n";
+            $y = 725;
+
+            foreach ($pageLines as $lineIndex => $line) {
                 if ($line['text'] === '') {
-                    $stream .= "0 -10 Td\n";
+                    $y -= 10;
                     continue;
                 }
-                $font = $line['bold'] ? 2 : 1;
-                $stream .= sprintf("/F%d %d Tf\n(%s) Tj\n", $font, $line['size'], $this->pdfEscape($line['text']));
+
+                if ($index === 0 && $lineIndex === 0) {
+                    $x = 65;
+                    $y = 795;
+                    $size = 18;
+                    $font = 2;
+                    $color = '1 1 1';
+                } elseif ($index === 0 && $lineIndex === 1) {
+                    $x = 65;
+                    $y = 775;
+                    $size = 9;
+                    $font = 1;
+                    $color = '0.85 0.91 0.98';
+                } else {
+                    $x = 50;
+                    $size = $line['size'];
+                    $font = $line['bold'] ? 2 : 1;
+                    $color = '0.10 0.14 0.20';
+                    if (($line['section'] ?? false) === true) {
+                        $stream .= "q\n0.90 0.94 0.99 rg\n50 ".($y - 5)." 495 19 re f\nQ\n";
+                    } elseif (str_starts_with($line['text'], 'Result: Passed')) {
+                        $color = '0.03 0.45 0.25';
+                    } elseif (str_starts_with($line['text'], 'Result: Failed')) {
+                        $color = '0.75 0.12 0.12';
+                    }
+                }
+
+                $stream .= "BT\n".$color." rg\n/F".$font.' '.$size." Tf\n1 0 0 1 ".$x.' '.$y." Tm\n(".$this->pdfEscape($line['text']).") Tj\nET\n";
+                if ($index === 0 && $lineIndex === 1) {
+                    $y = 725;
+                } elseif (! ($index === 0 && $lineIndex < 2)) {
+                    $y -= $line['size'] >= 12 ? 20 : 15;
+                }
             }
-            $stream .= "ET\nQ\n";
+            $stream .= "\n";
 
             $objects[$pageId] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 '.$fontRegular.' 0 R /F2 '.$fontBold.' 0 R >> >> /Contents '.$contentId.' 0 R >>';
             $objects[$contentId] = "<< /Length ".strlen($stream)." >>\nstream\n".$stream."endstream";

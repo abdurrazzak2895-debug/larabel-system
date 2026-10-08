@@ -437,7 +437,8 @@ class UserPanelTest extends TestCase
             ->assertHeader('Content-Disposition', 'attachment; filename="Rifat_Ahmed_Kitchen_Worker_Practical_Details.pdf"')
             ->assertSee('%PDF-1.4')
             ->assertSee('Practical Form - L1')
-            ->assertSee('Prometric codes: KW-01, KW-02');
+            ->assertSee('Reservation overview')
+            ->assertDontSee('Prometric codes');
 
         $failedTicket = $this->get(route('user.bookings.svp-ticket', ['reservation' => 5370113]));
 
