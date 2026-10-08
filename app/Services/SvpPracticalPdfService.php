@@ -217,12 +217,12 @@ final class SvpPracticalPdfService
                     continue;
                 }
                 $font = $line['bold'] ? 2 : 1;
-                $stream .= sprintf('/F%d %d Tf\n(%s) Tj\n', $font, $line['size'], $this->pdfEscape($line['text']));
+                $stream .= sprintf("/F%d %d Tf\n(%s) Tj\n", $font, $line['size'], $this->pdfEscape($line['text']));
             }
             $stream .= "ET\nQ\n";
 
             $objects[$pageId] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 '.$fontRegular.' 0 R /F2 '.$fontBold.' 0 R >> >> /Contents '.$contentId.' 0 R >>';
-            $objects[$contentId] = '<< /Length '.strlen($stream).' >>\nstream\n'.$stream.'endstream';
+            $objects[$contentId] = "<< /Length ".strlen($stream)." >>\nstream\n".$stream."endstream";
         }
         $objects[$fontRegular] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
         $objects[$fontBold] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
@@ -238,7 +238,7 @@ final class SvpPracticalPdfService
         $maxId = max(array_keys($objects));
         $pdf .= "xref\n0 ".($maxId + 1)."\n0000000000 65535 f \n";
         for ($id = 1; $id <= $maxId; $id++) {
-            $pdf .= sprintf('%010d 00000 n \n', $offsets[$id] ?? 0);
+            $pdf .= sprintf("%010d 00000 n \n", $offsets[$id] ?? 0);
         }
         $pdf .= "trailer\n<< /Size ".($maxId + 1).' /Root 1 0 R >>' . "\nstartxref\n".$xref."\n%%EOF\n";
 
