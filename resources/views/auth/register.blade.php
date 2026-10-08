@@ -61,8 +61,8 @@
                     </div>
                     <div>
                         <label for="phone" class="block text-sm font-medium text-slate-300 mb-2">Full phone number</label>
-                        <input type="tel" id="phone" name="phone" value="{{ old('phone') }}" required inputmode="tel" autocomplete="tel" class="input-glass w-full rounded-xl px-4 py-3.5 text-white placeholder-slate-500 text-sm" placeholder="+8801712345678">
-                        <p class="mt-2 text-xs text-slate-400">Include your country code. Spaces, dashes and brackets are accepted.</p>
+                        <input type="tel" id="phone" name="phone" value="{{ old('phone', '+880') }}" required inputmode="tel" autocomplete="tel" class="input-glass w-full rounded-xl px-4 py-3.5 text-white placeholder-slate-500 text-sm" placeholder="+8801712345678">
+                        <p class="mt-2 text-xs text-slate-400">+880 is prefilled. Add the rest of your number; spaces, dashes and brackets are accepted.</p>
                         @error('phone') <p class="mt-1.5 text-xs text-red-200">{{ $message }}</p> @enderror
                     </div>
                 </div>

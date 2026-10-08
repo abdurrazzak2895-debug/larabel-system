@@ -30,6 +30,11 @@ class RegistrationTest extends TestCase
             ->assertSee(route('register'), false)
             ->assertSee('Create a new account');
 
+        $this->get(route('register'))
+            ->assertOk()
+            ->assertSee('name="phone"', false)
+            ->assertSee('value="+880"', false);
+
         $csrfToken = 'registration-csrf-token';
         $response = $this->withSession(['_token' => $csrfToken])
             ->post(route('register.store'), [
