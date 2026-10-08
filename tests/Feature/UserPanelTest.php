@@ -570,8 +570,11 @@ class UserPanelTest extends TestCase
                 && str_ends_with($request->url(), '/exam_reservations/5370112/reschedule')
                 && $request['exam_session_id'] === 'reschedule-session-1'
                 && $request['exam_date'] === '2026-09-01'
+                && (string) ($request['occupation_id'] ?? '') === '2062'
+                && ($request['language_code'] ?? null) === 'LOABB'
                 && (string) ($request['site_id'] ?? '') === '17'
                 && ($request['site_city'] ?? null) === 'Dhaka'
+                && (string) ($request['hold_id'] ?? '') === 'hold-reschedule-1'
                 && $request->hasHeader('Authorization', 'Bearer test-svp-token');
         });
     }

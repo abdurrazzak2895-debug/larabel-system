@@ -524,15 +524,21 @@ class BookingService
             // request. The opaque session remains authoritative, while site_id
             // and site_city prevent SVP from falling back to the reservation's
             // previous/default center when the endpoint accepts location data.
+            // Reschedule also needs the same occupation/language/hold context
+            // as the original reservation flow; without it SVP cannot resolve
+            // reservation_exam_engine_snapshot and returns "Exam engine code
+            // not found" even for a valid session.
             $rescheduleResponse = $provider->rescheduleReservation($reservationId, array_filter([
                 'exam_session_id' => (string) $data['exam_session_id'],
                 'exam_date' => (string) $data['exam_date'],
+                'occupation_id' => $this->numericOrString($data['occupation_id'] ?? null),
                 'language_code' => strtoupper(trim((string) ($data['language_code'] ?? config('svp.default_language_code', 'LOABB')))),
                 'site_id' => isset($data['test_center_id'])
                     ? $this->numericOrString($data['test_center_id'])
                     : null,
                 'site_city' => $data['city'] ?? null,
                 'methodology' => $data['methodology'] ?? config('svp.default_methodology', 'in_person'),
+                'hold_id' => $this->numericOrString($data['temporary_hold_id'] ?? null),
             ], static fn ($value): bool => $value !== null && $value !== ''));
             $reschedulePayload = $rescheduleResponse->getData(true);
             $providerResponse = ['reschedule' => $reschedulePayload];
