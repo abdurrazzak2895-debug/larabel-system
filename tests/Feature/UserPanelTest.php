@@ -297,6 +297,17 @@ class UserPanelTest extends TestCase
                     'id' => 5370112,
                     'full_name' => 'Rifat Ahmed',
                     'exam_result' => 'passed',
+                    'final_result' => 'passed',
+                    'practical_exam_status' => 'completed',
+                    'cbt_exam_status' => 'completed',
+                    'examination_result' => [
+                        'calculated_practical_score' => 55,
+                        'calculated_cbt_score' => 16,
+                        'original_practical_score' => 74,
+                        'original_cbt_score' => 32,
+                        'cbt_correct_answers_count' => 10,
+                        'total_score' => 71,
+                    ],
                     'can_be_canceled' => true,
                     'can_be_rescheduled' => true,
                     'category_id' => 12,
@@ -436,8 +447,12 @@ class UserPanelTest extends TestCase
             ->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'attachment; filename="Rifat_Ahmed_Kitchen_Worker_Practical_Details.pdf"')
             ->assertSee('%PDF-1.4')
-            ->assertSee('Practical Form - L1')
-            ->assertSee('Reservation overview')
+            ->assertSee('SVP Exam Results')
+            ->assertSee('Practical examination')
+            ->assertSee('Computer examination (CBT)')
+            ->assertSee('Weighted score: 55 / 75')
+            ->assertSee('Weighted score: 16 / 25')
+            ->assertSee('Total score: 71 / 100')
             ->assertDontSee('Prometric codes');
 
         $failedTicket = $this->get(route('user.bookings.svp-ticket', ['reservation' => 5370113]));

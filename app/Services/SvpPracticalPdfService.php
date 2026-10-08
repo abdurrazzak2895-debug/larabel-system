@@ -72,58 +72,49 @@ final class SvpPracticalPdfService
             $add($target, $label.': '.(($value !== null && trim($value) !== '') ? trim($value) : 'Not provided'));
         };
 
-        $add($lines, 'SVP Practical Examination Details', 18, true);
-        $add($lines, 'System-generated reservation report', 9, false);
+        $examResult = (array) (data_get($reservation, 'examination_result')
+            ?? data_get($reservation, 'exam_result_details')
+            ?? []);
+        $practicalScore = $this->firstValue($examResult, ['calculated_practical_score', 'practical_score']);
+        $computerScore = $this->firstValue($examResult, ['calculated_cbt_score', 'cbt_score', 'computer_score']);
+        $rawPracticalScore = $this->firstValue($examResult, ['original_practical_score', 'raw_practical_score']);
+        $rawComputerScore = $this->firstValue($examResult, ['original_cbt_score', 'raw_cbt_score', 'original_computer_score']);
+        $correctAnswers = $this->firstValue($examResult, ['cbt_correct_answers_count', 'computer_correct_answers_count']);
+        $totalScore = $this->firstValue($examResult, ['total_score', 'calculated_total_score']);
+        $practicalWeight = $this->firstValue($category, ['practical_weight']);
+        $computerWeight = $this->firstValue($category, ['cbt_weight']);
+
+        $add($lines, 'SVP Exam Results', 18, true);
+        $add($lines, 'Practical and computer / CBT score summary', 9, false);
         $blank($lines);
 
-        $section($lines, 'Reservation overview');
+        $section($lines, 'Result overview');
         $field($lines, 'Reservation ID', $reservationId);
         $field($lines, 'Candidate', $this->first($reservation, [
             'full_name', 'fullName', 'candidate_name', 'name',
             'candidate.full_name', 'user.full_name', 'candidate.name', 'user.name',
         ]));
-        $field($lines, 'Result', $result['label']);
-        $field($lines, 'Reservation status', $this->first($reservation, ['status', 'reservation_status', 'exam_status']));
-        $field($lines, 'Exam date', $this->first($reservation, [
-            'exam_date', 'test_date', 'date', 'exam_session.exam_date',
-            'exam_session.start_date_in_browser_time_zone', 'examSession.exam_date',
-        ]));
-        $field($lines, 'Test center', $this->first($reservation, [
-            'test_center_name', 'center_name', 'test_center.name',
-            'test_center.english_name', 'test_center.data.attributes.name',
-            'exam_session.test_center.name', 'exam_session.test_center.data.attributes.name',
-        ]));
-        $field($lines, 'Methodology', $this->first($reservation, ['methodology', 'exam_methodology']));
+        $field($lines, 'Final result', $result['label']);
         $blank($lines);
 
-        $section($lines, 'Exam structure and occupation');
-        $field($lines, 'Category', $this->first($category, ['english_name', 'name']));
-        $field($lines, 'Exam type', $this->first($category, ['exam_type']));
-        $field($lines, 'Non-targeted exam type', $this->first($category, ['exam_type_non_targeted']));
-        $field($lines, 'Practical form', $this->first($category, ['practical_form_name']));
-        $field($lines, 'Minimum score', $this->scalar($this->firstValue($category, ['min_score'])));
-        $field($lines, 'Practical weight', $this->percentage($this->firstValue($category, ['practical_weight'])));
-        $field($lines, 'CBT weight', $this->percentage($this->firstValue($category, ['cbt_weight'])));
-        $field($lines, 'Non-targeted practical weight', $this->percentage($this->firstValue($category, ['practical_exam_weight_non_targeted'])));
-        $field($lines, 'Non-targeted CBT weight', $this->percentage($this->firstValue($category, ['cbt_weight_non_targeted'])));
-
-        $occupations = $this->firstValue($category, ['occupations']);
-        if (is_array($occupations)) {
-            $occupationText = implode(', ', array_values(array_filter(array_map(
-                fn ($item): string => $this->scalar($item) ?? '',
-                $occupations,
-            ))));
-        } else {
-            $occupationText = $this->scalar($occupations);
-        }
-        $field($lines, 'Category occupations', $occupationText);
-
+        $section($lines, 'Practical examination');
+        $field($lines, 'Status', $this->humanStatus($this->first($reservation, ['practical_exam_status'])));
+        $field($lines, 'Weighted score', $this->scoreWithMaximum($practicalScore, $practicalWeight));
+        $field($lines, 'Original score', $this->scalar($rawPracticalScore));
         $blank($lines);
 
-        $section($lines, 'Notes');
+        $section($lines, 'Computer examination (CBT)');
+        $field($lines, 'Status', $this->humanStatus($this->first($reservation, ['cbt_exam_status', 'computer_exam_status'])));
+        $field($lines, 'Weighted score', $this->scoreWithMaximum($computerScore, $computerWeight));
+        $field($lines, 'Original score', $this->scalar($rawComputerScore));
+        $field($lines, 'Correct answers', $this->scalar($correctAnswers));
+        $blank($lines);
+
+        $section($lines, 'Score summary');
+        $field($lines, 'Total score', $this->scoreWithMaximum($totalScore, 100));
         $add($lines, $result['passed']
-            ? 'The reservation result is passed and the official certificate can be downloaded separately.'
-            : 'This report contains the practical-exam metadata returned by the SVP reservation service.');
+            ? 'The final result is passed.'
+            : 'The practical and computer scores are not available for this reservation.');
         $add($lines, 'Generated at: '.now()->toDateTimeString(), 9, false);
 
         return $lines;
@@ -151,7 +142,7 @@ final class SvpPracticalPdfService
     private function result(array $reservation): array
     {
         $value = $this->first($reservation, [
-            'result_status', 'exam_result', 'result', 'outcome', 'exam_status',
+            'final_result', 'result_status', 'exam_result', 'result', 'outcome', 'exam_status',
             'reservation_status', 'status',
         ]) ?? '';
         $value = strtolower(trim($value));
@@ -233,9 +224,9 @@ final class SvpPracticalPdfService
                     $color = '0.10 0.14 0.20';
                     if (($line['section'] ?? false) === true) {
                         $stream .= "q\n0.90 0.94 0.99 rg\n50 ".($y - 5)." 495 19 re f\nQ\n";
-                    } elseif (str_starts_with($line['text'], 'Result: Passed')) {
+                    } elseif (str_starts_with($line['text'], 'Final result: Passed')) {
                         $color = '0.03 0.45 0.25';
-                    } elseif (str_starts_with($line['text'], 'Result: Failed')) {
+                    } elseif (str_starts_with($line['text'], 'Final result: Failed')) {
                         $color = '0.75 0.12 0.12';
                     }
                 }
@@ -303,6 +294,27 @@ final class SvpPracticalPdfService
     private function scalar(mixed $value): ?string
     {
         return is_scalar($value) ? trim((string) $value) : null;
+    }
+
+    private function scoreWithMaximum(mixed $score, mixed $maximum): ?string
+    {
+        $score = $this->scalar($score);
+        if ($score === null) {
+            return null;
+        }
+
+        $maximum = $this->scalar($maximum);
+
+        return $maximum !== null ? $score.' / '.$maximum : $score;
+    }
+
+    private function humanStatus(?string $status): ?string
+    {
+        if ($status === null || trim($status) === '') {
+            return null;
+        }
+
+        return ucfirst(str_replace(['_', '-'], ' ', strtolower(trim($status))));
     }
 
     private function percentage(mixed $value): ?string
