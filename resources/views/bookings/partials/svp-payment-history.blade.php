@@ -81,7 +81,7 @@
                             </td>
                             <td class="px-6 py-4 text-xs font-semibold text-slate-700 whitespace-nowrap">
                                 {{ is_numeric($payment['amount'] ?? null) ? number_format((float) $payment['amount'], 2) : ($payment['amount'] ?? '—') }}
-                                <span class="text-[11px] font-medium text-slate-400">BDT</span>
+                                <span class="text-[11px] font-medium text-slate-400">{{ $payment['currency'] ?? 'SAR' }}</span>
                             </td>
                             <td class="px-6 py-4 text-xs text-slate-600">{{ $payment['method'] ?? '—' }}</td>
                             <td class="px-6 py-4">
