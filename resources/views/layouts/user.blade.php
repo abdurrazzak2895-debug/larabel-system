@@ -39,6 +39,13 @@
     $__user = Auth::user();
     $__routeName = request()->route() ? request()->route()->getName() : '';
     $__unread = $__user ? \App\Models\Notification::where('user_id', $__user->getAuthIdentifier())->whereNull('read_at')->count() : 0;
+    $__activeSvpCandidate = null;
+    if ($__user) {
+        $__activeCandidateId = app(\App\Services\SvpOtp\SvpAutoSession::class)->activeCandidateId(request());
+        $__activeSvpCandidate = $__activeCandidateId
+            ? \App\Models\Candidate::where('user_id', $__user->getAuthIdentifier())->find($__activeCandidateId)
+            : null;
+    }
 
     $__icons = [
         'home' => '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>',
@@ -126,6 +133,24 @@
             <h1 class="text-base sm:text-lg font-bold text-slate-900 truncate">{{ trim(View::getSection('page-title')) !== '' ? trim(View::getSection('page-title')) : (trim(View::getSection('title')) !== '' ? trim(View::getSection('title')) : 'Dashboard') }}</h1>
         </div>
 
+        @if ($__activeSvpCandidate)
+            <div class="hidden sm:flex items-center gap-2 max-w-[230px] px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200" title="Currently active SVP profile">
+                <span class="relative flex h-2.5 w-2.5 shrink-0">
+                    <span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span class="min-w-0 leading-tight">
+                    <span class="block text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Active SVP</span>
+                    <span class="block text-xs font-bold text-emerald-900 truncate">{{ $__activeSvpCandidate->full_name ?: 'Connected profile' }}</span>
+                </span>
+            </div>
+        @else
+            <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition" title="Connect an SVP profile">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                Connect SVP
+            </a>
+        @endif
+
         <a href="{{ route('user.notifications.index') }}" class="relative p-2.5 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition" title="Notifications">
             {!! $__icons['bell'] !!}
             @if ($__unread > 0)
@@ -200,4 +225,3 @@
 </script>
 </body>
 </html>
-

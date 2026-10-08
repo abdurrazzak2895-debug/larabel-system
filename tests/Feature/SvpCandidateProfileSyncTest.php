@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\Auth\SvpLoginController;
 use App\Models\Agency;
 use App\Models\Candidate;
+use App\Models\CandidateSvpSession;
 use App\Models\User;
 use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -196,6 +197,67 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertTrue($oldCandidate->is_active);
         $this->assertTrue($newCandidate->is_active);
         $this->assertSame(2, Candidate::where('user_id', $user->id)->count());
+    }
+
+    public function test_user_can_switch_between_multiple_active_encrypted_svp_sessions(): void
+    {
+        $agency = Agency::create([
+            'name' => 'Switching Agency',
+            'code' => 'SWITCH1',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        $first = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-FIRST-USER',
+            'full_name' => 'First Active Profile',
+            'is_active' => true,
+        ]);
+        $second = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-SECOND-USER',
+            'full_name' => 'Second Active Profile',
+            'is_active' => true,
+        ]);
+
+        CandidateSvpSession::create([
+            'candidate_id' => $first->id,
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => $first->svp_user_id,
+            'access_token' => 'encrypted-token-first',
+            'csrf_token' => 'csrf-first',
+        ]);
+        CandidateSvpSession::create([
+            'candidate_id' => $second->id,
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => $second->svp_user_id,
+            'access_token' => 'encrypted-token-second',
+            'csrf_token' => 'csrf-second',
+        ]);
+
+        $response = $this->actingAs($user, 'web')
+            ->post(route('user.svp-profiles.switch', $second));
+
+        $response->assertRedirect();
+        $this->assertSame($second->id, session(SvpAutoSession::sessionKey('active_candidate_id')));
+        $this->assertSame('encrypted-token-second', session(SvpAutoSession::sessionKey('token')));
+        $this->assertTrue($first->refresh()->is_active);
+        $this->assertTrue($second->refresh()->is_active);
+
+        $this->post(route('user.svp-profiles.switch', $first));
+
+        $this->assertSame($first->id, session(SvpAutoSession::sessionKey('active_candidate_id')));
+        $this->assertSame('encrypted-token-first', session(SvpAutoSession::sessionKey('token')));
+        $this->assertDatabaseCount('candidate_svp_sessions', 2);
+
+        $this->get(route('user.dashboard'))
+            ->assertOk()
+            ->assertSee('Active SVP')
+            ->assertSee('First Active Profile');
     }
 
     public function test_profile_envelope_is_normalized_to_the_actual_user_record(): void
