@@ -83,6 +83,24 @@ final class SvpPracticalPdfService
         $totalScore = $this->firstValue($examResult, ['total_score', 'calculated_total_score']);
         $practicalWeight = $this->firstValue($category, ['practical_weight']);
         $computerWeight = $this->firstValue($category, ['cbt_weight']);
+        $occupation = $this->first($reservation, [
+            'occupation.english_name', 'occupation.name', 'occupation_name', 'job_title',
+            'candidate.occupation.english_name', 'category.english_name', 'category.name',
+        ]) ?? $this->first($category, ['english_name', 'name']);
+        $testCenter = $this->first($reservation, [
+            'test_center_name', 'center_name', 'test_center.name',
+            'test_center.english_name', 'test_center.data.attributes.name',
+            'exam_session.test_center.name', 'exam_session.test_center.data.attributes.name',
+        ]);
+        $city = $this->first($reservation, [
+            'city', 'city_name', 'test_center.city', 'test_center.city.name',
+            'test_center.data.attributes.city', 'test_center.data.attributes.city.name',
+            'exam_session.test_center.city', 'exam_session.test_center.city.name',
+        ]);
+        $examDate = $this->first($reservation, [
+            'exam_date', 'test_date', 'date', 'exam_session.exam_date',
+            'exam_session.start_date_in_browser_time_zone', 'examSession.exam_date',
+        ]);
 
         $add($lines, 'SVP Exam Results', 18, true);
         $add($lines, 'Practical and computer / CBT score summary', 9, false);
@@ -94,6 +112,10 @@ final class SvpPracticalPdfService
             'full_name', 'fullName', 'candidate_name', 'name',
             'candidate.full_name', 'user.full_name', 'candidate.name', 'user.name',
         ]));
+        $field($lines, 'Occupation', $occupation);
+        $field($lines, 'Test center', $testCenter);
+        $field($lines, 'City', $city);
+        $field($lines, 'Exam date', $examDate);
         $field($lines, 'Final result', $result['label']);
         $blank($lines);
 
@@ -196,7 +218,8 @@ final class SvpPracticalPdfService
         foreach ($pages as $index => $pageLines) {
             $pageId = 3 + (2 * $index);
             $contentId = $pageId + 1;
-            $stream = "q\n0.08 0.16 0.29 rg\n50 750 495 65 re f\nQ\n";
+            // UNICEF-inspired palette: bright blue, deep navy text, and a yellow accent.
+            $stream = "q\n0.00 0.68 0.89 rg\n50 750 495 65 re f\n1 0.72 0.11 rg\n50 810 495 5 re f\nQ\n";
             $y = 725;
 
             foreach ($pageLines as $lineIndex => $line) {
@@ -223,7 +246,7 @@ final class SvpPracticalPdfService
                     $font = $line['bold'] ? 2 : 1;
                     $color = '0.10 0.14 0.20';
                     if (($line['section'] ?? false) === true) {
-                        $stream .= "q\n0.90 0.94 0.99 rg\n50 ".($y - 5)." 495 19 re f\nQ\n";
+                        $stream .= "q\n0.88 0.96 0.99 rg\n50 ".($y - 5)." 495 19 re f\n1 0.72 0.11 rg\n50 ".($y - 5)." 5 19 re f\nQ\n";
                     } elseif (str_starts_with($line['text'], 'Final result: Passed')) {
                         $color = '0.03 0.45 0.25';
                     } elseif (str_starts_with($line['text'], 'Final result: Failed')) {
