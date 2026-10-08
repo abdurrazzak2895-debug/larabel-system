@@ -36,7 +36,7 @@ class RegisterController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'alpha_dash', 'min:3', 'max:50', 'unique:users,username'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'phone' => ['required', 'string', 'max:16', 'regex:/^\+?[0-9]{7,15}$/', 'unique:users,phone'],
+            'phone' => ['required', 'string', 'max:16', 'regex:/^\+[1-9][0-9]{7,14}$/', 'unique:users,phone'],
             'agency_code' => [
                 'required', 'string', 'max:64',
                 Rule::in([self::FIXED_AGENCY_CODE]),

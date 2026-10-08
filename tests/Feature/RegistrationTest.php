@@ -96,7 +96,7 @@ class RegistrationTest extends TestCase
                 'name' => 'Invalid Phone User',
                 'username' => 'invalid-phone-user',
                 'email' => 'invalid.phone@example.com',
-                'phone' => '12345',
+                'phone' => '01712345678',
                 'agency_code' => $agency->code,
                 'password' => 'Password123!',
                 'password_confirmation' => 'Password123!',
