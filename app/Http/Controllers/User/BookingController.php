@@ -391,6 +391,8 @@ class BookingController extends Controller
     {
         $fullName = data_get($reservation, 'full_name')
             ?? data_get($reservation, 'fullName')
+            ?? data_get($reservation, 'candidate_name')
+            ?? data_get($reservation, 'name')
             ?? data_get($reservation, 'candidate.full_name')
             ?? data_get($reservation, 'user.full_name')
             ?? data_get($reservation, 'candidate.name')
@@ -398,7 +400,14 @@ class BookingController extends Controller
         $occupation = data_get($reservation, 'occupation.name')
             ?? data_get($reservation, 'occupation.english_name')
             ?? data_get($reservation, 'occupation.name_en')
-            ?? data_get($reservation, 'occupation');
+            ?? data_get($reservation, 'occupation')
+            ?? data_get($reservation, 'occupation_name')
+            ?? data_get($reservation, 'exam_name')
+            ?? data_get($reservation, 'exam.english_name')
+            ?? data_get($reservation, 'exam.name')
+            ?? data_get($reservation, 'category.english_name')
+            ?? data_get($reservation, 'category.name')
+            ?? data_get($reservation, 'category_name');
 
         $parts = array_values(array_filter([
             is_scalar($fullName) ? trim((string) $fullName) : '',
@@ -615,6 +624,24 @@ class BookingController extends Controller
 
             $payload = $svpResponse->getData(true);
             $reservationData = $this->svpReservationData((array) $payload);
+
+            // Some live SVP reservation-detail responses omit the candidate
+            // name even though the authenticated portal account has a synced
+            // local candidate. Use that local identity only as a filename
+            // fallback; the official PDF body still comes from SVP.
+            $candidate = Candidate::where('user_id', Auth::id())
+                ->where('is_active', true)
+                ->where('svp_user_id', (string) ($reservationData['svp_user_id'] ?? $reservationData['user_id'] ?? ''))
+                ->first();
+            $candidate ??= Candidate::where('user_id', Auth::id())
+                ->where('is_active', true)
+                ->latest()
+                ->first();
+
+            if ($candidate && ! data_get($reservationData, 'full_name')) {
+                $reservationData['full_name'] = $candidate->full_name;
+            }
+
             $result = $this->normalizeSvpResult($reservationData);
             $filename = $this->certificateFilename($reservationData, $reservation, $result['passed']);
 
