@@ -54,9 +54,17 @@
                     </div>
                 </div>
 
-                <div>
-                    <label for="email" class="block text-sm font-medium text-slate-300 mb-2">Email address</label>
-                    <input type="email" id="email" name="email" value="{{ old('email') }}" required autocomplete="email" class="input-glass w-full rounded-xl px-4 py-3.5 text-white placeholder-slate-500 text-sm" placeholder="you@example.com">
+                <div class="grid sm:grid-cols-2 gap-5">
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-slate-300 mb-2">Email address</label>
+                        <input type="email" id="email" name="email" value="{{ old('email') }}" required autocomplete="email" class="input-glass w-full rounded-xl px-4 py-3.5 text-white placeholder-slate-500 text-sm" placeholder="you@example.com">
+                    </div>
+                    <div>
+                        <label for="phone" class="block text-sm font-medium text-slate-300 mb-2">Full phone number</label>
+                        <input type="tel" id="phone" name="phone" value="{{ old('phone') }}" required inputmode="tel" autocomplete="tel" class="input-glass w-full rounded-xl px-4 py-3.5 text-white placeholder-slate-500 text-sm" placeholder="+8801712345678">
+                        <p class="mt-2 text-xs text-slate-400">Include your country code. Spaces, dashes and brackets are accepted.</p>
+                        @error('phone') <p class="mt-1.5 text-xs text-red-200">{{ $message }}</p> @enderror
+                    </div>
                 </div>
 
                 <div>

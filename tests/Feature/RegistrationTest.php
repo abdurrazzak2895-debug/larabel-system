@@ -37,6 +37,7 @@ class RegistrationTest extends TestCase
                 'name' => 'Registered Portal User',
                 'username' => 'registered-user',
                 'email' => 'registered.user@example.com',
+                'phone' => '+880 1712-345678',
                 'agency_code' => 'SVP-7474',
                 'password' => 'Password123!',
                 'password_confirmation' => 'Password123!',
@@ -47,6 +48,7 @@ class RegistrationTest extends TestCase
 
         $user = User::where('email', 'registered.user@example.com')->firstOrFail();
         $this->assertSame($agency->id, $user->agency_id);
+        $this->assertSame('+8801712345678', $user->phone);
         $this->assertTrue($user->hasRole('Agency User'));
         $this->assertDatabaseHas('user_wallets', ['user_id' => $user->id]);
 
@@ -77,5 +79,30 @@ class RegistrationTest extends TestCase
             ->assertSessionHasErrors('agency_code');
 
         $this->assertDatabaseMissing('users', ['email' => 'unassigned@example.com']);
+    }
+
+    public function test_registration_requires_a_valid_full_phone_number(): void
+    {
+        $agency = Agency::factory()->create([
+            'code' => 'SVP-7474',
+            'status' => true,
+        ]);
+
+        $csrfToken = 'invalid-phone-registration-csrf-token';
+        $this->withSession(['_token' => $csrfToken])
+            ->from(route('register'))
+            ->post(route('register.store'), [
+                '_token' => $csrfToken,
+                'name' => 'Invalid Phone User',
+                'username' => 'invalid-phone-user',
+                'email' => 'invalid.phone@example.com',
+                'phone' => '12345',
+                'agency_code' => $agency->code,
+                'password' => 'Password123!',
+                'password_confirmation' => 'Password123!',
+            ])
+            ->assertSessionHasErrors('phone');
+
+        $this->assertDatabaseMissing('users', ['email' => 'invalid.phone@example.com']);
     }
 }

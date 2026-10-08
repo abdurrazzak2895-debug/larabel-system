@@ -26,15 +26,24 @@ class RegisterController extends Controller
 
     public function store(Request $request)
     {
+        $phone = preg_replace('/[\s().-]+/', '', trim((string) $request->input('phone', '')));
+        if (is_string($phone) && str_starts_with($phone, '00')) {
+            $phone = '+'.substr($phone, 2);
+        }
+        $request->merge(['phone' => $phone]);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'alpha_dash', 'min:3', 'max:50', 'unique:users,username'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['required', 'string', 'max:16', 'regex:/^\+?[0-9]{7,15}$/', 'unique:users,phone'],
             'agency_code' => [
                 'required', 'string', 'max:64',
                 Rule::in([self::FIXED_AGENCY_CODE]),
             ],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ], [
+            'phone.regex' => 'Enter a valid full phone number with country code, for example +8801712345678.',
         ]);
 
         $agency = Agency::query()
@@ -48,6 +57,7 @@ class RegisterController extends Controller
             'name' => $data['name'],
             'username' => $data['username'],
             'email' => $data['email'],
+            'phone' => $data['phone'],
             'password' => Hash::make($data['password']),
             'status' => true,
             'portal_booking_fee' => null,

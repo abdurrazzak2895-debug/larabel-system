@@ -17,6 +17,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
  * @property string $name
  * @property string|null $username
  * @property string|null $email
+ * @property string|null $phone
  * @property string $password
  * @property bool $status
  * @property \Illuminate\Support\Carbon|null $created_at
@@ -30,7 +31,7 @@ class User extends Authenticatable
     use HasRoles;
 
     /** @var array<int, string> */
-    protected $fillable = ['agency_id', 'account_source', 'name', 'username', 'email', 'password', 'status', 'portal_booking_fee'];
+    protected $fillable = ['agency_id', 'account_source', 'name', 'username', 'email', 'phone', 'password', 'status', 'portal_booking_fee'];
 
     /** @var array<int, string> */
     protected $hidden = ['password', 'remember_token'];
