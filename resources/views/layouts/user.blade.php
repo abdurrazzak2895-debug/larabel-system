@@ -144,10 +144,17 @@
                 </span>
             </div>
         @else
-            <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition" title="Connect an SVP profile">
-                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-                Connect SVP
-            </a>
+            @if ($__routeName === 'user.dashboard')
+                <button type="button" data-open-svp-connect class="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition" title="Connect an SVP profile">
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                    Connect SVP
+                </button>
+            @else
+                <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition" title="Connect an SVP profile">
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                    Connect SVP
+                </a>
+            @endif
         @endif
 
         <a href="{{ route('user.notifications.index') }}" class="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition" title="Notifications">

@@ -48,10 +48,10 @@
                 </div>
                 <p class="text-xs text-slate-400 mt-1">Connect multiple SVP accounts and switch between encrypted sessions.</p>
             </div>
-            <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-xs font-semibold shadow-sm transition">
+            <button type="button" data-open-svp-connect class="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-xs font-semibold shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 Connect another SVP account
-            </a>
+            </button>
         </div>
         <div class="divide-y divide-slate-100">
             @forelse ($candidates as $candidate)
@@ -78,7 +78,7 @@
                                 <button type="submit" class="px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition">Switch to this profile</button>
                             </form>
                         @elseif ($candidate->is_active && ! $candidate->is_connected)
-                            <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition">Reconnect</a>
+                            <button type="button" data-open-svp-connect class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition">Reconnect</button>
                         @elseif (! $candidate->is_active)
                             <form method="POST" action="{{ route('user.svp-profiles.activate', $candidate) }}">
                                 @csrf
@@ -104,9 +104,69 @@
             @empty
                 <div class="px-5 sm:px-6 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <p class="text-sm text-slate-500">No SVP profiles connected yet.</p>
-                    <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="text-xs font-semibold text-brand-600 hover:text-brand-700">Connect your first account →</a>
+                    <button type="button" data-open-svp-connect class="text-xs font-semibold text-brand-600 hover:text-brand-700">Connect your first account →</button>
                 </div>
             @endforelse
+        </div>
+    </div>
+
+    {{-- ===================== Inline SVP connect modal ===================== --}}
+    <div id="svp-connect-modal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="svp-connect-title">
+        <div class="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" data-svp-modal-card>
+            <div class="flex items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-500">SVP Profiles</p>
+                    <h3 id="svp-connect-title" class="mt-1 text-lg font-bold text-slate-900">Connect another SVP account</h3>
+                    <p class="mt-1 text-xs text-slate-500">Add the account here without leaving your dashboard.</p>
+                </div>
+                <button type="button" data-close-svp-connect class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div class="px-5 py-5 sm:px-6">
+                <div id="svp-connect-status" class="mb-4 hidden rounded-xl border px-3 py-2.5 text-sm" role="status"></div>
+
+                <form id="svp-inline-login-form" class="space-y-4">
+                    @csrf
+                    <div>
+                        <label for="svp-inline-email" class="mb-1.5 block text-xs font-semibold text-slate-700">SVP email</label>
+                        <input id="svp-inline-email" name="email" type="email" required autocomplete="email" class="w-full rounded-xl border-slate-200 px-3.5 py-3 text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="you@example.com">
+                    </div>
+                    <div>
+                        <label for="svp-inline-password" class="mb-1.5 block text-xs font-semibold text-slate-700">SVP password</label>
+                        <input id="svp-inline-password" name="password" type="password" required autocomplete="current-password" class="w-full rounded-xl border-slate-200 px-3.5 py-3 text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="••••••••">
+                    </div>
+                    <div>
+                        <label for="svp-inline-otp-method" class="mb-1.5 block text-xs font-semibold text-slate-700">OTP delivery</label>
+                        <select id="svp-inline-otp-method" name="otp_method" class="w-full rounded-xl border-slate-200 px-3.5 py-3 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <option value="email">Email</option>
+                            <option value="sms">SMS</option>
+                        </select>
+                    </div>
+                    <button id="svp-inline-login-submit" type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-indigo-600 hover:to-fuchsia-600 disabled:cursor-not-allowed disabled:opacity-60">
+                        <span data-svp-submit-label>Send OTP</span>
+                        <span data-svp-spinner class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+                    </button>
+                </form>
+
+                <form id="svp-inline-otp-form" class="hidden space-y-4">
+                    @csrf
+                    <p class="rounded-xl bg-indigo-50 px-3.5 py-3 text-sm text-indigo-800">Enter the OTP sent to <strong id="svp-inline-otp-email"></strong>.</p>
+                    <div>
+                        <label for="svp-inline-otp-code" class="mb-1.5 block text-xs font-semibold text-slate-700">One-time passcode</label>
+                        <input id="svp-inline-otp-code" name="otp_code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required class="w-full rounded-xl border-slate-200 px-3.5 py-3 text-center text-lg font-bold tracking-[0.35em] focus:border-indigo-500 focus:ring-indigo-500" placeholder="000000">
+                    </div>
+                    <button id="svp-inline-otp-submit" type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-indigo-600 hover:to-fuchsia-600 disabled:cursor-not-allowed disabled:opacity-60">
+                        <span data-svp-verify-label>Verify and connect</span>
+                        <span data-svp-verify-spinner class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+                    </button>
+                    <div class="flex items-center justify-between text-xs">
+                        <button type="button" id="svp-inline-resend" class="font-semibold text-indigo-600 hover:text-indigo-800">Resend OTP</button>
+                        <button type="button" id="svp-inline-change-account" class="text-slate-500 hover:text-slate-700">Use another account</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -283,4 +343,159 @@
         </div>
     </div>
 </div>
+
+<script>
+(() => {
+    const modal = document.getElementById('svp-connect-modal');
+    const loginForm = document.getElementById('svp-inline-login-form');
+    const otpForm = document.getElementById('svp-inline-otp-form');
+    if (!modal || !loginForm || !otpForm) return;
+
+    const statusBox = document.getElementById('svp-connect-status');
+    const otpEmail = document.getElementById('svp-inline-otp-email');
+    const otpCode = document.getElementById('svp-inline-otp-code');
+    const loginSubmit = document.getElementById('svp-inline-login-submit');
+    const otpSubmit = document.getElementById('svp-inline-otp-submit');
+    const resendButton = document.getElementById('svp-inline-resend');
+    const changeAccountButton = document.getElementById('svp-inline-change-account');
+
+    const routes = {
+        login: @json(route('svp.login.attempt')),
+        verify: @json(route('svp.otp.verify')),
+        resend: @json(route('svp.otp.resend')),
+    };
+
+    const setStatus = (message, type = 'info') => {
+        if (!message) {
+            statusBox.textContent = '';
+            statusBox.className = 'mb-4 hidden rounded-xl border px-3 py-2.5 text-sm';
+            return;
+        }
+
+        const palette = type === 'error'
+            ? 'border-red-200 bg-red-50 text-red-700'
+            : type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-indigo-200 bg-indigo-50 text-indigo-700';
+        statusBox.textContent = message;
+        statusBox.className = `mb-4 rounded-xl border px-3 py-2.5 text-sm ${palette}`;
+    };
+
+    const errorMessage = (body, fallback) => {
+        const validationMessage = body?.errors
+            ? Object.values(body.errors).flat().find(Boolean)
+            : null;
+        return validationMessage || body?.message || fallback;
+    };
+
+    const setBusy = (button, busy, labelSelector, spinnerSelector, label) => {
+        button.disabled = busy;
+        button.querySelector(labelSelector).textContent = busy ? 'Please wait…' : label;
+        button.querySelector(spinnerSelector).classList.toggle('hidden', !busy);
+    };
+
+    const postForm = async (url, form) => {
+        const response = await fetch(url, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(errorMessage(body, 'SVP authentication failed. Please try again.'));
+        return body;
+    };
+
+    const showLogin = () => {
+        loginForm.classList.remove('hidden');
+        otpForm.classList.add('hidden');
+        otpCode.value = '';
+        setStatus('');
+        window.setTimeout(() => document.getElementById('svp-inline-email')?.focus(), 50);
+    };
+
+    const showOtp = (email) => {
+        loginForm.classList.add('hidden');
+        otpForm.classList.remove('hidden');
+        otpEmail.textContent = email || 'your email';
+        setStatus('OTP sent. Check your email and enter the code below.', 'success');
+        window.setTimeout(() => otpCode.focus(), 50);
+    };
+
+    const openModal = () => {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        showLogin();
+    };
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    };
+
+    document.querySelectorAll('[data-open-svp-connect]').forEach((button) => button.addEventListener('click', openModal));
+    document.querySelectorAll('[data-close-svp-connect]').forEach((button) => button.addEventListener('click', closeModal));
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+
+    loginForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setStatus('');
+        setBusy(loginSubmit, true, '[data-svp-submit-label]', '[data-svp-spinner]', 'Send OTP');
+        try {
+            const body = await postForm(routes.login, loginForm);
+            if (body.status === 'authenticated') {
+                setStatus('SVP account connected. Refreshing your profiles…', 'success');
+                window.setTimeout(() => window.location.reload(), 500);
+                return;
+            }
+            showOtp(body.email || document.getElementById('svp-inline-email').value);
+        } catch (error) {
+            setStatus(error.message, 'error');
+        } finally {
+            setBusy(loginSubmit, false, '[data-svp-submit-label]', '[data-svp-spinner]', 'Send OTP');
+        }
+    });
+
+    otpForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setStatus('');
+        setBusy(otpSubmit, true, '[data-svp-verify-label]', '[data-svp-verify-spinner]', 'Verify and connect');
+        try {
+            const body = await postForm(routes.verify, otpForm);
+            if (body.status === 'authenticated') {
+                setStatus('SVP account connected. Refreshing your profiles…', 'success');
+                window.setTimeout(() => window.location.reload(), 500);
+            } else {
+                showLogin();
+            }
+        } catch (error) {
+            setStatus(error.message, 'error');
+        } finally {
+            setBusy(otpSubmit, false, '[data-svp-verify-label]', '[data-svp-verify-spinner]', 'Verify and connect');
+        }
+    });
+
+    resendButton.addEventListener('click', async () => {
+        resendButton.disabled = true;
+        try {
+            const body = await postForm(routes.resend, otpForm);
+            setStatus(body.message || 'A new OTP has been sent.', 'success');
+        } catch (error) {
+            setStatus(error.message, 'error');
+        } finally {
+            resendButton.disabled = false;
+        }
+    });
+
+    changeAccountButton.addEventListener('click', showLogin);
+})();
+</script>
 @endsection

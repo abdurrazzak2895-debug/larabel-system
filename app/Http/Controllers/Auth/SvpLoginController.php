@@ -55,6 +55,12 @@ class SvpLoginController extends Controller
     public function login(Request $request)
     {
         if (! Auth::guard('web')->check()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Sign in to the portal before connecting your SVP account.',
+                ], 401);
+            }
+
             return redirect()->route('login')->with('status', 'Sign in to the portal before connecting your SVP account.');
         }
 
@@ -109,6 +115,14 @@ class SvpLoginController extends Controller
             Log::warning('SVP OTP automation found no code; falling back to the manual OTP form');
         }
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'otp_required',
+                'message' => 'OTP sent. Enter the code from your SVP email.',
+                'email' => $credentials['email'],
+            ]);
+        }
+
         return redirect()->route('svp.otp.form');
     }
 
@@ -134,11 +148,23 @@ class SvpLoginController extends Controller
     public function resendOtp(Request $request)
     {
         if (! Auth::guard('web')->check()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Sign in to the portal before resending the SVP OTP.',
+                ], 401);
+            }
+
             return redirect()->route('login')->with('status', 'Sign in to the portal before resending the SVP OTP.');
         }
 
         $svpLogin = $request->session()->get(SvpAutoSession::sessionKey('login', $request));
         if (! $svpLogin) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Your SVP login session expired. Start the connection again.',
+                ], 422);
+            }
+
             return redirect()->route('svp.login.form');
         }
 
@@ -163,6 +189,13 @@ class SvpLoginController extends Controller
             ]);
         }
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'otp_resent',
+                'message' => 'A new OTP has been sent to your email.',
+            ]);
+        }
+
         return back()->with('status', 'A new OTP has been sent to your email.');
     }
 
@@ -173,11 +206,23 @@ class SvpLoginController extends Controller
     {
         $user = Auth::guard('web')->user();
         if (! $user instanceof User) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Sign in to the portal before verifying your SVP account.',
+                ], 401);
+            }
+
             return redirect()->route('login')->with('status', 'Sign in to the portal before connecting your SVP account.');
         }
 
         $svpLogin = $request->session()->get(SvpAutoSession::sessionKey('login', $request));
         if (! $svpLogin) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Your SVP login session expired. Start the connection again.',
+                ], 422);
+            }
+
             return redirect()->route('svp.login.form');
         }
 
@@ -291,6 +336,14 @@ class SvpLoginController extends Controller
 
         // All portal users land on their private user panel after SVP login.
         $home = route('user.dashboard');
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'authenticated',
+                'message' => 'SVP account connected successfully.',
+                'redirect' => $home,
+            ]);
+        }
 
         return redirect()->intended($home);
     }
