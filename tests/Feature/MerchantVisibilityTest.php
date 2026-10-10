@@ -63,7 +63,7 @@ class MerchantVisibilityTest extends TestCase
         $this->assertDatabaseHas('settings', ['key' => 'nagad_merchant_number', 'value' => '01812345678']);
     }
 
-    public function test_public_and_admin_created_users_can_open_self_service_deposit_but_agency_users_cannot(): void
+    public function test_public_admin_and_agency_created_users_can_open_self_service_deposit(): void
     {
         $agency = Agency::factory()->create();
         $publicUser = User::factory()->create([
@@ -95,11 +95,27 @@ class MerchantVisibilityTest extends TestCase
 
         Auth::guard('web')->logout();
         Auth::guard('web')->login($agencyUser);
-        $this->get(route('user.deposits.create'))->assertForbidden();
+        $this->get(route('user.deposits.create'))
+            ->assertOk()
+            ->assertSee('01711111111')
+            ->assertSee('01822222222');
+
         $agencyCsrf = 'agency-self-service-deposit-csrf-token';
         $this->withSession(['_token' => $agencyCsrf])
-            ->post(route('user.deposits.store'), ['_token' => $agencyCsrf])
-            ->assertForbidden();
+            ->post(route('user.deposits.store'), [
+                '_token' => $agencyCsrf,
+                'amount' => '75.00',
+                'payment_method' => 'bkash',
+                'mfs_sender_phone' => '01712345678',
+                'mfs_transaction_id' => 'AGENCY-SELF-SERVICE-001',
+            ])
+            ->assertRedirect(route('user.deposits.index'));
+
+        $this->assertDatabaseHas('deposit_requests', [
+            'user_id' => $agencyUser->id,
+            'mfs_transaction_id' => 'AGENCY-SELF-SERVICE-001',
+            'status' => 'pending',
+        ]);
     }
 
     public function test_self_service_deposit_stays_pending_until_admin_approval_and_credits_selected_user_only(): void

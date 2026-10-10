@@ -14,8 +14,6 @@ use Illuminate\Validation\Rule;
 
 class DepositController extends Controller
 {
-    private const ELIGIBLE_SOURCES = ['public_registration', 'admin_control'];
-
     public function __construct(private UserWalletService $userWallet)
     {
         $this->middleware('auth.multi');
@@ -82,7 +80,7 @@ class DepositController extends Controller
     {
         $user = Auth::user();
 
-        abort_unless($user instanceof User && in_array($user->account_source, self::ELIGIBLE_SOURCES, true), 403);
+        abort_unless($user instanceof User && $user->canCreateSelfServiceDeposit(), 403);
 
         return $user;
     }

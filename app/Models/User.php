@@ -25,7 +25,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
  */
 class User extends Authenticatable
 {
-    public const SELF_SERVICE_DEPOSIT_SOURCES = ['public_registration', 'admin_control'];
+    public const SELF_SERVICE_DEPOSIT_SOURCES = ['public_registration', 'admin_control', 'agency_control'];
 
     use HasFactory;
     use HasRoles;
