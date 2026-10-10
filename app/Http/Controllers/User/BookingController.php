@@ -451,17 +451,17 @@ class BookingController extends Controller
                 if ($score === null && $pair['score'] !== null) {
                     $score = $pair['score'];
                 }
-                if ($max === null && $pair['max'] !== null) {
+                if (($max === null || (float) $max <= 0) && $pair['max'] !== null && (float) $pair['max'] > 0) {
                     $max = $pair['max'];
                 }
             }
-            if ($isMaxField && $max === null) {
+            if ($isMaxField && ($max === null || (float) $max <= 0)) {
                 $numeric = $this->numericScoreValue($field['value']);
-                if ($numeric !== null) {
+                if ($numeric !== null && (float) $numeric > 0) {
                     $max = $numeric;
                 }
             }
-            if ($score !== null && $max !== null) {
+            if ($score !== null && $max !== null && (float) $max > 0) {
                 break;
             }
         }
@@ -484,10 +484,13 @@ class BookingController extends Controller
                 $score = $pair['score'];
                 $max = $pair['max'];
             }
-            if ($max === null && collect($maxTokens)->contains(fn ($token) => str_contains($key, $token))) {
-                $max = $this->numericScoreValue($field['value']);
+            if (($max === null || (float) $max <= 0) && collect($maxTokens)->contains(fn ($token) => str_contains($key, $token))) {
+                $candidateMax = $this->numericScoreValue($field['value']);
+                if ($candidateMax !== null && (float) $candidateMax > 0) {
+                    $max = $candidateMax;
+                }
             }
-            if ($score !== null && $max !== null) {
+            if ($score !== null && $max !== null && (float) $max > 0) {
                 break;
             }
         }
