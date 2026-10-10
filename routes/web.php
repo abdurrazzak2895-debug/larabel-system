@@ -50,6 +50,10 @@ Route::middleware('web')->group(function () {
     // -------------------------------
     Route::get('/svp/login', [SvpLoginController::class, 'showLoginForm'])->name('svp.login.form');
     Route::post('/svp/login', [SvpLoginController::class, 'login'])->middleware('throttle:5,1')->name('svp.login.attempt');
+    Route::post('/svp/profiles/{candidate}/reconnect', [SvpLoginController::class, 'reconnect'])
+        ->whereNumber('candidate')
+        ->middleware('throttle:5,1')
+        ->name('svp.profile.reconnect');
     Route::get('/svp/otp', [SvpLoginController::class, 'showOtpForm'])->name('svp.otp.form');
     Route::post('/svp/otp/verify', [SvpLoginController::class, 'verifyOtp'])->middleware('throttle:10,1')->name('svp.otp.verify');
     Route::post('/svp/otp/resend', [SvpLoginController::class, 'resendOtp'])->middleware('throttle:3,1')->name('svp.otp.resend');

@@ -32,13 +32,23 @@ class Candidate extends Model
         'national_id',
         'phone',
         'email',
+        'svp_login_email',
+        'svp_login_password',
         'svp_data',
+    ];
+
+    /** @var array<int, string> */
+    protected $hidden = [
+        'svp_login_email',
+        'svp_login_password',
     ];
 
     /** @var array<string, string> */
     protected $casts = [
         'is_active' => 'boolean',
         'svp_data' => 'array',
+        'svp_login_email' => 'encrypted',
+        'svp_login_password' => 'encrypted',
     ];
 
     /** @return BelongsTo<User, static> */

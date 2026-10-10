@@ -84,7 +84,7 @@
                                 <button type="submit" class="px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition">Switch to this profile</button>
                             </form>
                         @elseif ($candidate->is_active && ! $candidate->is_connected)
-                            <button type="button" data-open-svp-connect class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition">Reconnect</button>
+                            <button type="button" data-open-svp-connect data-reconnect-candidate="{{ $candidate->id }}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition">Reconnect</button>
                         @elseif (! $candidate->is_active)
                             <form method="POST" action="{{ route('user.svp-profiles.activate', $candidate) }}">
                                 @csrf
@@ -135,6 +135,7 @@
 
                 <form id="svp-inline-login-form" class="space-y-3">
                     @csrf
+                    <input id="svp-inline-candidate-id" name="candidate_id" type="hidden" value="">
                     <div>
                         <label for="svp-inline-email" class="mb-1 block text-xs font-semibold text-slate-700">SVP email</label>
                         <input id="svp-inline-email" name="email" type="email" required autocomplete="email" class="w-full rounded-xl border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="you@example.com">
@@ -364,9 +365,12 @@
     const otpSubmit = document.getElementById('svp-inline-otp-submit');
     const resendButton = document.getElementById('svp-inline-resend');
     const changeAccountButton = document.getElementById('svp-inline-change-account');
+    const candidateIdInput = document.getElementById('svp-inline-candidate-id');
+    let reconnectCandidateId = null;
 
     const routes = {
         login: @json(route('svp.login.attempt')),
+        reconnect: @json(route('svp.profile.reconnect', ['candidate' => '__candidate__'])),
         verify: @json(route('svp.otp.verify')),
         resend: @json(route('svp.otp.resend')),
     };
@@ -403,7 +407,7 @@
     const postForm = async (url, form) => {
         const response = await fetch(url, {
             method: 'POST',
-            body: new FormData(form),
+            body: form instanceof FormData ? form : new FormData(form),
             headers: {
                 Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
@@ -411,14 +415,20 @@
             credentials: 'same-origin',
         });
         const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(errorMessage(body, 'SVP authentication failed. Please try again.'));
+        if (!response.ok && body?.status !== 'credentials_required') {
+            throw new Error(errorMessage(body, 'SVP authentication failed. Please try again.'));
+        }
         return body;
     };
 
-    const showLogin = () => {
+    const showLogin = (preserveCandidate = false) => {
         loginForm.classList.remove('hidden');
         otpForm.classList.add('hidden');
         otpCode.value = '';
+        if (!preserveCandidate) {
+            reconnectCandidateId = null;
+            candidateIdInput.value = '';
+        }
         setStatus('');
         window.setTimeout(() => document.getElementById('svp-inline-email')?.focus(), 50);
     };
@@ -431,10 +441,39 @@
         window.setTimeout(() => otpCode.focus(), 50);
     };
 
-    const openModal = () => {
+    const startReconnect = async (candidateId) => {
+        reconnectCandidateId = String(candidateId);
+        candidateIdInput.value = reconnectCandidateId;
+        setStatus('Reconnecting with the saved SVP credentials…');
+
+        const formData = new FormData();
+        formData.append('_token', loginForm.querySelector('[name="_token"]')?.value || '');
+
+        try {
+            const body = await postForm(routes.reconnect.replace('__candidate__', reconnectCandidateId), formData);
+            if (body.status === 'otp_required') {
+                showOtp(body.email);
+                return;
+            }
+
+            if (body.status === 'credentials_required') {
+                document.getElementById('svp-inline-email').value = body.email || '';
+                document.getElementById('svp-inline-password').value = '';
+                showLogin(true);
+                setStatus(body.message || 'Enter the SVP password once to finish reconnect setup.', 'info');
+            }
+        } catch (error) {
+            setStatus(error.message, 'error');
+        }
+    };
+
+    const openModal = (candidateId = null) => {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         showLogin();
+        if (candidateId) {
+            startReconnect(candidateId);
+        }
     };
 
     const closeModal = () => {
@@ -442,7 +481,7 @@
         modal.classList.remove('flex');
     };
 
-    document.querySelectorAll('[data-open-svp-connect]').forEach((button) => button.addEventListener('click', openModal));
+    document.querySelectorAll('[data-open-svp-connect]').forEach((button) => button.addEventListener('click', () => openModal(button.dataset.reconnectCandidate || null)));
     document.querySelectorAll('[data-close-svp-connect]').forEach((button) => button.addEventListener('click', closeModal));
     modal.addEventListener('click', (event) => {
         if (event.target === modal) closeModal();
@@ -501,7 +540,7 @@
         }
     });
 
-    changeAccountButton.addEventListener('click', showLogin);
+    changeAccountButton.addEventListener('click', () => showLogin());
 })();
 </script>
 @endsection

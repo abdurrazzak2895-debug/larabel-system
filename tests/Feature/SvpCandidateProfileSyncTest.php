@@ -8,6 +8,7 @@ use App\Models\Candidate;
 use App\Models\CandidateSvpSession;
 use App\Models\DepositRequest;
 use App\Models\User;
+use App\Services\SvpApiService;
 use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -135,6 +136,83 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertNull($user->agency_id);
         $this->assertSame('SVP-OTP-USER', $candidate->svp_user_id);
         $this->assertSame('svp-otp-token', session(SvpAutoSession::sessionKey('token')));
+    }
+
+    public function test_reconnect_uses_saved_credentials_and_requires_only_otp(): void
+    {
+        $agency = Agency::create([
+            'name' => 'Reconnect Agency',
+            'code' => 'RECON1',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        $candidate = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-RECONNECT-USER',
+            'full_name' => 'Reconnect Candidate',
+            'email' => 'reconnect@example.test',
+            'is_active' => true,
+            'svp_login_email' => 'reconnect@example.test',
+            'svp_login_password' => 'saved-secret',
+        ]);
+
+        $this->mock(SvpApiService::class, function ($mock): void {
+            $mock->shouldReceive('login')
+                ->once()
+                ->with('reconnect@example.test', 'saved-secret', 'email')
+                ->andReturn(['status' => 200, 'body' => ['required_2fa' => true]]);
+            $mock->shouldReceive('verifyOtp')
+                ->once()
+                ->with('reconnect@example.test', 'saved-secret', '123456', 'email')
+                ->andReturn([
+                    'status' => 200,
+                    'body' => [
+                        'access_token' => 'reconnect-token',
+                        'access_payload' => [
+                            'csrf' => 'reconnect-csrf',
+                            'user' => ['id' => 'SVP-RECONNECT-USER'],
+                        ],
+                        'profile' => [
+                            'id' => 'SVP-RECONNECT-USER',
+                            'full_name' => 'Reconnect Candidate',
+                            'email' => 'reconnect@example.test',
+                        ],
+                    ],
+                ]);
+        });
+
+        Http::fake(['*' => Http::response([
+            'profile' => [
+                'id' => 'SVP-RECONNECT-USER',
+                'full_name' => 'Reconnect Candidate',
+                'email' => 'reconnect@example.test',
+            ],
+        ], 200)]);
+
+        $csrfToken = 'reconnect-csrf-token';
+        $this->actingAs($user, 'web')
+            ->withSession(['_token' => $csrfToken])
+            ->postJson(route('svp.profile.reconnect', $candidate), ['_token' => $csrfToken])
+            ->assertOk()
+            ->assertJson([
+                'status' => 'otp_required',
+                'candidate_id' => $candidate->id,
+                'email' => 'reconnect@example.test',
+            ]);
+
+        $this->postJson(route('svp.otp.verify'), [
+            '_token' => $csrfToken,
+            'otp_code' => '123456',
+        ])->assertOk()->assertJson(['status' => 'authenticated']);
+
+        $candidate->refresh();
+        $this->assertSame('reconnect@example.test', $candidate->svp_login_email);
+        $this->assertSame('saved-secret', $candidate->svp_login_password);
+        $this->assertDatabaseHas('candidate_svp_sessions', [
+            'candidate_id' => $candidate->id,
+            'svp_user_id' => 'SVP-RECONNECT-USER',
+        ]);
     }
 
     public function test_svp_logout_preserves_saved_profiles_without_deleting_history(): void

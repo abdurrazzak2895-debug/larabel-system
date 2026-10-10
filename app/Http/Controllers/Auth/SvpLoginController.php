@@ -50,6 +50,71 @@ class SvpLoginController extends Controller
     }
 
     /**
+     * Start a reconnect for an owned candidate using credentials encrypted at
+     * rest. The password is never returned to the browser; only the OTP step
+     * is exposed to the user.
+     */
+    public function reconnect(Request $request, Candidate $candidate)
+    {
+        $user = Auth::guard('web')->user();
+        if (! $user instanceof User) {
+            return response()->json([
+                'message' => 'Sign in to the portal before reconnecting your SVP account.',
+            ], 401);
+        }
+
+        abort_unless((int) $candidate->user_id === (int) $user->id, 404);
+
+        if (! $candidate->is_active) {
+            return response()->json([
+                'message' => 'Activate this SVP profile before reconnecting it.',
+            ], 422);
+        }
+
+        $email = trim((string) ($candidate->svp_login_email ?: $candidate->email));
+        $password = (string) $candidate->svp_login_password;
+
+        if ($email === '' || $password === '') {
+            return response()->json([
+                'status' => 'credentials_required',
+                'candidate_id' => $candidate->id,
+                'email' => $email,
+                'message' => 'Enter this SVP account password once. It will be encrypted for future reconnects.',
+            ], 422);
+        }
+
+        try {
+            $result = $this->svp->login($email, $password, 'email');
+        } catch (\Throwable $e) {
+            Log::error('SVP reconnect failed', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'message' => 'Takamol SVP is temporarily unreachable. Please try again in a few minutes.',
+            ], 503);
+        }
+
+        if ($result['status'] >= 400) {
+            return response()->json([
+                'message' => $this->authenticationErrorMessage((int) $result['status'], $result['body']),
+            ], 422);
+        }
+
+        $request->session()->put(SvpAutoSession::sessionKey('login', $request), [
+            'email' => $email,
+            'password' => $password,
+            'otp_method' => 'email',
+            'candidate_id' => $candidate->id,
+        ]);
+
+        return response()->json([
+            'status' => 'otp_required',
+            'candidate_id' => $candidate->id,
+            'email' => $email,
+            'message' => 'OTP sent. Enter the code from your SVP email.',
+        ]);
+    }
+
+    /**
      * Step 1 — hit SVP /sessions/login, then show OTP form.
      */
     public function login(Request $request)
@@ -67,7 +132,16 @@ class SvpLoginController extends Controller
         $credentials = $request->validate([
             'email'    => ['required', 'email'],
             'password' => ['required', 'string'],
+            'candidate_id' => ['nullable', 'integer'],
         ]);
+
+        $candidateId = (int) ($credentials['candidate_id'] ?? 0);
+        if ($candidateId > 0) {
+            abort_unless(
+                Candidate::where('id', $candidateId)->where('user_id', Auth::guard('web')->id())->exists(),
+                404,
+            );
+        }
 
         try {
             $result = $this->svp->login(
@@ -93,6 +167,7 @@ class SvpLoginController extends Controller
             'email'    => $credentials['email'],
             'password' => $credentials['password'],
             'otp_method' => $request->input('otp_method', 'email'),
+            'candidate_id' => $candidateId > 0 ? $candidateId : null,
         ]);
 
         // Email OTP automation: when a mailbox is configured, read the code SVP
@@ -316,6 +391,18 @@ class SvpLoginController extends Controller
         }
 
         $candidate = null;
+        $requestedCandidateId = (int) ($svpLogin['candidate_id'] ?? 0);
+        $requestedCandidate = $requestedCandidateId > 0
+            ? Candidate::where('id', $requestedCandidateId)->where('user_id', $user->id)->first()
+            : null;
+
+        if ($requestedCandidate && $requestedCandidate->svp_user_id && $loginSvpUserId !== ''
+            && (string) $requestedCandidate->svp_user_id !== $loginSvpUserId) {
+            throw ValidationException::withMessages([
+                'otp_code' => 'These SVP credentials belong to a different saved profile.',
+            ]);
+        }
+
         if ($profile !== []) {
             try {
                 $candidate = $this->syncCandidateFromProfile($user, $profile);
@@ -324,7 +411,18 @@ class SvpLoginController extends Controller
             }
         }
 
+        if ($requestedCandidate && $candidate instanceof Candidate && $candidate->id !== $requestedCandidate->id) {
+            throw ValidationException::withMessages([
+                'otp_code' => 'This SVP account is already saved under another profile.',
+            ]);
+        }
+
         if ($candidate instanceof Candidate) {
+            $candidate->forceFill([
+                'svp_login_email' => $svpLogin['email'],
+                'svp_login_password' => $svpLogin['password'],
+            ])->save();
+
             $this->autoSession->storeForCandidate(
                 $request,
                 $candidate->id,
