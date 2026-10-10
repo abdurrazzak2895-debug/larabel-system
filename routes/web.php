@@ -243,6 +243,7 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::post('/{candidate}/switch', [UserSvpProfileController::class, 'select'])->name('switch');
         Route::post('/{candidate}/activate', [UserSvpProfileController::class, 'activate'])->name('activate');
         Route::post('/{candidate}/deactivate', [UserSvpProfileController::class, 'deactivate'])->name('deactivate');
+        Route::delete('/{candidate}', [UserSvpProfileController::class, 'destroy'])->name('destroy');
     });
 
     // Bookings

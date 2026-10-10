@@ -8,6 +8,7 @@ use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class SvpProfileController extends Controller
 {
@@ -55,6 +56,22 @@ class SvpProfileController extends Controller
         $this->autoSession->forgetCandidate($request, $candidate->id);
 
         return back()->with('success', $candidate->full_name.' has been deactivated.');
+    }
+
+    public function destroy(Request $request, Candidate $candidate): RedirectResponse
+    {
+        $candidate = $this->ownedCandidate($candidate);
+        $name = $candidate->full_name ?: 'SVP profile';
+
+        // Remove the active browser context first. The candidate_svp_sessions
+        // row is also deleted by the candidate FK cascade, while historical
+        // bookings keep their record and null the old credential reference.
+        DB::transaction(function () use ($request, $candidate): void {
+            $this->autoSession->forgetCandidate($request, $candidate->id);
+            $candidate->delete();
+        });
+
+        return back()->with('success', $name.' was removed from your SVP profiles.');
     }
 
     private function ownedCandidate(Candidate $candidate): Candidate

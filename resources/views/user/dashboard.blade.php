@@ -91,6 +91,14 @@
                                 <button type="submit" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:border-red-200 hover:bg-red-50 hover:text-red-700 transition">Deactivate</button>
                             </form>
                         @endif
+                        <form method="POST" action="{{ route('user.svp-profiles.destroy', $candidate) }}" onsubmit="return confirm('Delete this SVP profile and its encrypted session? Existing booking history will be kept.');">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 hover:border-red-300 transition">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-8 0h10"/></svg>
+                                Delete profile
+                            </button>
+                        </form>
                     </div>
                 </div>
             @empty

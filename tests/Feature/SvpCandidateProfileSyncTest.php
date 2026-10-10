@@ -239,8 +239,10 @@ class SvpCandidateProfileSyncTest extends TestCase
             'csrf_token' => 'csrf-second',
         ]);
 
+        $csrfToken = 'svp-profile-test-token';
         $response = $this->actingAs($user, 'web')
-            ->post(route('user.svp-profiles.switch', $second));
+            ->withSession(['_token' => $csrfToken])
+            ->post(route('user.svp-profiles.switch', $second), ['_token' => $csrfToken]);
 
         $response->assertRedirect();
         $this->assertSame($second->id, session(SvpAutoSession::sessionKey('active_candidate_id')));
@@ -248,7 +250,8 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertTrue($first->refresh()->is_active);
         $this->assertTrue($second->refresh()->is_active);
 
-        $this->post(route('user.svp-profiles.switch', $first));
+        $this->withSession(['_token' => $csrfToken])
+            ->post(route('user.svp-profiles.switch', $first), ['_token' => $csrfToken]);
 
         $this->assertSame($first->id, session(SvpAutoSession::sessionKey('active_candidate_id')));
         $this->assertSame('encrypted-token-first', session(SvpAutoSession::sessionKey('token')));
@@ -258,6 +261,51 @@ class SvpCandidateProfileSyncTest extends TestCase
             ->assertOk()
             ->assertSee('Active SVP')
             ->assertSee('First Active Profile');
+    }
+
+    public function test_user_can_delete_one_owned_svp_profile_and_its_encrypted_session(): void
+    {
+        $agency = Agency::create([
+            'name' => 'Delete Profile Agency',
+            'code' => 'DELETE1',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        $keep = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-KEEP-USER',
+            'full_name' => 'Profile To Keep',
+            'is_active' => true,
+        ]);
+        $remove = Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-REMOVE-USER',
+            'full_name' => 'Profile To Remove',
+            'is_active' => true,
+        ]);
+        CandidateSvpSession::create([
+            'candidate_id' => $remove->id,
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => $remove->svp_user_id,
+            'access_token' => 'encrypted-token-remove',
+            'csrf_token' => 'csrf-remove',
+        ]);
+
+        $this->actingAs($user, 'web');
+        $activeKey = SvpAutoSession::sessionKey('active_candidate_id', request());
+        $csrfToken = 'svp-profile-delete-test-token';
+        $response = $this
+            ->withSession([$activeKey => $remove->id, '_token' => $csrfToken])
+            ->delete(route('user.svp-profiles.destroy', $remove), ['_token' => $csrfToken]);
+
+        $response->assertRedirect()->assertSessionHas('success', 'Profile To Remove was removed from your SVP profiles.');
+        $this->assertDatabaseMissing('candidates', ['id' => $remove->id]);
+        $this->assertDatabaseMissing('candidate_svp_sessions', ['candidate_id' => $remove->id]);
+        $this->assertDatabaseHas('candidates', ['id' => $keep->id, 'svp_user_id' => 'SVP-KEEP-USER']);
+        $this->assertNull(session($activeKey));
     }
 
     public function test_profile_envelope_is_normalized_to_the_actual_user_record(): void
