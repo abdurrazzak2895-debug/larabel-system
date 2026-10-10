@@ -16,7 +16,48 @@ class AutomaticRefundTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_expired_pending_booking_is_refunded_and_wallet_hold_is_released_once(): void
+    public function test_manual_refund_requests_and_approvals_are_disabled(): void
+    {
+        $agency = Agency::factory()->create();
+        $booking = Booking::create([
+            'agency_id' => $agency->id,
+            'booking_status' => 'failed',
+            'booking_reference' => 'TEST-REFUNDS-DISABLED',
+        ]);
+        $service = app(RefundService::class);
+
+        try {
+            $service->request([
+                'booking_id' => $booking->id,
+                'agency_id' => $agency->id,
+                'amount' => 25.00,
+                'reason' => 'Policy test',
+            ]);
+            $this->fail('A new refund request must be rejected when refunds are disabled.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Portal-fee refunds are disabled.', $exception->getMessage());
+        }
+
+        $refund = RefundRequest::create([
+            'booking_id' => $booking->id,
+            'agency_id' => $agency->id,
+            'amount' => 25.00,
+            'reason' => 'Legacy pending request',
+            'status' => 'pending',
+        ]);
+
+        try {
+            $service->approve($refund);
+            $this->fail('A pending refund must not be approved when refunds are disabled.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Portal-fee refunds are disabled.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('wallet_transactions', 0);
+        $this->assertDatabaseCount('user_wallet_transactions', 0);
+    }
+
+    public function test_expired_pending_booking_is_not_refunded_when_refunds_are_disabled(): void
     {
         $agency = Agency::factory()->create();
         $wallet = app(WalletService::class);
@@ -41,44 +82,26 @@ class AutomaticRefundTest extends TestCase
 
         $count = app(RefundService::class)->autoRefundExpiredPending();
 
-        $this->assertSame(1, $count);
+        $this->assertSame(0, $count);
         $this->assertDatabaseHas('bookings', [
             'id' => $booking->id,
-            'booking_status' => 'refunded',
+            'booking_status' => 'pending',
         ]);
         $this->assertDatabaseHas('agency_wallets', [
             'agency_id' => $agency->id,
-            'available_balance' => 100.00,
-            'reserved_balance' => 0.00,
+            'available_balance' => 75.00,
+            'reserved_balance' => 25.00,
         ]);
-        $this->assertDatabaseHas('wallet_transactions', [
-            'type' => 'refund',
-            'amount' => 25.00,
-            'reference' => $reference,
-        ]);
-        $this->assertDatabaseHas('refund_requests', [
-            'booking_id' => $booking->id,
-            'agency_id' => $agency->id,
-            'amount' => 25.00,
-            'status' => 'processed',
-        ]);
-        $this->assertDatabaseHas('booking_attempts', [
-            'booking_id' => $booking->id,
-            'status' => 'expired',
-        ]);
-        $this->assertDatabaseHas('booking_logs', [
-            'booking_id' => $booking->id,
-            'event_type' => 'pending_booking_auto_refunded',
-        ]);
+        $this->assertDatabaseMissing('wallet_transactions', ['type' => 'refund', 'reference' => $reference]);
+        $this->assertDatabaseCount('refund_requests', 0);
 
         $secondCount = app(RefundService::class)->autoRefundExpiredPending();
 
         $this->assertSame(0, $secondCount);
-        $this->assertSame(1, DB::table('wallet_transactions')
+        $this->assertSame(0, DB::table('wallet_transactions')
             ->where('reference', $reference)
             ->where('type', 'refund')
             ->count());
-        $this->assertSame(1, RefundRequest::where('booking_id', $booking->id)->count());
     }
 
     public function test_recent_pending_booking_and_non_pending_booking_are_not_refunded(): void
@@ -137,13 +160,12 @@ class AutomaticRefundTest extends TestCase
         ]);
 
         $this->artisan('bookings:refund-expired-pending')
-            ->expectsOutput('Automatically refunded 1 expired pending booking(s).')
+            ->expectsOutput('Portal-fee refunds are disabled; no pending booking refunds were processed.')
             ->assertExitCode(0);
 
         $this->assertDatabaseHas('bookings', [
             'id' => $booking->id,
-            'booking_status' => 'refunded',
+            'booking_status' => 'pending',
         ]);
     }
 }
-

@@ -93,7 +93,6 @@
                     {!! $__navLink('My Bookings', 'user.bookings.index', str_starts_with((string) $__routeName, 'user.bookings'), 'calendar') !!}
                     {!! $__navLink('Wallet', 'user.wallets.index', str_starts_with((string) $__routeName, 'user.wallets'), 'wallet') !!}
                     {!! $__navLink('Deposits', 'user.deposits.index', str_starts_with((string) $__routeName, 'user.deposits'), 'banknotes') !!}
-                    {!! $__navLink('Refunds', 'user.refunds.index', str_starts_with((string) $__routeName, 'user.refunds'), 'rotate') !!}
                     {!! $__navLink('Notifications', 'user.notifications.index', str_starts_with((string) $__routeName, 'user.notifications'), 'bell', $__unread > 0 ? (string) $__unread : null) !!}
                 </div>
             </div>
@@ -129,7 +128,7 @@
             @endif
 
             {{-- Agency section --}}
-            @if ($__isAgency)
+            @if ($__isAgency && $__user->hasPermission('manage agencies'))
             <div>
                 <p class="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-600">Agency</p>
                 <div class="space-y-1">

@@ -136,15 +136,19 @@ Artisan::command('bookings:refund-expired-pending {--minutes=10 : Minutes a pend
     $limit = max(1, min(500, (int) $this->option('limit')));
     $count = app(RefundService::class)->autoRefundExpiredPending($minutes, $limit);
 
-    $this->info("Automatically refunded {$count} expired pending booking(s).");
+    if (! (bool) config('svp.portal_fee_refunds_enabled', false)) {
+        $this->info('Portal-fee refunds are disabled; no pending booking refunds were processed.');
+    } else {
+        $this->info("Automatically refunded {$count} expired pending booking(s).");
+    }
 
     return 0;
-})->purpose('Automatically refund pending bookings after the payment timeout');
+})->purpose('Handle expired pending bookings according to the portal refund policy');
 
 Schedule::command('bookings:refund-expired-pending')
     ->everyMinute()
     ->withoutOverlapping(15)
-    ->description('Refund pending bookings that have exceeded the payment timeout.');
+    ->description('Handle pending bookings that have exceeded the payment timeout.');
 
 Artisan::command('portal:refresh-availability {--credential-id= : Refresh one local credential ID} {--account-id= : Refresh one portal account ID}', function (): int {
     $credentialId = $this->option('credential-id') !== null && $this->option('credential-id') !== ''

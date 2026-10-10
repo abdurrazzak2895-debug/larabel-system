@@ -163,7 +163,7 @@ Route::middleware('web')->group(function () {
 // -------------------------------
 Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.multi', 'agency.scope'])->group(function () {
     Route::get('/dashboard', [AgencyDashboardController::class, 'index'])
-        ->middleware('CheckPermission:manage agency users')
+        ->middleware('CheckPermission:manage agencies')
         ->name('dashboard');
 
     // Bookings
@@ -192,7 +192,7 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::post('/bookings/{booking}/cancel', [\App\Http\Controllers\Agency\BookingController::class, 'cancel'])->whereNumber('booking')->name('bookings.cancel');
 
     // Users
-    Route::prefix('users')->name('users.')->middleware('CheckPermission:manage agency users')->group(function () {
+    Route::prefix('users')->name('users.')->middleware('CheckPermission:manage agencies')->group(function () {
         Route::get('/', [AgencyUserController::class, 'index'])->name('index');
         Route::get('/create', [AgencyUserController::class, 'create'])->name('create');
         Route::post('/', [AgencyUserController::class, 'store'])->name('store');
@@ -213,14 +213,14 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
 
 
     // Refunds
-    Route::prefix('refunds')->name('refunds.')->group(function () {
+    Route::prefix('refunds')->name('refunds.')->middleware('CheckPermission:manage agencies')->group(function () {
         Route::get('/', [AgencyRefundController::class, 'index'])->name('index');
         Route::get('/create', [AgencyRefundController::class, 'create'])->name('create');
         Route::post('/', [AgencyRefundController::class, 'store'])->name('store');
     });
 
     // Reports
-    Route::prefix('reports')->name('reports.')->group(function () {
+    Route::prefix('reports')->name('reports.')->middleware('CheckPermission:manage agencies')->group(function () {
         Route::get('/daily-bookings', [AgencyReportController::class, 'dailyBookings'])->name('daily-bookings');
         Route::get('/wallet-statement', [AgencyReportController::class, 'walletStatement'])->name('wallet-statement');
         Route::get('/user-activity', [AgencyReportController::class, 'userActivity'])->name('user-activity');
@@ -229,7 +229,7 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     });
 
     // Notifications
-    Route::prefix('notifications')->name('notifications.')->group(function () {
+    Route::prefix('notifications')->name('notifications.')->middleware('CheckPermission:manage agencies')->group(function () {
         Route::get('/', [AgencyNotificationController::class, 'index'])->name('index');
         Route::post('/{notification}/mark-read', [AgencyNotificationController::class, 'markRead'])->name('mark-read');
     });

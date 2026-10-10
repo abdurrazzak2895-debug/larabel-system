@@ -75,13 +75,14 @@ class UserPanelTest extends TestCase
             route('user.wallets.index'),
             route('user.deposits.index'),
             route('user.refunds.index'),
-            route('user.refunds.create'),
             route('user.notifications.index'),
         ];
 
         foreach ($pages as $url) {
             $this->get($url)->assertOk();
         }
+
+        $this->get(route('user.refunds.create'))->assertForbidden();
 
         if ($booking) {
             $this->get(route('user.bookings.show', $booking))->assertOk();
@@ -141,7 +142,7 @@ class UserPanelTest extends TestCase
         $this->get(route('agency.dashboard'))->assertForbidden();
     }
 
-    public function test_failed_card_payment_refunds_portal_fee_to_available_balance(): void
+    public function test_failed_card_payment_keeps_portal_fee_charged(): void
     {
         $user = $this->loginAgencyUser();
         Setting::create(['key' => 'booking_price', 'value' => '100.00', 'agency_id' => null]);
@@ -185,25 +186,24 @@ class UserPanelTest extends TestCase
             ]));
 
         $response->assertRedirect(route('user.bookings.show', $booking));
-        $response->assertSessionHas('error', 'SVP payment was not confirmed. The portal fee has been refunded to your personal wallet balance.');
+        $response->assertSessionHas('error', 'SVP payment was not confirmed. The portal fee was charged and is non-refundable.');
 
         $this->assertDatabaseHas('bookings', [
             'id' => $booking->id,
             'booking_status' => 'failed',
         ]);
         $this->assertDatabaseHas('user_wallet_transactions', [
-            'type' => 'refund',
+            'type' => 'booking_debit',
             'amount' => 100.00,
             'reference' => 'portal-booking-fee-'.$booking->id,
         ]);
-        $this->assertDatabaseHas('refund_requests', [
-            'booking_id' => $booking->id,
-            'agency_id' => $user->agency_id,
-            'amount' => 100.00,
-            'status' => 'processed',
+        $this->assertDatabaseMissing('user_wallet_transactions', [
+            'type' => 'refund',
+            'reference' => 'portal-booking-fee-'.$booking->id,
         ]);
+        $this->assertDatabaseMissing('refund_requests', ['booking_id' => $booking->id]);
         $walletAfterRefund = app(UserWalletService::class)->getWallet($user->id)->fresh();
-        $this->assertSame($availableBefore + 200.00, (float) $walletAfterRefund->available_balance);
+        $this->assertSame($availableBefore + 100.00, (float) $walletAfterRefund->available_balance);
         $this->assertSame($reservedBefore, (float) $walletAfterRefund->reserved_balance);
     }
 

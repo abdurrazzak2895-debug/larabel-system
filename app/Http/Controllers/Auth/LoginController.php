@@ -56,15 +56,9 @@ class LoginController extends Controller
         ], $remember)) {
             $request->session()->regenerate();
 
-            $user = Auth::guard('web')->user();
-
-            if ($user && $user->agency_id !== null && $user->hasPermission('manage agency users')) {
-                return redirect()->intended(route('agency.dashboard'));
-            }
-
-            // Regular agency members and standalone users use the user panel.
-            // They can access their dashboard immediately; the booking
-            // flow will prompt for SVP login only when they try to book.
+            // Every portal user stays in the private user panel. Agency-wide
+            // pages are reserved for platform administrators and must never
+            // expose one portal user's account to another portal user.
             return redirect()->intended(route('user.dashboard'));
         }
 

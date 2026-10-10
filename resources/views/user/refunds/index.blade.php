@@ -9,12 +9,8 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">Refunds</h1>
-            <p class="text-sm text-slate-500 mt-1">Track and manage your refund requests.</p>
+            <p class="text-sm text-slate-500 mt-1">Portal-fee refunds are disabled. This page only shows legacy records.</p>
         </div>
-        <a href="{{ route('user.refunds.create') }}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            New Refund
-        </a>
     </div>
 
     {{-- ===================== Summary cards ===================== --}}
@@ -111,8 +107,7 @@
                                 <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
                             </div>
                             <p class="text-sm font-medium text-slate-600">No refunds yet</p>
-                            <p class="text-xs text-slate-400 mt-1">Refund requests will appear here.</p>
-                            <a href="{{ route('user.refunds.create') }}" class="inline-block mt-4 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-fuchsia-600 transition">Request Refund</a>
+                            <p class="text-xs text-slate-400 mt-1">No legacy refund records were found.</p>
                         </td>
                     </tr>
                     @endforelse
@@ -127,4 +122,3 @@
     </div>
 </div>
 @endsection
-

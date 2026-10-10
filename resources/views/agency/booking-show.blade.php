@@ -37,7 +37,7 @@
             <button
                 x-data
                 @click="
-                    if (confirm('Cancel this booking and initiate a refund?')) {
+                    if (confirm('Cancel this booking? The portal fee is non-refundable.')) {
                         document.getElementById('cancel-form').submit();
                     }
                 "

@@ -20,7 +20,7 @@ use Illuminate\Support\Str;
  *   Search Occupation → Search Test Center → Search Exam Session
  *   → Wallet Validation → Reserve Balance → Complete Booking
  *   → Success? → Save Booking → Wallet Debit → Notify User
- *   → Failure? → Release Reserved Balance → Refund → Notify User
+ *   → Failure? → Keep the charged portal fee → Notify User
  */
 class BookingService
 {
@@ -276,12 +276,12 @@ class BookingService
                 'request_payload' => $data,
             ]);
 
-            // The portal booking fee belongs to the Agency wallet and is
-            // completely separate from the amount/credit decision made by SVP.
-            // Hold it before touching SVP, then debit only after SVP confirms the
-            // reservation. This prevents a successful external booking without
-            // the portal fee being accounted for.
+            // The portal booking fee belongs to the authenticated portal user
+            // (or legacy agency wallet) and is separate from SVP's amount/credit
+            // decision. Charge it before touching the reservation API. The fee
+            // is non-refundable even when SVP rejects or cannot complete it.
             $this->ensurePortalBookingFeeHeld($booking, 'portal_booking_fee');
+            $this->finalizePortalBookingFee($booking);
 
             // 2. Create the real SVP reservation. The selected exam_session_id
             // is the authoritative center assignment; site_id/site_city are
@@ -510,14 +510,15 @@ class BookingService
 
         try {
             $attempt = BookingAttempt::create([
-                'booking_id' => $booking->id,
-                'status' => 'processing',
+                'booking_id'     => $booking->id,
+                'status'         => 'processing',
                 'request_payload' => $data + ['reservation_id' => $reservationId],
             ]);
 
             $this->ensurePortalBookingFeeHeld($booking, 'portal_booking_fee_reschedule', [
                 'reservation_id' => $reservationId,
             ]);
+            $this->finalizePortalBookingFee($booking);
 
             $provider = $this->provider->withToken($token);
             // Keep the selected physical center explicit in the reschedule
@@ -1087,7 +1088,10 @@ class BookingService
     }
 
     /**
-     * Release reserved balance, mark booking failed, notify user.
+     * Mark a booking failed without returning the already-charged portal fee.
+     *
+     * The method name is retained for controller compatibility with older
+     * callers, but no wallet refund or refund request is created.
      *
      * @return array{booking: Booking, success: bool, error: string}
      */
@@ -1099,15 +1103,17 @@ class BookingService
     }
 
     /**
-     * Mark a booking as failed and immediately return any portal-fee hold to
-     * the agency wallet's available balance. This is used by live SVP booking,
-     * reschedule, and card-payment failure paths so failed bookings never leave
-     * money stuck in reserved balance.
+     * Mark a booking as failed after an SVP reservation attempt. The portal fee
+     * is charged before that attempt and is never returned.
      */
     public function markBookingFailedAndRefund(Booking $booking, ?BookingAttempt $attempt = null, mixed $response = null, ?string $error = null): void
     {
         DB::transaction(function () use ($booking, $attempt, $response, $error): void {
-            $releasedAmount = $this->releasePortalBookingFee($booking);
+            // This is idempotent for new bookings (already debited before the
+            // SVP call) and converts legacy holds into a permanent debit.
+            $this->finalizePortalBookingFee($booking);
+            $debit = $this->walletTransaction($booking, 'booking_debit', $this->portalFeeReference($booking));
+            $chargedAmount = (float) ($debit?->amount ?? 0);
 
             $booking->update(['booking_status' => 'failed']);
 
@@ -1124,24 +1130,25 @@ class BookingService
                 ]);
             }
 
-            $this->recordAutomaticRefundRequest($booking, $releasedAmount, $error ?: 'Automatic refund for failed booking.');
             $this->logEvent($booking, 'booking_failed', [
                 'response' => $response,
-                'portal_fee_refunded' => $releasedAmount,
+                'portal_fee_refunded' => 0,
+                'portal_fee_charged' => $chargedAmount,
             ]);
 
             if ($booking->user_id) {
                 $this->notifications->send(
                     $booking->user_id,
                     'Booking failed',
-                    'Your booking could not be completed. The portal fee has been refunded to your personal wallet balance.'
+                    'Your booking could not be completed. The portal fee was charged and is non-refundable.'
                 );
             }
 
             $this->audit->log((int) $booking->agency_id, 'booking', [
                 'booking_id' => $booking->id,
                 'action' => 'failed',
-                'portal_fee_refunded' => $releasedAmount,
+                'portal_fee_refunded' => 0,
+                'portal_fee_charged' => $chargedAmount,
             ]);
         });
     }
@@ -1239,6 +1246,10 @@ class BookingService
 
     public function releasePortalBookingFee(Booking $booking): float
     {
+        if (! (bool) config('svp.portal_fee_refunds_enabled', false)) {
+            return 0.0;
+        }
+
         $reference = $this->portalFeeReference($booking);
         $hold = $this->walletTransaction($booking, 'booking_hold', $reference);
         if (! $hold || $this->walletTransaction($booking, 'refund', $reference)) {
@@ -1308,31 +1319,24 @@ class BookingService
     }
 
     /**
-     * Cancel a booked reservation and trigger refund.
+     * Cancel a booked reservation without returning the non-refundable portal fee.
      */
     public function cancelBooking(Booking $booking, float $amount, string $reason): array
     {
         return DB::transaction(function () use ($booking, $amount, $reason) {
             $booking->update(['booking_status' => 'cancelled']);
 
-            if ($booking->user_id) {
-                $this->userWallet->refund((int) $booking->user_id, $amount, $booking->booking_reference, [
-                    'booking_id' => $booking->id,
-                ]);
-            } else {
-                $this->wallet->refund((int) $booking->agency_id, $amount, $booking->booking_reference, [
-                    'booking_id' => $booking->id,
-                ]);
-            }
-
             $this->logEvent($booking, 'booking_cancelled', ['reason' => $reason]);
-            $this->audit->log((int) $booking->agency_id, 'refund', ['booking_id' => $booking->id, 'action' => 'cancelled']);
+            $this->audit->log((int) $booking->agency_id, 'booking', [
+                'booking_id' => $booking->id,
+                'action' => 'cancelled_no_refund',
+            ]);
 
             if ($booking->user_id) {
                 $this->notifications->send(
                     $booking->user_id,
                     'Booking cancelled',
-                    'Your booking was cancelled. Refund has been initiated.'
+                    'Your booking was cancelled. The portal fee is non-refundable.'
                 );
             }
 

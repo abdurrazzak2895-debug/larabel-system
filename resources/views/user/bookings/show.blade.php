@@ -191,7 +191,7 @@
         {{-- Refunds --}}
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h3 class="text-sm font-semibold text-slate-800">Refund Requests</h3>
-            <p class="text-xs text-slate-400 mt-0.5">Money back for this booking</p>
+            <p class="text-xs text-slate-400 mt-0.5">Portal fees are non-refundable</p>
             <div class="mt-4">
                 @forelse ($refunds as $refund)
                 @php
@@ -214,10 +214,6 @@
                 @empty
                 <p class="text-sm text-slate-400">No refund requests for this booking.</p>
                 @endforelse
-                <a href="{{ route('user.refunds.create', ['booking' => $booking->id]) }}" class="inline-flex items-center gap-2 mt-2 text-xs font-semibold text-brand-600 hover:text-brand-700 transition">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                    Request a refund
-                </a>
             </div>
         </div>
 
@@ -255,4 +251,3 @@
     </div>
 </div>
 @endsection
-

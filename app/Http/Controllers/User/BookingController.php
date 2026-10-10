@@ -1740,7 +1740,7 @@ class BookingController extends Controller
                     'SVP payment was not confirmed.'
                 );
 
-                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. The portal fee has been refunded to your personal wallet balance.');
+                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. The portal fee was charged and is non-refundable.');
             }
 
             $booking->update(['booking_status' => 'booked']);

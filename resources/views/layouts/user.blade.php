@@ -63,7 +63,6 @@
         ['label' => 'My Bookings',     'route' => 'user.bookings.index',      'match' => 'user.bookings',         'icon' => 'calendar'],
         ['label' => 'Wallet',          'route' => 'user.wallets.index',       'match' => 'user.wallets',          'icon' => 'wallet'],
         ['label' => 'Deposits',        'route' => 'user.deposits.index',      'match' => 'user.deposits',         'icon' => 'banknotes'],
-        ['label' => 'Refunds',         'route' => 'user.refunds.index',       'match' => 'user.refunds',          'icon' => 'rotate'],
         ['label' => 'Notifications',   'route' => 'user.notifications.index', 'match' => 'user.notifications',   'icon' => 'bell'],
     ];
 

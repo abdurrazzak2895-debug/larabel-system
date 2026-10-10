@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\BookingService;
+use App\Services\UserWalletService;
 use App\Services\WalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -836,7 +837,7 @@ class CoreServicesTest extends TestCase
         ]);
     }
 
-    public function test_booking_service_marks_failed_and_refunds_on_provider_error(): void
+    public function test_booking_service_marks_failed_without_refunding_on_provider_error(): void
     {
         Http::fake([
             '*' => Http::response(['message' => 'seat unavailable'], 422),
@@ -851,7 +852,8 @@ class CoreServicesTest extends TestCase
             'email'      => $user->email,
         ]);
 
-        app(WalletService::class)->deposit($this->agency->id, 2000.00);
+        Setting::create(['key' => 'booking_price', 'value' => '100.00', 'agency_id' => null]);
+        app(UserWalletService::class)->deposit($user->id, 200.00, 'PROVIDER-FAILURE-DEPOSIT');
 
         $result = app(BookingService::class)->completeBooking('test-token', [
             'agency_id'       => $this->agency->id,
@@ -871,12 +873,19 @@ class CoreServicesTest extends TestCase
             'booking_status' => 'failed',
         ]);
 
-        // The hold must be released so no funds stay reserved. (Note: the
-        // failure path runs releaseHold() AND refund(), which double-credits
-        // the wallet — a pre-existing quirk outside the scope of the FK fix.)
-        $this->assertDatabaseHas('agency_wallets', [
-            'agency_id'        => $this->agency->id,
-            'reserved_balance' => 0.00,
+        // The reservation API attempt permanently charges the portal fee, even
+        // when SVP rejects the reservation. No refund transaction is created.
+        $this->assertDatabaseHas('user_wallet_transactions', [
+            'type'      => 'booking_debit',
+            'amount'    => 100.00,
+            'reference' => 'portal-booking-fee-'.$result['booking']->id,
+        ]);
+        $this->assertDatabaseMissing('user_wallet_transactions', [
+            'type'      => 'refund',
+            'reference' => 'portal-booking-fee-'.$result['booking']->id,
+        ]);
+        $this->assertDatabaseMissing('refund_requests', [
+            'booking_id' => $result['booking']->id,
         ]);
     }
 }

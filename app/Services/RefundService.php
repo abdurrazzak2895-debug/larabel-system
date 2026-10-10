@@ -9,9 +9,10 @@ use App\Models\UserWalletTransaction;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Handles refund requests for bookings.
+ * Handles legacy refund records for bookings.
  *
- * Flow: request → review → approve → wallet refund → audit + notify
+ * Portal-fee refunds are disabled by policy. Existing records can still be
+ * reviewed or rejected, but no new request or wallet credit is allowed.
  */
 class RefundService
 {
@@ -29,6 +30,8 @@ class RefundService
      */
     public function request(array $data): RefundRequest
     {
+        $this->assertRefundsEnabled();
+
         return DB::transaction(function () use ($data) {
             $refund = RefundRequest::create([
                 'booking_id' => $data['booking_id'],
@@ -53,6 +56,8 @@ class RefundService
      */
     public function approve(RefundRequest $refund): RefundRequest
     {
+        $this->assertRefundsEnabled();
+
         return DB::transaction(function () use ($refund) {
             if ($refund->status !== 'pending') {
                 throw new \RuntimeException('Only pending refunds can be approved.');
@@ -107,6 +112,10 @@ class RefundService
      */
     public function autoRefundExpiredPending(int $minutes = 10, int $limit = 100): int
     {
+        if (! (bool) config('svp.portal_fee_refunds_enabled', false)) {
+            return 0;
+        }
+
         $minutes = max(1, $minutes);
         $limit = max(1, min(500, $limit));
         $cutoff = now()->subMinutes($minutes);
@@ -251,6 +260,13 @@ class RefundService
             });
 
         return $processed;
+    }
+
+    private function assertRefundsEnabled(): void
+    {
+        if (! (bool) config('svp.portal_fee_refunds_enabled', false)) {
+            throw new \RuntimeException('Portal-fee refunds are disabled.');
+        }
     }
 
     /**

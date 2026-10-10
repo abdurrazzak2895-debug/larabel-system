@@ -120,6 +120,7 @@ class BookingController extends Controller
         // Local bookings created through our system (fast DB query).
         $localBookings = Booking::with('attempts')
             ->where('agency_id', $agencyId)
+            ->where('user_id', Auth::id())
             ->latest()
             ->paginate(10);
 
@@ -868,7 +869,7 @@ class BookingController extends Controller
                     'SVP payment was not confirmed.'
                 );
 
-                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. The selected user’s portal fee has been refunded to their personal wallet balance.');
+                return redirect($showRoute)->with('error', 'SVP payment was not confirmed. The portal fee was charged and is non-refundable.');
             }
 
             $booking->update(['booking_status' => 'booked']);
@@ -941,7 +942,7 @@ class BookingController extends Controller
     }
 
     /**
-     * POST /agency/bookings/{booking}/cancel — cancel + refund.
+     * POST /agency/bookings/{booking}/cancel — cancel without refund.
      */
     public function cancel(Request $request, Booking $booking)
     {
@@ -960,13 +961,16 @@ class BookingController extends Controller
 
         return redirect()
             ->route('agency.bookings.show', $booking->id)
-            ->with('success', 'Booking cancelled. Refund initiated.');
+            ->with('success', 'Booking cancelled. The portal fee is non-refundable.');
     }
 
     private function authorizeOwnership(Booking $booking): void
     {
-        if ((int) $booking->agency_id !== (int) Auth::user()->agency_id) {
-            abort(403, 'You do not have access to this booking.');
-        }
+        abort_unless(
+            (int) $booking->agency_id === (int) Auth::user()->agency_id
+            && (int) $booking->user_id === (int) Auth::id(),
+            403,
+            'You do not have access to this booking.'
+        );
     }
 }

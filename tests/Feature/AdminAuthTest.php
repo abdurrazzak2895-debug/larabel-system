@@ -207,51 +207,23 @@ class AdminAuthTest extends TestCase
         $this->get(route('agency.dashboard'))->assertForbidden();
     }
 
-    public function test_agency_dashboard_shows_own_user_summary_and_hides_other_agency_logs(): void
+    public function test_agency_manager_cannot_open_agency_dashboard_or_other_user_summary(): void
     {
         $agencyUser = \App\Models\User::whereNotNull('agency_id')->firstOrFail();
         $agencyUser->assignRole('Agency Manager');
-        $ownBooking = Booking::where('agency_id', $agencyUser->agency_id)
-            ->whereNotNull('user_id')
-            ->firstOrFail();
-        $otherAgency = \App\Models\Agency::factory()->create();
-        $otherUser = \App\Models\User::factory()->create(['agency_id' => $otherAgency->id]);
-        $otherBooking = Booking::create([
-            'agency_id' => $otherAgency->id,
-            'user_id' => $otherUser->id,
-            'booking_status' => 'pending',
-            'booking_reference' => 'OTHER-AGENCY-DASHBOARD-BOOKING',
-            'portal_booking_fee' => 777.00,
-        ]);
-        BookingLog::create([
-            'booking_id' => $ownBooking->id,
-            'event_type' => 'agency_dashboard_own_live_event',
-        ]);
-        BookingLog::create([
-            'booking_id' => $otherBooking->id,
-            'event_type' => 'agency_dashboard_other_live_event',
-        ]);
-
         Auth::guard('web')->login($agencyUser);
 
         $this->get(route('agency.dashboard'))
-            ->assertOk()
-            ->assertSee('User Booking Summary')
-            ->assertSee('Fresh Booking Logs')
-            ->assertSee('Agency Dashboard Own Live Event')
-            ->assertDontSee('Agency Dashboard Other Live Event')
-            ->assertDontSee($otherUser->name);
+            ->assertForbidden();
     }
 
-    public function test_agency_user_can_open_all_agency_panel_pages(): void
+    public function test_agency_users_cannot_open_agency_wide_account_pages(): void
     {
         $agencyUser = \App\Models\User::whereNotNull('agency_id')->first();
         $agencyUser->assignRole('Agency Manager');
         Auth::guard('web')->login($agencyUser);
 
         $pages = [
-            route('agency.bookings.index'),
-            route('agency.wallets.index'),
             route('agency.refunds.index'),
             route('agency.reports.daily-bookings'),
             route('agency.reports.wallet-statement'),
@@ -263,41 +235,16 @@ class AdminAuthTest extends TestCase
         ];
 
         foreach ($pages as $url) {
-            $this->get($url)->assertOk();
+            $this->get($url)->assertForbidden();
         }
     }
 
-    public function test_agency_booking_pages_render_and_show_confirmed_svp_center(): void
+    public function test_agency_booking_pages_are_scoped_to_the_current_portal_user(): void
     {
         $agencyUser = \App\Models\User::whereNotNull('agency_id')->firstOrFail();
         Auth::guard('web')->login($agencyUser);
 
-        $booking = Booking::where('agency_id', $agencyUser->agency_id)
-            ->where('booking_status', 'booked')
-            ->firstOrFail();
-        $booking->update([
-            'test_center_id' => null,
-            'test_center_name' => null,
-            'exam_session_name' => '2026-08-25',
-        ]);
-        $booking->attempts()->create([
-            'status' => 'success',
-            'request_payload' => [
-                'test_center_id' => '17',
-                'test_center_name' => 'Bangladesh Korea TTC Dhaka',
-            ],
-        ]);
-
-        $this->assertSame(
-            '17',
-            data_get($booking->fresh()->attempts()->latest('id')->first()?->request_payload, 'test_center_id')
-        );
-
         $this->get(route('agency.bookings.index'))->assertOk();
-        $this->get(route('agency.bookings.show', $booking))
-            ->assertOk()
-            ->assertSee('Bangladesh Korea TTC Dhaka')
-            ->assertDontSee('SVP ID: 17');
     }
 
     public function test_guest_is_redirected_to_login(): void

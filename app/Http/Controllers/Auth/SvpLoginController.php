@@ -42,11 +42,7 @@ class SvpLoginController extends Controller
         } elseif (! $request->boolean('connect') && $this->autoSession->token($request) !== null) {
             $user = Auth::guard('web')->user();
             if ($user instanceof User) {
-                return redirect()->route(
-                    $user->agency_id !== null && $user->hasPermission('manage agency users')
-                        ? 'agency.dashboard'
-                        : 'user.dashboard'
-                );
+                return redirect()->route('user.dashboard');
             }
         }
 
@@ -293,10 +289,8 @@ class SvpLoginController extends Controller
             );
         }
 
-        // Agency staff land on the agency panel; standalone SVP users on the user panel.
-        $home = $user->agency_id !== null && $user->hasPermission('manage agency users')
-            ? route('agency.dashboard')
-            : route('user.dashboard');
+        // All portal users land on their private user panel after SVP login.
+        $home = route('user.dashboard');
 
         return redirect()->intended($home);
     }

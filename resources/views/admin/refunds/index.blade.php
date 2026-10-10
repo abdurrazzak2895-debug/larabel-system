@@ -52,10 +52,7 @@
                         <td class="px-6 py-4">
                             @if ($refund->status === 'pending')
                                 <div class="flex items-center gap-2">
-                                    <form action="{{ route('admin.refunds.approve', $refund) }}" method="POST">
-                                        @csrf
-                                        <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition">Approve</button>
-                                    </form>
+                                    <span class="px-3 py-1.5 bg-slate-100 text-slate-500 text-xs font-semibold rounded-lg">Refunds disabled</span>
                                     <form action="{{ route('admin.refunds.reject', $refund) }}" method="POST"
                                           onsubmit="return confirm('Reject refund #{{ $refund->id }}?')">
                                         @csrf
