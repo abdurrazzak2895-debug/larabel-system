@@ -218,17 +218,12 @@ class SvpLoginController extends Controller
             ]);
         }
 
+        $loginSvpUserId = $this->extractSvpUserId($result['body']);
+
         // Keep SVP authentication scoped to the already authenticated portal user.
         // The external SVP identity is stored on that user's Candidate record; it
         // must never create a local User, Agency, or Agency wallet.
         $request->session()->regenerate();
-        $this->autoSession->store(
-            $request,
-            $token,
-            data_get($result['body'], 'access_payload.csrf'),
-            (string) ($this->extractSvpUserId($result['body']) ?? '')
-        );
-        $request->session()->forget(SvpAutoSession::sessionKey('login', $request));
 
         // Auto-create / update candidate from SVP profile after successful login.
         // Some SVP deployments intermittently fail the follow-up profile request,
@@ -246,10 +241,6 @@ class SvpLoginController extends Controller
 
         $loginPayload = is_array($result['body'] ?? null) ? $result['body'] : [];
         $loginProfile = $this->extractProfileRecord($loginPayload);
-        $loginSvpUserId = $this->extractSvpUserId($loginPayload);
-        if ($loginSvpUserId !== '') {
-            $request->session()->put(SvpAutoSession::sessionKey('user_id', $request), $loginSvpUserId);
-        }
 
         // The live /profile response contains the complete personal profile but
         // omits the SVP account ID. Preserve that profile, then supplement its
@@ -270,22 +261,40 @@ class SvpLoginController extends Controller
             $profile = ['svp_user_id' => $loginSvpUserId];
         }
 
+        $effectiveSvpUserId = $loginSvpUserId !== ''
+            ? $loginSvpUserId
+            : $this->extractSvpUserId($profile);
+        $this->assertSvpProfileOwnership($user, $effectiveSvpUserId);
+        if ($effectiveSvpUserId !== '') {
+            $request->session()->put(SvpAutoSession::sessionKey('user_id', $request), $effectiveSvpUserId);
+        }
+
         $candidate = null;
         if ($profile !== []) {
             try {
                 $candidate = $this->syncCandidateFromProfile($user, $profile);
+            } catch (ValidationException $e) {
+                throw $e;
             } catch (\Throwable $e) {
-                Log::warning('SVP candidate persistence after login failed', ['error' => $e->getMessage()]);
+                Log::warning('SVP candidate persistence after login failed; trying OTP response fallback', ['error' => $e->getMessage()]);
             }
         }
 
+        $request->session()->forget(SvpAutoSession::sessionKey('login', $request));
         if ($candidate instanceof Candidate) {
             $this->autoSession->storeForCandidate(
                 $request,
                 $candidate->id,
                 $token,
                 data_get($result['body'], 'access_payload.csrf'),
-                $loginSvpUserId !== '' ? $loginSvpUserId : (string) $candidate->svp_user_id,
+                $effectiveSvpUserId !== '' ? $effectiveSvpUserId : (string) $candidate->svp_user_id,
+            );
+        } else {
+            $this->autoSession->store(
+                $request,
+                $token,
+                data_get($result['body'], 'access_payload.csrf'),
+                $effectiveSvpUserId,
             );
         }
 
@@ -341,9 +350,36 @@ class SvpLoginController extends Controller
         return null;
     }
 
+    private function assertSvpProfileOwnership(User $user, string $svpUserId): void
+    {
+        $svpUserId = trim($svpUserId);
+        if ($svpUserId === '') {
+            return;
+        }
+
+        $ownedByAnotherUser = Candidate::query()
+            ->where('svp_user_id', $svpUserId)
+            ->where('user_id', '!=', $user->id)
+            ->exists();
+
+        if (! $ownedByAnotherUser) {
+            return;
+        }
+
+        Log::warning('Blocked SVP profile reuse across portal users', [
+            'portal_user_id' => $user->id,
+            'svp_user_id' => $svpUserId,
+        ]);
+
+        throw ValidationException::withMessages([
+            'otp_code' => 'This SVP account is already connected to another portal user. Use your own SVP account.',
+        ]);
+    }
+
     private function syncCandidateFromProfile(User $user, array $profile): Candidate
     {
         $svpUserId = $this->extractSvpUserId($profile);
+        $this->assertSvpProfileOwnership($user, $svpUserId);
         $candidate = $svpUserId !== ''
             ? Candidate::where('user_id', $user->id)->where('svp_user_id', $svpUserId)->first()
             : null;

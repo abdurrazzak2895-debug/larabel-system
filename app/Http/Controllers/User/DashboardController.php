@@ -11,7 +11,6 @@ use App\Models\Notification;
 use App\Models\WalletTransaction;
 use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
@@ -21,8 +20,13 @@ class DashboardController extends Controller
 
     public function index(Request $request)
     {
-        $userId = Auth::id();
-        $user = Auth::user();
+        // Always derive the portal identity from the web guard. The multi-guard
+        // middleware also serves agency/admin routes, so the default Auth facade
+        // must never be allowed to select a stale account from another guard.
+        $user = $request->user('web');
+        abort_unless($user !== null, 401);
+
+        $userId = (int) $user->getAuthIdentifier();
         $agencyId = $user->agency_id;
 
         $wallet = $agencyId
@@ -67,8 +71,8 @@ class DashboardController extends Controller
                 ->first(),
             'notifications'      => Notification::where('user_id', $userId)->latest()->take(5)->get(),
             'unreadNotifications'=> Notification::where('user_id', $userId)->whereNull('read_at')->count(),
-            'latestDeposit'      => DepositRequest::where('agency_id', $agencyId)->latest()->first(),
-            'pendingDeposits'    => DepositRequest::where('agency_id', $agencyId)
+            'latestDeposit'      => DepositRequest::where('user_id', $userId)->latest()->first(),
+            'pendingDeposits'    => DepositRequest::where('user_id', $userId)
                 ->where('status', 'pending')->count(),
             'recentTransactions' => $agencyId
                 ? WalletTransaction::whereHas('wallet', fn ($q) => $q->where('agency_id', $agencyId))

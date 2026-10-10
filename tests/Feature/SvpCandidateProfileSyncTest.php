@@ -6,10 +6,12 @@ use App\Http\Controllers\Auth\SvpLoginController;
 use App\Models\Agency;
 use App\Models\Candidate;
 use App\Models\CandidateSvpSession;
+use App\Models\DepositRequest;
 use App\Models\User;
 use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -197,6 +199,80 @@ class SvpCandidateProfileSyncTest extends TestCase
         $this->assertTrue($oldCandidate->is_active);
         $this->assertTrue($newCandidate->is_active);
         $this->assertSame(2, Candidate::where('user_id', $user->id)->count());
+    }
+
+    public function test_user_dashboard_only_shows_the_authenticated_users_profiles_and_deposits(): void
+    {
+        $agency = Agency::create([
+            'name' => 'Dashboard Isolation Agency',
+            'code' => 'DASHISO1',
+            'status' => true,
+        ]);
+        $user = User::factory()->create(['agency_id' => $agency->id]);
+        $sibling = User::factory()->create(['agency_id' => $agency->id]);
+
+        Candidate::create([
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-DASHBOARD-OWNER',
+            'full_name' => 'Visible Own Profile',
+            'email' => $user->email,
+        ]);
+        Candidate::create([
+            'user_id' => $sibling->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-DASHBOARD-SIBLING',
+            'full_name' => 'Hidden Sibling Profile',
+            'email' => $sibling->email,
+        ]);
+        DepositRequest::create([
+            'agency_id' => $agency->id,
+            'user_id' => $user->id,
+            'amount' => 111,
+            'payment_method' => 'bkash',
+            'status' => 'approved',
+        ]);
+        DepositRequest::create([
+            'agency_id' => $agency->id,
+            'user_id' => $sibling->id,
+            'amount' => 999,
+            'payment_method' => 'bkash',
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($user, 'web')
+            ->get(route('user.dashboard'))
+            ->assertOk()
+            ->assertSee('Visible Own Profile')
+            ->assertDontSee('Hidden Sibling Profile')
+            ->assertSee('111.00')
+            ->assertDontSee('999.00');
+    }
+
+    public function test_svp_identity_cannot_be_attached_to_a_second_portal_user(): void
+    {
+        $agency = Agency::create([
+            'name' => 'SVP Ownership Agency',
+            'code' => 'SVPOWN1',
+            'status' => true,
+        ]);
+        $owner = User::factory()->create(['agency_id' => $agency->id]);
+        $secondUser = User::factory()->create(['agency_id' => $agency->id]);
+        Candidate::create([
+            'user_id' => $owner->id,
+            'agency_id' => $agency->id,
+            'svp_user_id' => 'SVP-OWNED-ONCE',
+            'full_name' => 'Existing Owner Profile',
+            'email' => $owner->email,
+        ]);
+
+        $controller = app(SvpLoginController::class);
+        $sync = new ReflectionMethod($controller, 'syncCandidateFromProfile');
+        $this->expectException(ValidationException::class);
+        $sync->invoke($controller, $secondUser, [
+            'id' => 'SVP-OWNED-ONCE',
+            'full_name' => 'Attempted Shared Profile',
+        ]);
     }
 
     public function test_user_can_switch_between_multiple_active_encrypted_svp_sessions(): void
