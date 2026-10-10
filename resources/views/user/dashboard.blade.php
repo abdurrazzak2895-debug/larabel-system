@@ -111,53 +111,53 @@
     </div>
 
     {{-- ===================== Inline SVP connect modal ===================== --}}
-    <div id="svp-connect-modal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="svp-connect-title">
-        <div class="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" data-svp-modal-card>
-            <div class="flex items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+    <div id="svp-connect-modal" class="fixed inset-0 z-[70] hidden items-center justify-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-labelledby="svp-connect-title">
+        <div class="my-auto w-full max-w-md max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl" data-svp-modal-card>
+            <div class="flex items-start justify-between border-b border-slate-100 px-4 py-3 sm:px-5">
                 <div>
                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-500">SVP Profiles</p>
-                    <h3 id="svp-connect-title" class="mt-1 text-lg font-bold text-slate-900">Connect another SVP account</h3>
-                    <p class="mt-1 text-xs text-slate-500">Add the account here without leaving your dashboard.</p>
+                    <h3 id="svp-connect-title" class="mt-0.5 text-base font-bold text-slate-900">Connect another SVP account</h3>
+                    <p class="mt-0.5 text-[11px] text-slate-500">Add the account here without leaving your dashboard.</p>
                 </div>
-                <button type="button" data-close-svp-connect class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                <button type="button" data-close-svp-connect class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
 
-            <div class="px-5 py-5 sm:px-6">
-                <div id="svp-connect-status" class="mb-4 hidden rounded-xl border px-3 py-2.5 text-sm" role="status"></div>
+            <div class="px-4 py-4 sm:px-5">
+                <div id="svp-connect-status" class="mb-3 hidden rounded-xl border px-3 py-2 text-xs" role="status"></div>
 
-                <form id="svp-inline-login-form" class="space-y-4">
+                <form id="svp-inline-login-form" class="space-y-3">
                     @csrf
                     <div>
-                        <label for="svp-inline-email" class="mb-1.5 block text-xs font-semibold text-slate-700">SVP email</label>
-                        <input id="svp-inline-email" name="email" type="email" required autocomplete="email" class="w-full rounded-xl border-slate-200 px-3.5 py-3 text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="you@example.com">
+                        <label for="svp-inline-email" class="mb-1 block text-xs font-semibold text-slate-700">SVP email</label>
+                        <input id="svp-inline-email" name="email" type="email" required autocomplete="email" class="w-full rounded-xl border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="you@example.com">
                     </div>
                     <div>
-                        <label for="svp-inline-password" class="mb-1.5 block text-xs font-semibold text-slate-700">SVP password</label>
-                        <input id="svp-inline-password" name="password" type="password" required autocomplete="current-password" class="w-full rounded-xl border-slate-200 px-3.5 py-3 text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="••••••••">
+                        <label for="svp-inline-password" class="mb-1 block text-xs font-semibold text-slate-700">SVP password</label>
+                        <input id="svp-inline-password" name="password" type="password" required autocomplete="current-password" class="w-full rounded-xl border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="••••••••">
                     </div>
                     <div>
-                        <label for="svp-inline-otp-method" class="mb-1.5 block text-xs font-semibold text-slate-700">OTP delivery</label>
-                        <select id="svp-inline-otp-method" name="otp_method" class="w-full rounded-xl border-slate-200 px-3.5 py-3 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <label for="svp-inline-otp-method" class="mb-1 block text-xs font-semibold text-slate-700">OTP delivery</label>
+                        <select id="svp-inline-otp-method" name="otp_method" class="w-full rounded-xl border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-indigo-500">
                             <option value="email">Email</option>
                             <option value="sms">SMS</option>
                         </select>
                     </div>
-                    <button id="svp-inline-login-submit" type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-indigo-600 hover:to-fuchsia-600 disabled:cursor-not-allowed disabled:opacity-60">
+                    <button id="svp-inline-login-submit" type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-indigo-600 hover:to-fuchsia-600 disabled:cursor-not-allowed disabled:opacity-60">
                         <span data-svp-submit-label>Send OTP</span>
                         <span data-svp-spinner class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
                     </button>
                 </form>
 
-                <form id="svp-inline-otp-form" class="hidden space-y-4">
+                <form id="svp-inline-otp-form" class="hidden space-y-3">
                     @csrf
-                    <p class="rounded-xl bg-indigo-50 px-3.5 py-3 text-sm text-indigo-800">Enter the OTP sent to <strong id="svp-inline-otp-email"></strong>.</p>
+                    <p class="rounded-xl bg-indigo-50 px-3 py-2.5 text-xs text-indigo-800">Enter the OTP sent to <strong id="svp-inline-otp-email"></strong>.</p>
                     <div>
-                        <label for="svp-inline-otp-code" class="mb-1.5 block text-xs font-semibold text-slate-700">One-time passcode</label>
-                        <input id="svp-inline-otp-code" name="otp_code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required class="w-full rounded-xl border-slate-200 px-3.5 py-3 text-center text-lg font-bold tracking-[0.35em] focus:border-indigo-500 focus:ring-indigo-500" placeholder="000000">
+                        <label for="svp-inline-otp-code" class="mb-1 block text-xs font-semibold text-slate-700">One-time passcode</label>
+                        <input id="svp-inline-otp-code" name="otp_code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required class="w-full rounded-xl border-slate-200 px-3 py-2.5 text-center text-lg font-bold tracking-[0.35em] focus:border-indigo-500 focus:ring-indigo-500" placeholder="000000">
                     </div>
-                    <button id="svp-inline-otp-submit" type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-indigo-600 hover:to-fuchsia-600 disabled:cursor-not-allowed disabled:opacity-60">
+                    <button id="svp-inline-otp-submit" type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-indigo-600 hover:to-fuchsia-600 disabled:cursor-not-allowed disabled:opacity-60">
                         <span data-svp-verify-label>Verify and connect</span>
                         <span data-svp-verify-spinner class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
                     </button>
