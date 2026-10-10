@@ -102,6 +102,32 @@
                                 $resultState = $reservation['_result_state'] ?? 'pending';
                                 $resultLabel = $reservation['_result_label'] ?? 'Pending';
                                 $resultPassed = (bool) ($reservation['_result_passed'] ?? false);
+                                $scores = (array) ($reservation['_score'] ?? []);
+                                $cbtScore = (array) ($scores['cbt'] ?? []);
+                                $practicalScore = (array) ($scores['practical'] ?? []);
+                                $totalScore = (array) ($scores['total'] ?? []);
+                                $hasScores = (bool) ($scores['has_any'] ?? false);
+                                $scoreText = static function (array $metric): string {
+                                    if (($metric['score'] ?? null) === null) {
+                                        return '—';
+                                    }
+                                    $score = (float) $metric['score'];
+                                    $scoreLabel = fmod($score, 1.0) === 0.0 ? (string) (int) $score : number_format($score, 2);
+                                    if (($metric['max'] ?? null) === null) {
+                                        return $scoreLabel;
+                                    }
+                                    $max = (float) $metric['max'];
+                                    $maxLabel = fmod($max, 1.0) === 0.0 ? (string) (int) $max : number_format($max, 2);
+                                    return $scoreLabel . ' / ' . $maxLabel;
+                                };
+                                $scorePercent = static function (array $metric): int {
+                                    $score = $metric['score'] ?? null;
+                                    $max = $metric['max'] ?? null;
+                                    if ($score === null || $max === null || (float) $max <= 0) {
+                                        return 0;
+                                    }
+                                    return max(0, min(100, (int) round(((float) $score / (float) $max) * 100)));
+                                };
                                 $resultStyle = match ($resultState) {
                                     'passed' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
                                     'failed' => 'bg-red-50 text-red-700 border-red-200',
@@ -155,6 +181,43 @@
                                     @endif
                                 </td>
                             </tr>
+                            @if ($hasScores || $resultPassed)
+                                <tr class="bg-slate-50/50">
+                                    <td colspan="6" class="px-6 pb-5 pt-0">
+                                        <div class="rounded-2xl border border-slate-200 bg-slate-900 p-4 text-white shadow-inner">
+                                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                                                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Live exam score</div>
+                                                <div class="font-mono text-xs font-bold text-slate-200">Reservation #{{ $reservationId ?: '—' }}</div>
+                                            </div>
+                                            @if ($hasScores)
+                                                <div class="grid gap-4 md:grid-cols-[120px_1fr] md:items-center">
+                                                    <div class="mx-auto grid h-24 w-24 place-items-center rounded-full border-2 border-emerald-500 bg-slate-800 text-center shadow-[0_0_0_5px_rgba(16,185,129,0.08)]">
+                                                        <div>
+                                                            <div class="text-[9px] font-black uppercase tracking-widest text-slate-400">Total score</div>
+                                                            <div class="mt-1 text-2xl font-black text-white">{{ $scoreText($totalScore) }}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="space-y-4">
+                                                        @foreach ([['label' => 'CBT', 'metric' => $cbtScore], ['label' => 'Practical', 'metric' => $practicalScore]] as $scoreRow)
+                                                            <div>
+                                                                <div class="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                                                                    <span class="font-semibold text-slate-300">{{ $scoreRow['label'] }}</span>
+                                                                    <strong class="text-sm text-white">{{ $scoreText($scoreRow['metric']) }}</strong>
+                                                                </div>
+                                                                <div class="h-2 overflow-hidden rounded-full bg-slate-700">
+                                                                    <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400" style="width: {{ $scorePercent($scoreRow['metric']) }}%"></div>
+                                                                </div>
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
+                                                </div>
+                                            @else
+                                                <p class="mb-0 text-xs font-semibold text-slate-300">Result is published, but CBT and Practical score values were not returned by SVP yet.</p>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endif
                         @empty
                             <tr>
                                 <td colspan="6" class="px-6 py-12 text-center">

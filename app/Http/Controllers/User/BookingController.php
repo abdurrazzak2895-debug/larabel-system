@@ -239,6 +239,7 @@ class BookingController extends Controller
         return array_map(function ($item): array {
             $reservation = (array) $item;
             $reservation = $this->normalizeSvpReservationDisplayFields($reservation);
+            $reservation['_score'] = $this->normalizeSvpScores($reservation);
             $result = $this->normalizeSvpResult($reservation);
             $reservation['_result_state'] = $result['state'];
             $reservation['_result_label'] = $result['label'];
@@ -262,9 +263,10 @@ class BookingController extends Controller
             $reservation = $this->normalizeSvpReservationDisplayFields($reservation);
             $hasDate = is_string($reservation['exam_date'] ?? null) && trim($reservation['exam_date']) !== '';
             $hasCenter = is_string($reservation['test_center_name'] ?? null) && trim($reservation['test_center_name']) !== '';
+            $hasScore = (bool) data_get($reservation, '_score.has_any', false);
             $reservationId = $reservation['id'] ?? null;
 
-            if (($hasDate && $hasCenter) || ! is_scalar($reservationId) || trim((string) $reservationId) === '') {
+            if (($hasDate && $hasCenter && $hasScore) || ! is_scalar($reservationId) || trim((string) $reservationId) === '') {
                 return $reservation;
             }
 
@@ -275,6 +277,7 @@ class BookingController extends Controller
                     if ($detail !== []) {
                         $reservation = array_replace_recursive($detail, $reservation);
                         $reservation = $this->normalizeSvpReservationDisplayFields($reservation);
+                        $reservation['_score'] = $this->normalizeSvpScores($reservation);
                     }
                 }
             } catch (\Throwable $e) {
@@ -363,6 +366,180 @@ class BookingController extends Controller
         }
 
         return $reservation;
+    }
+
+    /**
+     * Normalize score aliases returned by the different SVP reservation shapes.
+     * Scores can arrive flat (cbt_score/practical_score), nested (cbt.score),
+     * or as a slash value such as "18/25".
+     *
+     * @return array{cbt: array{score: float|int|null, max: float|int|null}, practical: array{score: float|int|null, max: float|int|null}, total: array{score: float|int|null, max: float|int|null}, has_any: bool}
+     */
+    private function normalizeSvpScores(array $reservation): array
+    {
+        $fields = [];
+        $this->collectScoreFields($reservation, [], $fields);
+
+        $cbt = $this->findScoreMetric($fields, ['cbt', 'computerbased', 'theory', 'written']);
+        $practical = $this->findScoreMetric($fields, ['practical', 'handson', 'skilltest']);
+        $total = $this->findTotalScoreMetric($fields);
+
+        if ($total['score'] === null && $cbt['score'] !== null && $practical['score'] !== null) {
+            $total['score'] = $cbt['score'] + $practical['score'];
+        }
+        if ($total['max'] === null && $cbt['max'] !== null && $practical['max'] !== null) {
+            $total['max'] = $cbt['max'] + $practical['max'];
+        }
+
+        return [
+            'cbt' => $cbt,
+            'practical' => $practical,
+            'total' => $total,
+            'has_any' => $cbt['score'] !== null || $practical['score'] !== null || $total['score'] !== null,
+        ];
+    }
+
+    /** @param array<int, array{key: string, path: array<int, string>, value: mixed}> $fields */
+    private function collectScoreFields(mixed $value, array $path, array &$fields, int $depth = 0): void
+    {
+        if (! is_array($value) || $depth > 8) {
+            return;
+        }
+
+        foreach ($value as $key => $entry) {
+            $key = (string) $key;
+            $nextPath = [...$path, $key];
+            $fields[] = ['key' => $key, 'path' => $nextPath, 'value' => $entry];
+            $this->collectScoreFields($entry, $nextPath, $fields, $depth + 1);
+        }
+    }
+
+    /** @param array{key: string, path: array<int, string>, value: mixed} $field */
+    private function scoreFieldKey(array $field): string
+    {
+        return strtolower((string) preg_replace('/[^a-z0-9]/i', '', $field['key']));
+    }
+
+    /** @param array{key: string, path: array<int, string>, value: mixed} $field */
+    private function scoreFieldPath(array $field): string
+    {
+        return strtolower((string) preg_replace('/[^a-z0-9]/i', '', implode('.', $field['path'])));
+    }
+
+    /** @param array<int, array{key: string, path: array<int, string>, value: mixed}> $fields */
+    private function findScoreMetric(array $fields, array $componentTokens): array
+    {
+        $score = null;
+        $max = null;
+        $scoreTokens = ['score', 'marks', 'mark', 'points', 'obtained', 'earned', 'result', 'value'];
+        $maxTokens = ['max', 'maximum', 'total', 'outof', 'fullmarks', 'weight'];
+
+        foreach ($fields as $field) {
+            $key = $this->scoreFieldKey($field);
+            $path = $this->scoreFieldPath($field);
+            $hasComponent = collect($componentTokens)->contains(fn ($token) => str_contains($path, $token));
+            if (! $hasComponent) {
+                continue;
+            }
+
+            $pair = $this->scorePair($field['value']);
+            $isComponentNode = in_array($key, $componentTokens, true);
+            $isScoreField = $isComponentNode || collect($scoreTokens)->contains(fn ($token) => str_contains($key, $token));
+            $isMaxField = collect($maxTokens)->contains(fn ($token) => str_contains($key, $token));
+
+            if ($isScoreField && $pair !== null) {
+                if ($score === null && $pair['score'] !== null) {
+                    $score = $pair['score'];
+                }
+                if ($max === null && $pair['max'] !== null) {
+                    $max = $pair['max'];
+                }
+            }
+            if ($isMaxField && $max === null) {
+                $numeric = $this->numericScoreValue($field['value']);
+                if ($numeric !== null) {
+                    $max = $numeric;
+                }
+            }
+            if ($score !== null && $max !== null) {
+                break;
+            }
+        }
+
+        return ['score' => $score, 'max' => $max];
+    }
+
+    /** @param array<int, array{key: string, path: array<int, string>, value: mixed}> $fields */
+    private function findTotalScoreMetric(array $fields): array
+    {
+        $score = null;
+        $max = null;
+        $scoreTokens = ['totalscore', 'totalmarks', 'overallscore', 'overallmarks', 'finalscore', 'finalmarks'];
+        $maxTokens = ['totalmax', 'totalmaximum', 'overallmax', 'overallmaximum', 'maxscore', 'maxmarks'];
+
+        foreach ($fields as $field) {
+            $key = $this->scoreFieldKey($field);
+            $pair = $this->scorePair($field['value']);
+            if ($score === null && collect($scoreTokens)->contains(fn ($token) => str_contains($key, $token)) && $pair !== null) {
+                $score = $pair['score'];
+                $max = $pair['max'];
+            }
+            if ($max === null && collect($maxTokens)->contains(fn ($token) => str_contains($key, $token))) {
+                $max = $this->numericScoreValue($field['value']);
+            }
+            if ($score !== null && $max !== null) {
+                break;
+            }
+        }
+
+        return ['score' => $score, 'max' => $max];
+    }
+
+    private function numericScoreValue(mixed $value): float|int|null
+    {
+        if (is_int($value) || is_float($value)) {
+            return is_finite((float) $value) ? $value : null;
+        }
+        if (! is_string($value) || ! preg_match('/^-?\d+(?:\.\d+)?$/', trim($value))) {
+            return null;
+        }
+
+        $number = (float) trim($value);
+
+        return fmod($number, 1.0) === 0.0 ? (int) $number : $number;
+    }
+
+    private function scorePair(mixed $value): ?array
+    {
+        if (is_string($value) && preg_match('/(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)/', trim($value), $matches)) {
+            return ['score' => $this->numericScoreValue($matches[1]), 'max' => $this->numericScoreValue($matches[2])];
+        }
+        if (is_int($value) || is_float($value) || is_string($value)) {
+            $number = $this->numericScoreValue($value);
+            return $number === null ? null : ['score' => $number, 'max' => null];
+        }
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $score = null;
+        foreach (['score', 'marks', 'mark', 'points', 'obtained', 'earned', 'value', 'result'] as $key) {
+            $candidate = data_get($value, $key);
+            $score = $this->numericScoreValue($candidate);
+            if ($score !== null) {
+                break;
+            }
+        }
+        $max = null;
+        foreach (['max', 'maximum', 'total', 'out_of', 'outof', 'full_marks', 'fullmarks', 'weight'] as $key) {
+            $candidate = data_get($value, $key);
+            $max = $this->numericScoreValue($candidate);
+            if ($max !== null) {
+                break;
+            }
+        }
+
+        return $score !== null || $max !== null ? ['score' => $score, 'max' => $max] : null;
     }
 
     /**
