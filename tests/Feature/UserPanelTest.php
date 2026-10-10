@@ -138,7 +138,7 @@ class UserPanelTest extends TestCase
         }
 
         $this->get(route('user.dashboard'))->assertDontSee('>Reserved<');
-        $this->get(route('agency.dashboard'))->assertDontSee('>Reserved<');
+        $this->get(route('agency.dashboard'))->assertForbidden();
     }
 
     public function test_failed_card_payment_refunds_portal_fee_to_available_balance(): void

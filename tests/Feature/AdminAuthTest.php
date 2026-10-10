@@ -199,17 +199,18 @@ class AdminAuthTest extends TestCase
         $this->get(route('admin.dashboard'))->assertForbidden();
     }
 
-    public function test_agency_user_can_open_agency_dashboard(): void
+    public function test_regular_agency_user_cannot_open_agency_dashboard(): void
     {
         $agencyUser = \App\Models\User::whereNotNull('agency_id')->first();
         Auth::guard('web')->login($agencyUser);
 
-        $this->get(route('agency.dashboard'))->assertOk();
+        $this->get(route('agency.dashboard'))->assertForbidden();
     }
 
     public function test_agency_dashboard_shows_own_user_summary_and_hides_other_agency_logs(): void
     {
         $agencyUser = \App\Models\User::whereNotNull('agency_id')->firstOrFail();
+        $agencyUser->assignRole('Agency Manager');
         $ownBooking = Booking::where('agency_id', $agencyUser->agency_id)
             ->whereNotNull('user_id')
             ->firstOrFail();

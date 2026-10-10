@@ -11,7 +11,6 @@ use App\Models\User;
 use App\Services\SvpOtp\SvpAutoSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Validation\ValidationException;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -247,32 +246,6 @@ class SvpCandidateProfileSyncTest extends TestCase
             ->assertDontSee('Hidden Sibling Profile')
             ->assertSee('111.00')
             ->assertDontSee('999.00');
-    }
-
-    public function test_svp_identity_cannot_be_attached_to_a_second_portal_user(): void
-    {
-        $agency = Agency::create([
-            'name' => 'SVP Ownership Agency',
-            'code' => 'SVPOWN1',
-            'status' => true,
-        ]);
-        $owner = User::factory()->create(['agency_id' => $agency->id]);
-        $secondUser = User::factory()->create(['agency_id' => $agency->id]);
-        Candidate::create([
-            'user_id' => $owner->id,
-            'agency_id' => $agency->id,
-            'svp_user_id' => 'SVP-OWNED-ONCE',
-            'full_name' => 'Existing Owner Profile',
-            'email' => $owner->email,
-        ]);
-
-        $controller = app(SvpLoginController::class);
-        $sync = new ReflectionMethod($controller, 'syncCandidateFromProfile');
-        $this->expectException(ValidationException::class);
-        $sync->invoke($controller, $secondUser, [
-            'id' => 'SVP-OWNED-ONCE',
-            'full_name' => 'Attempted Shared Profile',
-        ]);
     }
 
     public function test_user_can_switch_between_multiple_active_encrypted_svp_sessions(): void

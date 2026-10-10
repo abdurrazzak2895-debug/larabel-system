@@ -162,7 +162,9 @@ Route::middleware('web')->group(function () {
 // Agency panel
 // -------------------------------
 Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.multi', 'agency.scope'])->group(function () {
-    Route::get('/dashboard', [AgencyDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [AgencyDashboardController::class, 'index'])
+        ->middleware('CheckPermission:manage agency users')
+        ->name('dashboard');
 
     // Bookings
     Route::get('/bookings',             [\App\Http\Controllers\Agency\BookingController::class, 'index'])->name('bookings.index');

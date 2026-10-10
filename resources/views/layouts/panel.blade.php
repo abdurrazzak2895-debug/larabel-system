@@ -133,7 +133,9 @@
             <div>
                 <p class="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-600">Agency</p>
                 <div class="space-y-1">
-                    {!! $__navLink('Agency Dashboard', 'agency.dashboard', str_starts_with((string) $__routeName, 'agency.dashboard'), 'home') !!}
+                    @if ($__user->hasPermission('manage agency users'))
+                        {!! $__navLink('Agency Dashboard', 'agency.dashboard', str_starts_with((string) $__routeName, 'agency.dashboard'), 'home') !!}
+                    @endif
                     {!! $__navLink('Bookings', 'agency.bookings.index', str_starts_with((string) $__routeName, 'agency.bookings'), 'calendar') !!}
                     {!! $__navLink('Refunds', 'agency.refunds.index', str_starts_with((string) $__routeName, 'agency.refunds'), 'rotate') !!}
                     {!! $__navLink('Reports', 'agency.reports.daily-bookings', str_starts_with((string) $__routeName, 'agency.reports'), 'chart') !!}
