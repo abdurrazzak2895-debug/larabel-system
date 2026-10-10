@@ -490,6 +490,11 @@
         if (event.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
     });
 
+    if (new URLSearchParams(window.location.search).get('open_svp') === '1') {
+        window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+        openModal();
+    }
+
     loginForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         setStatus('');

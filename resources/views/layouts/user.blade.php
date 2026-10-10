@@ -155,7 +155,7 @@
                     Connect SVP
                 </button>
             @else
-                <a href="{{ route('svp.login.form', ['connect' => 1]) }}" class="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition" title="Connect an SVP profile">
+                <a href="{{ route('user.dashboard', ['open_svp' => 1]) }}#svp-profiles" class="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition" title="Connect an SVP profile">
                     <span class="w-2 h-2 rounded-full bg-amber-400"></span>
                     Connect SVP
                 </a>

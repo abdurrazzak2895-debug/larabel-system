@@ -29,24 +29,23 @@ class SvpLoginController extends Controller
     }
 
     /**
-     * Show SVP login form.
-     * Public — any user can attempt SVP authentication directly.
+     * Keep the legacy URL as a compatibility redirect. SVP authentication is
+     * now handled only by the inline modal on the authenticated dashboard.
      */
     public function showLoginForm(Request $request)
     {
-        // Allow an authenticated user to replace an expired/stale SVP token.
-        // The booking page can link here with ?force=1 after an external API
-        // authentication failure; no credentials are persisted beyond the OTP step.
-        if ($request->boolean('force')) {
-            $this->autoSession->forgetCurrent($request);
-        } elseif (! $request->boolean('connect') && $this->autoSession->token($request) !== null) {
-            $user = Auth::guard('web')->user();
-            if ($user instanceof User) {
-                return redirect()->route('user.dashboard');
-            }
+        $user = Auth::guard('web')->user();
+        if (! $user instanceof User) {
+            return redirect()->route('login');
         }
 
-        return view('auth.svp-login');
+        // Preserve force-reconnect behavior, but keep the user on the private
+        // dashboard where the inline credential/OTP modal is rendered.
+        if ($request->boolean('force')) {
+            $this->autoSession->forgetCurrent($request);
+        }
+
+        return redirect()->route('user.dashboard', ['open_svp' => '1']);
     }
 
     /**

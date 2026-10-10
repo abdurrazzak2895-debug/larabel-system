@@ -13,6 +13,21 @@ class SvpLoginErrorTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_standalone_svp_login_url_redirects_authenticated_users_to_dashboard_modal(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user, 'web')
+            ->get(route('svp.login.form', ['connect' => 1]))
+            ->assertRedirect(route('user.dashboard', ['open_svp' => 1]));
+    }
+
+    public function test_standalone_svp_login_url_redirects_guests_to_portal_login(): void
+    {
+        $this->get(route('svp.login.form'))
+            ->assertRedirect(route('login'));
+    }
+
     public function test_api_base_url_with_existing_prefix_is_not_duplicated(): void
     {
         config()->set('svp.log_requests', false);
