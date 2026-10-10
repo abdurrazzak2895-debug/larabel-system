@@ -128,20 +128,22 @@
             @endif
 
             {{-- Agency section --}}
-            @if ($__isAgency && $__user->hasPermission('manage agencies'))
+            @if ($__isAgency && ($__user->hasPermission('manage agencies') || $__user->hasPermission('manage agency users')))
             <div>
                 <p class="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-600">Agency</p>
                 <div class="space-y-1">
-                    @if ($__user->hasPermission('manage agency users'))
+                    @if ($__user->hasPermission('manage agencies'))
                         {!! $__navLink('Agency Dashboard', 'agency.dashboard', str_starts_with((string) $__routeName, 'agency.dashboard'), 'home') !!}
                     @endif
                     {!! $__navLink('Bookings', 'agency.bookings.index', str_starts_with((string) $__routeName, 'agency.bookings'), 'calendar') !!}
-                    {!! $__navLink('Refunds', 'agency.refunds.index', str_starts_with((string) $__routeName, 'agency.refunds'), 'rotate') !!}
-                    {!! $__navLink('Reports', 'agency.reports.daily-bookings', str_starts_with((string) $__routeName, 'agency.reports'), 'chart') !!}
                     @if ($__user->hasPermission('manage agency users'))
                         {!! $__navLink('Users & Wallets', 'agency.users.index', str_starts_with((string) $__routeName, 'agency.users'), 'users') !!}
                     @endif
-                    {!! $__navLink('Notifications', 'agency.notifications.index', str_starts_with((string) $__routeName, 'agency.notifications'), 'bell') !!}
+                    @if ($__user->hasPermission('manage agencies'))
+                        {!! $__navLink('Refunds', 'agency.refunds.index', str_starts_with((string) $__routeName, 'agency.refunds'), 'rotate') !!}
+                        {!! $__navLink('Reports', 'agency.reports.daily-bookings', str_starts_with((string) $__routeName, 'agency.reports'), 'chart') !!}
+                        {!! $__navLink('Notifications', 'agency.notifications.index', str_starts_with((string) $__routeName, 'agency.notifications'), 'bell') !!}
+                    @endif
                 </div>
             </div>
             @endif

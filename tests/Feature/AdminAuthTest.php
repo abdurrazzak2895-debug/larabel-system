@@ -217,6 +217,27 @@ class AdminAuthTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_agency_manager_can_view_users_belonging_to_their_own_agency_only(): void
+    {
+        $agencyUser = \App\Models\User::whereNotNull('agency_id')->firstOrFail();
+        $agencyUser->assignRole('Agency Manager');
+        $visibleUser = \App\Models\User::factory()->create([
+            'agency_id' => $agencyUser->agency_id,
+            'name' => 'Visible Managed User',
+        ]);
+        $otherAgency = \App\Models\Agency::factory()->create();
+        $hiddenUser = \App\Models\User::factory()->create([
+            'agency_id' => $otherAgency->id,
+            'name' => 'Hidden Other Agency User',
+        ]);
+        Auth::guard('web')->login($agencyUser);
+
+        $this->get(route('agency.users.index'))
+            ->assertOk()
+            ->assertSee($visibleUser->name)
+            ->assertDontSee($hiddenUser->name);
+    }
+
     public function test_agency_users_cannot_open_agency_wide_account_pages(): void
     {
         $agencyUser = \App\Models\User::whereNotNull('agency_id')->first();
@@ -230,7 +251,6 @@ class AdminAuthTest extends TestCase
             route('agency.reports.user-activity'),
             route('agency.reports.failed-bookings'),
             route('agency.reports.deposit-history'),
-            route('agency.users.index'),
             route('agency.notifications.index'),
         ];
 

@@ -192,7 +192,7 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
     Route::post('/bookings/{booking}/cancel', [\App\Http\Controllers\Agency\BookingController::class, 'cancel'])->whereNumber('booking')->name('bookings.cancel');
 
     // Users
-    Route::prefix('users')->name('users.')->middleware('CheckPermission:manage agencies')->group(function () {
+    Route::prefix('users')->name('users.')->middleware('CheckPermission:manage agency users')->group(function () {
         Route::get('/', [AgencyUserController::class, 'index'])->name('index');
         Route::get('/create', [AgencyUserController::class, 'create'])->name('create');
         Route::post('/', [AgencyUserController::class, 'store'])->name('store');
