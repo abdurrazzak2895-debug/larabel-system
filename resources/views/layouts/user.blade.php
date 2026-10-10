@@ -83,7 +83,7 @@
 <aside id="user-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 border-r border-slate-800 transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
     <div class="flex flex-col h-full">
         {{-- Brand --}}
-        <div class="px-5 h-16 flex items-center gap-3 border-b border-white/5 shrink-0">
+        <div class="px-5 h-12 flex items-center gap-3 border-b border-white/5 shrink-0">
             <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-fuchsia-500 flex items-center justify-center text-white text-sm font-black shadow-lg shadow-indigo-500/30">S</div>
             <div class="min-w-0">
                 <p class="text-white font-bold text-sm leading-tight">SVP Takamol</p>
@@ -123,8 +123,8 @@
 <!-- ===================== MAIN ===================== -->
 <div class="lg:pl-64 min-h-screen flex flex-col">
     {{-- Header --}}
-    <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-slate-200 h-16 flex items-center gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8">
-        <button onclick="openUserSidebar()" class="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition" aria-label="Open menu">
+    <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-slate-200 h-12 flex items-center gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8">
+        <button onclick="openUserSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition" aria-label="Open menu">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
 
@@ -150,7 +150,7 @@
             </a>
         @endif
 
-        <a href="{{ route('user.notifications.index') }}" class="relative p-2.5 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition" title="Notifications">
+        <a href="{{ route('user.notifications.index') }}" class="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition" title="Notifications">
             {!! $__icons['bell'] !!}
             @if ($__unread > 0)
                 <span class="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{{ $__unread > 9 ? '9+' : $__unread }}</span>
@@ -158,7 +158,7 @@
         </a>
 
         <div class="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200">
-            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-fuchsia-500 flex items-center justify-center text-white text-sm font-bold">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-fuchsia-500 flex items-center justify-center text-xs font-bold">
                 {{ strtoupper(substr($__user?->name ?? 'U', 0, 1)) }}
             </div>
             <div class="min-w-0 hidden md:block">
