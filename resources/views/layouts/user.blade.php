@@ -83,11 +83,11 @@
 <aside id="user-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 border-r border-slate-800 transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
     <div class="flex flex-col h-full">
         {{-- Brand --}}
-        <div class="px-5 h-12 flex items-center gap-3 border-b border-white/5 shrink-0">
-            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-fuchsia-500 flex items-center justify-center text-white text-sm font-black shadow-lg shadow-indigo-500/30">S</div>
+        <div class="px-5 h-10 flex items-center gap-2.5 border-b border-white/5 shrink-0">
+            <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-400 to-fuchsia-500 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-500/30">S</div>
             <div class="min-w-0">
-                <p class="text-white font-bold text-sm leading-tight">SVP Takamol</p>
-                <p class="text-[11px] text-indigo-300/80">User Portal</p>
+                <p class="text-white font-bold text-xs leading-tight">SVP Takamol</p>
+                <p class="text-[9px] text-indigo-300/80">User Portal</p>
             </div>
         </div>
 
@@ -123,13 +123,13 @@
 <!-- ===================== MAIN ===================== -->
 <div class="lg:pl-64 min-h-screen flex flex-col">
     {{-- Header --}}
-    <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-slate-200 h-12 flex items-center gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8">
+    <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-slate-200 h-10 flex items-center gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8">
         <button onclick="openUserSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition" aria-label="Open menu">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
 
         <div class="min-w-0 flex-1">
-            <h1 class="text-base sm:text-lg font-bold text-slate-900 truncate">{{ trim(View::getSection('page-title')) !== '' ? trim(View::getSection('page-title')) : (trim(View::getSection('title')) !== '' ? trim(View::getSection('title')) : 'Dashboard') }}</h1>
+            <h1 class="hidden">{{ trim(View::getSection('page-title')) !== '' ? trim(View::getSection('page-title')) : (trim(View::getSection('title')) !== '' ? trim(View::getSection('title')) : 'Dashboard') }}</h1>
         </div>
 
         @if ($__activeSvpCandidate)
@@ -157,8 +157,8 @@
             @endif
         </a>
 
-        <div class="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200">
-            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-fuchsia-500 flex items-center justify-center text-xs font-bold">
+        <div class="hidden sm:flex items-center gap-2 pl-2 border-l border-slate-200">
+            <div class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-fuchsia-500 flex items-center justify-center text-[11px] font-bold">
                 {{ strtoupper(substr($__user?->name ?? 'U', 0, 1)) }}
             </div>
             <div class="min-w-0 hidden md:block">
