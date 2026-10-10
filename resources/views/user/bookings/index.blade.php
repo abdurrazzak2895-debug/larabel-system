@@ -74,9 +74,9 @@
                 <span class="text-[11px] text-slate-400">Updated from SVP when this page opened</span>
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="overflow-hidden">
                 <table class="w-full text-sm">
-                    <thead class="bg-slate-50/70">
+                    <thead class="hidden bg-slate-50/70 md:table-header-group">
                         <tr class="text-left text-[11px] uppercase tracking-wide text-slate-500">
                             <th class="px-6 py-3 font-medium">Reservation</th>
                             <th class="px-6 py-3 font-medium">Exam</th>
@@ -134,24 +134,47 @@
                                     default => 'bg-amber-50 text-amber-700 border-amber-200',
                                 };
                             @endphp
-                            <tr class="hover:bg-slate-50/60 transition align-top">
-                                <td class="px-6 py-4">
-                                    <div class="font-mono text-xs font-semibold text-slate-700">#{{ $reservationId ?: '—' }}</div>
-                                    <div class="text-[11px] text-slate-400 mt-1">{{ $reservation['booking_reference'] ?? 'SVP reservation' }}</div>
+                            <tr class="block border-b border-slate-100 transition hover:bg-slate-50/60 md:table-row md:align-top">
+                                <td class="block px-4 py-3 md:table-cell md:px-6 md:py-4">
+                                    <div class="flex items-center justify-between gap-3 md:block">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Reservation</span>
+                                        <div class="text-right md:text-left">
+                                            <div class="font-mono text-xs font-semibold text-slate-700">#{{ $reservationId ?: '—' }}</div>
+                                            <div class="text-[11px] text-slate-400 mt-1">{{ $reservation['booking_reference'] ?? 'SVP reservation' }}</div>
+                                        </div>
+                                    </div>
                                 </td>
-                                <td class="px-6 py-4">
-                                    <div class="text-xs font-medium text-slate-700">{{ $examName }}</div>
-                                    <div class="text-[11px] text-slate-400 mt-1">Session: {{ $reservation['exam_session_id'] ?? $reservation['session_id'] ?? ($session['id'] ?? '—') }}</div>
+                                <td class="block border-t border-slate-100 px-4 py-3 md:table-cell md:border-t-0 md:px-6 md:py-4">
+                                    <div class="flex items-center justify-between gap-3 md:block">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Exam</span>
+                                        <div class="text-right md:text-left">
+                                            <div class="text-xs font-medium text-slate-700">{{ $examName }}</div>
+                                            <div class="text-[11px] text-slate-400 mt-1">Session: {{ $reservation['exam_session_id'] ?? $reservation['session_id'] ?? ($session['id'] ?? '—') }}</div>
+                                        </div>
+                                    </div>
                                 </td>
-                                <td class="px-6 py-4 text-xs text-slate-600">
-                                    <div>{{ $examDate ?: 'Date pending' }}</div>
-                                    <div class="text-[11px] text-slate-400 mt-1">{{ $centerName ?: 'Center not returned' }}</div>
+                                <td class="block border-t border-slate-100 px-4 py-3 text-xs text-slate-600 md:table-cell md:border-t-0 md:px-6 md:py-4">
+                                    <div class="flex items-center justify-between gap-3 md:block">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Date / Center</span>
+                                        <div class="text-right md:text-left">
+                                            <div>{{ $examDate ?: 'Date pending' }}</div>
+                                            <div class="text-[11px] text-slate-400 mt-1">{{ $centerName ?: 'Center not returned' }}</div>
+                                        </div>
+                                    </div>
                                 </td>
-                                <td class="px-6 py-4 space-y-1.5">
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-50 text-slate-700 border-slate-200">{{ $reservation['status'] ?? 'Reserved' }}</span>
-                                    <div><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border {{ $resultStyle }}">Result: {{ $resultLabel }}</span></div>
+                                <td class="block border-t border-slate-100 px-4 py-3 md:table-cell md:border-t-0 md:px-6 md:py-4 md:align-top">
+                                    <div class="flex items-start justify-between gap-3 md:block">
+                                        <span class="pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Status</span>
+                                        <div class="space-y-1.5 text-right md:text-left">
+                                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-50 text-slate-700 border-slate-200">{{ $reservation['status'] ?? 'Reserved' }}</span>
+                                            <div><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border {{ $resultStyle }}">Result: {{ $resultLabel }}</span></div>
+                                        </div>
+                                    </div>
                                 </td>
-                                <td class="px-6 py-4 text-xs space-y-2">
+                                <td class="block border-t border-slate-100 px-4 py-3 text-xs md:table-cell md:border-t-0 md:px-6 md:py-4">
+                                    <div class="flex items-start justify-between gap-3 md:block">
+                                    <span class="pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Actions</span>
+                                    <div class="space-y-2 text-right md:text-left">
                                     @if ($cancellable && $reservationId !== '' && ctype_digit($reservationId))
                                         <form method="POST" action="{{ route('user.bookings.svp-cancel', ['reservation' => $reservationId]) }}" onsubmit="return confirm('Cancel this SVP reservation? This action cannot be undone.');">
                                             @csrf
@@ -165,8 +188,13 @@
                                     @else
                                         <div class="text-slate-400">Reschedule: Unavailable</div>
                                     @endif
+                                    </div>
+                                    </div>
                                 </td>
-                                <td class="px-6 py-4 text-right">
+                                <td class="block border-t border-slate-100 px-4 py-3 text-xs md:table-cell md:border-t-0 md:px-6 md:py-4 md:text-right">
+                                    <div class="flex items-start justify-between gap-3 md:block">
+                                    <span class="pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Downloads</span>
+                                    <div class="text-right md:text-left">
                                     @if ($reservationId !== '' && ctype_digit($reservationId))
                                         <a href="{{ route('user.bookings.svp-ticket', ['reservation' => $reservationId]) }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg {{ $resultPassed ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-slate-700 hover:bg-slate-800' }} text-white text-xs font-semibold transition" download>
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h5l4 4v11a2 2 0 01-2 2z"/></svg>
@@ -179,19 +207,21 @@
                                     @else
                                         <span class="text-xs text-slate-400">Ticket unavailable</span>
                                     @endif
+                                    </div>
+                                    </div>
                                 </td>
                             </tr>
                             @if ($hasScores || $resultPassed)
-                                <tr class="bg-slate-50/50">
-                                    <td colspan="6" class="px-6 pb-5 pt-0">
-                                        <div class="rounded-2xl border border-slate-200 bg-slate-900 p-4 text-white shadow-inner">
+                                <tr class="block bg-slate-50/50 md:table-row">
+                                    <td colspan="6" class="block px-4 pb-4 pt-0 md:table-cell md:px-6 md:pb-5">
+                                        <div class="rounded-2xl border border-slate-200 bg-slate-900 p-3 text-white shadow-inner sm:p-4">
                                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                                                 <div class="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Live exam score</div>
                                                 <div class="font-mono text-xs font-bold text-slate-200">Reservation #{{ $reservationId ?: '—' }}</div>
                                             </div>
                                             @if ($hasScores)
                                                 <div class="grid gap-4 md:grid-cols-[120px_1fr] md:items-center">
-                                                    <div class="mx-auto grid h-24 w-24 place-items-center rounded-full border-2 border-emerald-500 bg-slate-800 text-center shadow-[0_0_0_5px_rgba(16,185,129,0.08)]">
+                                                    <div class="mx-auto grid h-20 w-20 place-items-center rounded-full border-2 border-emerald-500 bg-slate-800 text-center shadow-[0_0_0_5px_rgba(16,185,129,0.08)] sm:h-24 sm:w-24">
                                                         <div>
                                                             <div class="text-[9px] font-black uppercase tracking-widest text-slate-400">Total score</div>
                                                             <div class="mt-1 text-2xl font-black text-white">{{ $scoreText($totalScore) }}</div>
