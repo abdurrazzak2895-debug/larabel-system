@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Admin;
 use App\Models\Booking;
 use App\Models\BookingLog;
+use App\Models\RefundRequest;
 use App\Models\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -245,7 +246,6 @@ class AdminAuthTest extends TestCase
         Auth::guard('web')->login($agencyUser);
 
         $pages = [
-            route('agency.refunds.index'),
             route('agency.reports.daily-bookings'),
             route('agency.reports.wallet-statement'),
             route('agency.reports.user-activity'),
@@ -257,6 +257,49 @@ class AdminAuthTest extends TestCase
         foreach ($pages as $url) {
             $this->get($url)->assertForbidden();
         }
+    }
+
+    public function test_agency_manager_can_view_and_update_refund_history_for_own_agency(): void
+    {
+        $agencyUser = \App\Models\User::whereNotNull('agency_id')->firstOrFail();
+        $agencyUser->assignRole('Agency Manager');
+        $booking = Booking::create([
+            'agency_id' => $agencyUser->agency_id,
+            'user_id' => $agencyUser->id,
+            'booking_status' => 'failed',
+            'booking_reference' => 'AGENCY-REFUND-HISTORY-001',
+            'portal_booking_fee' => 50,
+        ]);
+        $refund = RefundRequest::create([
+            'booking_id' => $booking->id,
+            'agency_id' => $agencyUser->agency_id,
+            'amount' => 50,
+            'reason' => 'Agency review of failed booking.',
+            'status' => 'pending',
+        ]);
+        Auth::guard('web')->login($agencyUser);
+        $csrfToken = 'agency-refund-csrf-token';
+
+        $this->get(route('agency.refunds.index'))
+            ->assertOk()
+            ->assertSee('AGENCY-REFUND-HISTORY-001')
+            ->assertSee($agencyUser->email)
+            ->assertSee('Approve');
+
+        $this->withSession(['_token' => $csrfToken])
+            ->post(route('agency.refunds.update', $refund), [
+                '_token' => $csrfToken,
+                'status' => 'rejected',
+                'reason' => 'Rejected after agency review.',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('refund_requests', [
+            'id' => $refund->id,
+            'agency_id' => $agencyUser->agency_id,
+            'status' => 'rejected',
+        ]);
     }
 
     public function test_agency_booking_pages_are_scoped_to_the_current_portal_user(): void

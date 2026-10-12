@@ -7,7 +7,7 @@
 <div class="flex items-center justify-between mb-6">
     <div>
         <h2 class="text-xl font-bold text-slate-900">Refund Requests</h2>
-        <p class="text-sm text-slate-500 mt-0.5">Request refunds for failed or cancelled exam bookings.</p>
+        <p class="text-sm text-slate-500 mt-0.5">Review refund history submitted by users under this agency and update pending requests.</p>
     </div>
     <a href="{{ route('agency.refunds.create') }}"
        class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/20 transition">
@@ -30,10 +30,12 @@
                 <tr>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Booking</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">User</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Reason</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                     <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
@@ -43,6 +45,7 @@
                             'pending'  => 'bg-amber-50 text-amber-700 border-amber-200',
                             'approved' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
                             'rejected' => 'bg-red-50 text-red-700 border-red-200',
+                            'processed' => 'bg-sky-50 text-sky-700 border-sky-200',
                         ];
                         $color = $statusColors[$refund->status] ?? 'bg-slate-50 text-slate-600 border-slate-200';
                     @endphp
@@ -57,19 +60,45 @@
                                 <span class="font-mono text-xs text-slate-500">#{{ $refund->booking_id }}</span>
                             @endif
                         </td>
+                        <td class="px-6 py-4 text-xs text-slate-600">
+                            @if ($refund->booking?->user)
+                                <span class="font-medium">{{ $refund->booking->user->name }}</span>
+                                <span class="block text-slate-400">{{ $refund->booking->user->email }}</span>
+                            @else
+                                <span class="text-slate-400">Agency booking</span>
+                            @endif
+                        </td>
                         <td class="px-6 py-4 font-bold text-slate-900">{{ number_format($refund->amount, 2) }} <span class="text-xs font-medium text-slate-400">BDT</span></td>
                         <td class="px-6 py-4 text-slate-500 max-w-[220px] truncate">{{ $refund->reason }}</td>
                         <td class="px-6 py-4">
                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border {{ $color }}">
-                                <span class="w-1.5 h-1.5 rounded-full {{ $refund->status === 'approved' ? 'bg-emerald-500' : ($refund->status === 'pending' ? 'bg-amber-500' : 'bg-red-500') }}"></span>
+                                <span class="w-1.5 h-1.5 rounded-full {{ in_array($refund->status, ['approved', 'processed'], true) ? 'bg-emerald-500' : ($refund->status === 'pending' ? 'bg-amber-500' : 'bg-red-500') }}"></span>
                                 {{ ucfirst($refund->status) }}
                             </span>
                         </td>
                         <td class="px-6 py-4 text-slate-500">{{ $refund->created_at?->format('d M Y H:i') }}</td>
+                        <td class="px-6 py-4">
+                            @if ($refund->status === 'pending')
+                                <div class="flex items-center gap-2">
+                                    <form method="POST" action="{{ route('agency.refunds.update', $refund) }}" onsubmit="return confirm('Approve and credit refund #{{ $refund->id }}?')">
+                                        @csrf
+                                        <input type="hidden" name="status" value="approved">
+                                        <button type="submit" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded-lg transition">Approve</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('agency.refunds.update', $refund) }}" onsubmit="return confirm('Reject refund #{{ $refund->id }}?')">
+                                        @csrf
+                                        <input type="hidden" name="status" value="rejected">
+                                        <button type="submit" class="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold rounded-lg transition">Reject</button>
+                                    </form>
+                                </div>
+                            @else
+                                <span class="text-xs text-slate-400">Updated</span>
+                            @endif
+                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center">
+                        <td colspan="8" class="px-6 py-12 text-center">
                             <div class="flex flex-col items-center gap-3">
                                 <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
                                     <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>

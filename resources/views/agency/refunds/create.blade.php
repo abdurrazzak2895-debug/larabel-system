@@ -15,6 +15,19 @@
         </div>
     </div>
 
+    @if (session('error'))
+        <div class="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ session('error') }}</div>
+    @endif
+    @if ($errors->any())
+        <div class="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <ul class="list-disc list-inside space-y-1">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <form method="POST" action="{{ route('agency.refunds.store') }}" class="space-y-5">
             @csrf
@@ -36,15 +49,8 @@
                 @endif
             </div>
 
-            <div>
-                <label for="amount" class="block text-sm font-medium text-slate-700 mb-1">Amount <span class="text-slate-400">(BDT)</span></label>
-                <div class="relative">
-                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">BDT</span>
-                    <input type="number" name="amount" id="amount" step="0.01" min="1" required value="{{ old('amount') }}"
-                        placeholder="0.00"
-                        class="w-full rounded-xl pl-14 pr-4 py-3 border-slate-200 text-sm focus:border-brand-500 focus:ring-brand-500">
-                </div>
-                @error('amount')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                The refund amount is taken from the selected booking's original portal fee. It cannot be edited in this form.
             </div>
 
             <div>

@@ -217,10 +217,11 @@ Route::middleware('web')->prefix('agency')->name('agency.')->middleware(['auth.m
 
 
     // Refunds
-    Route::prefix('refunds')->name('refunds.')->middleware('CheckPermission:manage agencies')->group(function () {
+    Route::prefix('refunds')->name('refunds.')->middleware('CheckPermission:manage agency users')->group(function () {
         Route::get('/', [AgencyRefundController::class, 'index'])->name('index');
         Route::get('/create', [AgencyRefundController::class, 'create'])->name('create');
         Route::post('/', [AgencyRefundController::class, 'store'])->name('store');
+        Route::post('/{refund}/update', [AgencyRefundController::class, 'update'])->name('update');
     });
 
     // Reports
