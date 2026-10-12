@@ -861,6 +861,14 @@ class BookingController extends Controller
                     'status' => $response->getStatusCode(),
                 ]);
 
+                if ($this->booking->paymentVerificationUnavailable($response->getStatusCode())
+                    || $this->booking->paymentStatusIsPending($response->getStatusCode(), (array) $payload)) {
+                    return redirect($showRoute)->with(
+                        'status',
+                        'SVP payment confirmation is still pending. The booking remains pending; please complete the official checkout or retry verification.'
+                    );
+                }
+
                 $attempt = $booking->attempts()->latest()->first();
                 $this->booking->markBookingFailedAndRefund(
                     $booking,
@@ -885,7 +893,10 @@ class BookingController extends Controller
         } catch (\Throwable $e) {
             Log::warning('SVP HyperPay payment verification exception', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
 
-            return redirect($showRoute)->with('error', 'SVP could not verify the card payment. Please try again.');
+            return redirect($showRoute)->with(
+                'status',
+                'SVP payment confirmation is temporarily unavailable. The booking remains pending; please retry verification.'
+            );
         }
     }
 

@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\BookingService;
+use App\Services\SvpOtp\SvpAutoSession;
 use App\Services\UserWalletService;
 use App\Services\WalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -763,8 +764,8 @@ class CoreServicesTest extends TestCase
             ],
         ]);
 
-        $response = $this->actingAs($user, 'web')
-            ->withSession(['svp_token' => 'test-token'])
+        $this->actingAs($user, 'web');
+        $response = $this->withSession([SvpAutoSession::sessionKey('token') => 'test-token'])
             ->get(route('user.bookings.payment-return', [
                 'booking' => $booking->id,
                 'resourcePath' => '/v1/checkouts/TEST-NDC/payment',
@@ -818,8 +819,8 @@ class CoreServicesTest extends TestCase
             ],
         ]);
 
-        $response = $this->actingAs($user, 'web')
-            ->withSession(['svp_token' => 'nested-payment-test-token'])
+        $this->actingAs($user, 'web');
+        $response = $this->withSession([SvpAutoSession::sessionKey('token') => 'nested-payment-test-token'])
             ->get(route('user.bookings.payment-return', [
                 'booking' => $booking->id,
                 'resourcePath' => '/v1/checkouts/NESTED-NDC/payment',
@@ -835,6 +836,99 @@ class CoreServicesTest extends TestCase
             'booking_id' => $booking->id,
             'status' => 'success',
         ]);
+    }
+
+    public function test_user_payment_return_keeps_booking_pending_for_prepared_checkout(): void
+    {
+        Http::fake(function ($request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if (str_ends_with($path, '/v1/checkouts/PENDING-NDC/payment')) {
+                return Http::response([
+                    'result' => ['code' => '000.200.100', 'description' => 'successfully created checkout'],
+                    'transaction_status' => 'prepared_checkout',
+                ], 200);
+            }
+
+            return Http::response(['success' => true], 200);
+        });
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $booking = Booking::create([
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'reservation_id' => '7867',
+            'booking_status' => 'pending',
+            'booking_reference' => 'PAYMENT-PENDING-TEST',
+        ]);
+        BookingAttempt::create([
+            'booking_id' => $booking->id,
+            'status' => 'payment_required',
+            'provider_response' => ['checkout' => ['response' => ['ndc' => 'PENDING-NDC']]],
+        ]);
+
+        $this->actingAs($user, 'web');
+        $response = $this->withSession([SvpAutoSession::sessionKey('token') => 'pending-payment-test-token'])
+            ->get(route('user.bookings.payment-return', [
+                'booking' => $booking->id,
+                'resourcePath' => '/v1/checkouts/PENDING-NDC/payment',
+            ]));
+
+        $response->assertRedirect(route('user.bookings.show', $booking->id));
+        $response->assertSessionHas('status', 'SVP payment confirmation is still pending. The booking remains pending; please complete the official checkout or retry verification.');
+        $this->assertDatabaseHas('bookings', [
+            'id' => $booking->id,
+            'booking_status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('booking_attempts', [
+            'booking_id' => $booking->id,
+            'status' => 'payment_required',
+        ]);
+        $this->assertDatabaseMissing('refund_requests', ['booking_id' => $booking->id]);
+    }
+
+    public function test_user_payment_return_keeps_booking_pending_when_verification_is_unavailable(): void
+    {
+        Http::fake([
+            '*' => Http::response(['message' => 'payment status temporarily unavailable'], 404),
+        ]);
+
+        $user = User::factory()->create(['agency_id' => $this->agency->id]);
+        $booking = Booking::create([
+            'agency_id' => $this->agency->id,
+            'user_id' => $user->id,
+            'reservation_id' => '7868',
+            'booking_status' => 'pending',
+            'booking_reference' => 'PAYMENT-UNAVAILABLE-TEST',
+        ]);
+        BookingAttempt::create([
+            'booking_id' => $booking->id,
+            'status' => 'payment_required',
+            'provider_response' => ['checkout' => ['response' => ['ndc' => 'UNAVAILABLE-NDC']]],
+        ]);
+
+        $this->actingAs($user, 'web');
+        $response = $this->withSession([SvpAutoSession::sessionKey('token') => 'unavailable-payment-test-token'])
+            ->get(route('user.bookings.payment-return', [
+                'booking' => $booking->id,
+                'resourcePath' => '/v1/checkouts/UNAVAILABLE-NDC/payment',
+            ]));
+
+        $response->assertRedirect(route('user.bookings.show', $booking->id));
+        $response->assertSessionHas('status');
+        $this->assertDatabaseHas('bookings', [
+            'id' => $booking->id,
+            'booking_status' => 'pending',
+        ]);
+        $this->assertDatabaseMissing('refund_requests', ['booking_id' => $booking->id]);
+    }
+
+    public function test_payment_status_accepts_authoritative_paid_flag(): void
+    {
+        $this->assertTrue(app(BookingService::class)->paymentStatusIsSuccessful(200, [
+            'result' => ['code' => '000.200.100'],
+            'paid' => true,
+        ]));
     }
 
     public function test_booking_service_marks_failed_without_refunding_on_provider_error(): void

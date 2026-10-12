@@ -78,6 +78,18 @@ class BookingService
             return false;
         }
 
+        foreach ([
+            data_get($payload, 'paid'),
+            data_get($payload, 'payment.paid'),
+            data_get($payload, 'reservation.paid'),
+            data_get($payload, 'checkout.paid'),
+            data_get($payload, 'payment_status.paid'),
+        ] as $paid) {
+            if (filter_var($paid, FILTER_VALIDATE_BOOLEAN)) {
+                return true;
+            }
+        }
+
         $resultCode = data_get($payload, 'result.code')
             ?? data_get($payload, 'response.result.code')
             ?? data_get($payload, 'payment.result.code')
@@ -94,6 +106,10 @@ class BookingService
             data_get($payload, 'payment_status'),
             data_get($payload, 'payment.status'),
             data_get($payload, 'transaction.status'),
+            data_get($payload, 'transaction_status'),
+            data_get($payload, 'payment.transaction_status'),
+            data_get($payload, 'checkout.transaction_status'),
+            data_get($payload, 'reservation.transaction_status'),
         ];
 
         foreach ($statuses as $status) {
@@ -105,6 +121,60 @@ class BookingService
         }
 
         return false;
+    }
+
+    /**
+     * A checkout can be created successfully before the card payment is
+     * completed. Keep that booking pending instead of incorrectly marking it
+     * failed and creating a refund record.
+     */
+    public function paymentStatusIsPending(int $httpStatus, array $payload): bool
+    {
+        if ($httpStatus < 200 || $httpStatus >= 300) {
+            return false;
+        }
+
+        $resultCode = data_get($payload, 'result.code')
+            ?? data_get($payload, 'response.result.code')
+            ?? data_get($payload, 'payment.result.code')
+            ?? data_get($payload, 'checkout.response.result.code')
+            ?? data_get($payload, 'checkout.result.code');
+
+        if (is_string($resultCode) && str_starts_with($resultCode, '000.200.')) {
+            return true;
+        }
+
+        $statuses = [
+            data_get($payload, 'status'),
+            data_get($payload, 'payment_status'),
+            data_get($payload, 'payment.status'),
+            data_get($payload, 'transaction.status'),
+            data_get($payload, 'transaction_status'),
+            data_get($payload, 'payment.transaction_status'),
+            data_get($payload, 'checkout.transaction_status'),
+        ];
+        $pendingStatuses = [
+            'pending', 'processing', 'in_progress', 'prepared_checkout',
+            'checkout_created', 'created', 'initiated', 'awaiting_payment',
+            'payment_required',
+        ];
+
+        foreach ($statuses as $status) {
+            if (is_string($status) && in_array(strtolower(trim($status)), $pendingStatuses, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A provider/network error is not proof that a card payment failed. The
+     * caller should keep the local booking pending and allow a retry.
+     */
+    public function paymentVerificationUnavailable(int $httpStatus): bool
+    {
+        return $httpStatus < 200 || $httpStatus >= 400;
     }
     public function examSession(string $token, string $id)
     {
