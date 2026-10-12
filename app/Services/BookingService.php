@@ -1132,8 +1132,10 @@ class BookingService
 
             $this->logEvent($booking, 'booking_failed', [
                 'response' => $response,
+                'error_message' => $error,
                 'portal_fee_refunded' => 0,
                 'portal_fee_charged' => $chargedAmount,
+                'refund_status' => 'not_refunded',
             ]);
 
             if ($booking->user_id) {

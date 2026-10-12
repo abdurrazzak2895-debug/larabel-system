@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Booking;
 use App\Models\BookingAttempt;
+use App\Models\BookingLog;
 use App\Models\Candidate;
 use App\Models\Setting;
 use App\Models\PortalAvailabilityCredential;
@@ -253,6 +254,58 @@ class UserPanelTest extends TestCase
                 && ($request->data()['per_page'] ?? null) === 100
                 && ($request->data()['locale'] ?? null) === 'en';
         });
+    }
+
+    public function test_agency_user_booking_history_shows_failed_booking_and_no_refund_outcome(): void
+    {
+        $user = $this->loginAgencyUser();
+        $sibling = User::factory()->create(['agency_id' => $user->agency_id]);
+        $booking = Booking::create([
+            'agency_id' => $user->agency_id,
+            'user_id' => $user->id,
+            'booking_status' => 'failed',
+            'booking_reference' => 'AGENCY-FAILED-HISTORY-001',
+            'portal_booking_fee' => 100,
+        ]);
+        Booking::create([
+            'agency_id' => $sibling->agency_id,
+            'user_id' => $sibling->id,
+            'booking_status' => 'failed',
+            'booking_reference' => 'SIBLING-BOOKING-MUST-STAY-HIDDEN',
+        ]);
+        BookingAttempt::create([
+            'booking_id' => $booking->id,
+            'status' => 'failed',
+            'error_message' => 'SVP rejected the selected exam session.',
+        ]);
+        BookingLog::create([
+            'booking_id' => $booking->id,
+            'event_type' => 'booking_failed',
+            'payload' => [
+                'error_message' => 'SVP rejected the selected exam session.',
+                'portal_fee_refunded' => 0,
+                'refund_status' => 'not_refunded',
+            ],
+        ]);
+
+        Http::fake([
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/exam_reservations*' => Http::response([
+                'data' => ['exam_reservations' => []],
+            ], 200),
+            'svp-international-api.pacc.sa/api/v1/individual_labor_space/payments*' => Http::response([
+                'data' => ['payments' => []],
+            ], 200),
+        ]);
+
+        $this->withSession(['svp_token' => 'agency-history-test-token'])
+            ->get(route('user.bookings.index'))
+            ->assertOk()
+            ->assertSee('Portal Booking History')
+            ->assertSee('AGENCY-FAILED-HISTORY-001')
+            ->assertSee('SVP rejected the selected exam session.')
+            ->assertSee('Not refunded')
+            ->assertSee('100.00 BDT')
+            ->assertDontSee('SIBLING-BOOKING-MUST-STAY-HIDDEN');
     }
 
     public function test_user_can_see_live_svp_reservations_and_download_a_ticket(): void

@@ -711,6 +711,15 @@ class BookingController extends Controller
     public function index(Request $request)
     {
         $userId = Auth::id();
+        $localBookings = Booking::with([
+            'credential',
+            'attempts',
+            'logs',
+            'refundRequests',
+        ])
+            ->where('user_id', $userId)
+            ->latest()
+            ->paginate(15, ['*'], 'portal_page');
 
         $svpReservations = null;
         $svpError = null;
@@ -775,6 +784,7 @@ class BookingController extends Controller
         }
 
         return view('user.bookings.index', [
+            'localBookings'   => $localBookings,
             'svpReservations' => $svpReservations,
             'svpError'        => $svpError,
             'hasSvpToken'     => (bool) $svpToken,
