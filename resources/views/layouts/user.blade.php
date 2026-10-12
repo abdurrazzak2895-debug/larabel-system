@@ -62,6 +62,7 @@
     $__nav = [
         ['label' => 'Dashboard',       'route' => 'user.dashboard',           'match' => 'user.dashboard',        'icon' => 'home'],
         ['label' => 'My Bookings',     'route' => 'user.bookings.index',      'match' => 'user.bookings',         'icon' => 'calendar'],
+        ['label' => 'Booking History', 'route' => 'user.booking-history',     'match' => 'user.booking-history',  'icon' => 'rotate'],
         ['label' => 'Wallet',          'route' => 'user.wallets.index',       'match' => 'user.wallets',          'icon' => 'wallet'],
         ['label' => 'Deposits',        'route' => 'user.deposits.index',      'match' => 'user.deposits',         'icon' => 'banknotes'],
         ['label' => 'Notifications',   'route' => 'user.notifications.index', 'match' => 'user.notifications',   'icon' => 'bell'],

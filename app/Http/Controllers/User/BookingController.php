@@ -708,10 +708,9 @@ class BookingController extends Controller
         return Agency::whereKey($agencyId)->exists() ? $agencyId : null;
     }
 
-    public function index(Request $request)
+    private function localBookingHistory(int $userId)
     {
-        $userId = Auth::id();
-        $localBookings = Booking::with([
+        return Booking::with([
             'credential',
             'attempts',
             'logs',
@@ -720,6 +719,18 @@ class BookingController extends Controller
             ->where('user_id', $userId)
             ->latest()
             ->paginate(15, ['*'], 'portal_page');
+    }
+
+    public function history()
+    {
+        return view('user.booking-history', [
+            'localBookings' => $this->localBookingHistory((int) Auth::id()),
+        ]);
+    }
+
+    public function index(Request $request)
+    {
+        $userId = Auth::id();
 
         $svpReservations = null;
         $svpError = null;
@@ -784,7 +795,6 @@ class BookingController extends Controller
         }
 
         return view('user.bookings.index', [
-            'localBookings'   => $localBookings,
             'svpReservations' => $svpReservations,
             'svpError'        => $svpError,
             'hasSvpToken'     => (bool) $svpToken,

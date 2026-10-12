@@ -73,6 +73,7 @@ class UserPanelTest extends TestCase
         $pages = [
             route('user.dashboard'),
             route('user.bookings.index'),
+            route('user.booking-history'),
             route('user.wallets.index'),
             route('user.deposits.index'),
             route('user.refunds.index'),
@@ -298,7 +299,7 @@ class UserPanelTest extends TestCase
         ]);
 
         $this->withSession(['svp_token' => 'agency-history-test-token'])
-            ->get(route('user.bookings.index'))
+            ->get(route('user.booking-history'))
             ->assertOk()
             ->assertSee('Portal Booking History')
             ->assertSee('AGENCY-FAILED-HISTORY-001')
@@ -306,6 +307,11 @@ class UserPanelTest extends TestCase
             ->assertSee('Not refunded')
             ->assertSee('100.00 BDT')
             ->assertDontSee('SIBLING-BOOKING-MUST-STAY-HIDDEN');
+
+        $this->get(route('user.bookings.index'))
+            ->assertOk()
+            ->assertSee('SVP My Bookings')
+            ->assertDontSee('Portal Booking History');
     }
 
     public function test_user_can_see_live_svp_reservations_and_download_a_ticket(): void

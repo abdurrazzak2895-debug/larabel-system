@@ -291,6 +291,8 @@ Route::middleware('web')->prefix('user')->name('user.')->middleware(['auth.multi
         Route::get('/{booking}', [UserBookingController::class, 'show'])->whereNumber('booking')->name('show');
     });
 
+    Route::get('/booking-history', [UserBookingController::class, 'history'])->name('booking-history');
+
     // Wallet
     Route::prefix('wallets')->name('wallets.')->group(function () {
         Route::get('/', [UserWalletController::class, 'index'])->name('index');
