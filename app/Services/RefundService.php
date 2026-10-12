@@ -9,10 +9,10 @@ use App\Models\UserWalletTransaction;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Handles legacy refund records for bookings.
+ * Handles manual refund requests for bookings.
  *
- * Portal-fee refunds are disabled by policy. Existing records can still be
- * reviewed or rejected, but no new request or wallet credit is allowed.
+ * Automatic pending-booking refunds remain disabled. A user request is only
+ * credited after an administrator explicitly approves it.
  */
 class RefundService
 {
@@ -30,9 +30,18 @@ class RefundService
      */
     public function request(array $data): RefundRequest
     {
-        $this->assertRefundsEnabled();
+        $this->assertManualRefundRequestsEnabled();
 
         return DB::transaction(function () use ($data) {
+            $existing = RefundRequest::query()
+                ->where('booking_id', $data['booking_id'])
+                ->whereIn('status', ['pending', 'approved', 'processed'])
+                ->exists();
+
+            if ($existing) {
+                throw new \RuntimeException('A refund request already exists for this booking.');
+            }
+
             $refund = RefundRequest::create([
                 'booking_id' => $data['booking_id'],
                 'agency_id'  => $data['agency_id'],
@@ -56,7 +65,7 @@ class RefundService
      */
     public function approve(RefundRequest $refund): RefundRequest
     {
-        $this->assertRefundsEnabled();
+        $this->assertManualRefundRequestsEnabled();
 
         return DB::transaction(function () use ($refund) {
             if ($refund->status !== 'pending') {
@@ -262,10 +271,10 @@ class RefundService
         return $processed;
     }
 
-    private function assertRefundsEnabled(): void
+    private function assertManualRefundRequestsEnabled(): void
     {
-        if (! (bool) config('svp.portal_fee_refunds_enabled', false)) {
-            throw new \RuntimeException('Portal-fee refunds are disabled.');
+        if (! (bool) config('svp.portal_manual_refund_requests_enabled', false)) {
+            throw new \RuntimeException('Manual refund requests are disabled.');
         }
     }
 

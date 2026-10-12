@@ -84,7 +84,9 @@ class UserPanelTest extends TestCase
             $this->get($url)->assertOk();
         }
 
-        $this->get(route('user.refunds.create'))->assertForbidden();
+        $this->get(route('user.refunds.create'))
+            ->assertOk()
+            ->assertSee('Manual review required');
 
         if ($booking) {
             $this->get(route('user.bookings.show', $booking))->assertOk();
@@ -312,6 +314,35 @@ class UserPanelTest extends TestCase
             ->assertOk()
             ->assertSee('SVP My Bookings')
             ->assertDontSee('Portal Booking History');
+    }
+
+    public function test_agency_user_can_submit_a_manual_refund_request_for_own_failed_booking(): void
+    {
+        $user = $this->loginAgencyUser();
+        $booking = Booking::create([
+            'agency_id' => $user->agency_id,
+            'user_id' => $user->id,
+            'booking_status' => 'failed',
+            'booking_reference' => 'MANUAL-REFUND-REQUEST-001',
+            'portal_booking_fee' => 100,
+        ]);
+        $csrfToken = 'manual-refund-csrf-token';
+
+        $response = $this->withSession(['_token' => $csrfToken])
+            ->post(route('user.refunds.store'), [
+                '_token' => $csrfToken,
+                'booking_id' => $booking->id,
+                'reason' => 'The SVP reservation failed before confirmation.',
+            ]);
+
+        $response->assertRedirect(route('user.refunds.index'))
+            ->assertSessionHas('success');
+        $this->assertDatabaseHas('refund_requests', [
+            'booking_id' => $booking->id,
+            'agency_id' => $user->agency_id,
+            'amount' => 100,
+            'status' => 'pending',
+        ]);
     }
 
     public function test_user_can_see_live_svp_reservations_and_download_a_ticket(): void

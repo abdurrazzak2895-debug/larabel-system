@@ -16,44 +16,36 @@ class AutomaticRefundTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_manual_refund_requests_and_approvals_are_disabled(): void
+    public function test_manual_refund_requests_can_be_reviewed_and_processed(): void
     {
         $agency = Agency::factory()->create();
         $booking = Booking::create([
             'agency_id' => $agency->id,
             'booking_status' => 'failed',
-            'booking_reference' => 'TEST-REFUNDS-DISABLED',
+            'booking_reference' => 'TEST-MANUAL-REFUND',
         ]);
         $service = app(RefundService::class);
 
-        try {
-            $service->request([
-                'booking_id' => $booking->id,
-                'agency_id' => $agency->id,
-                'amount' => 25.00,
-                'reason' => 'Policy test',
-            ]);
-            $this->fail('A new refund request must be rejected when refunds are disabled.');
-        } catch (\RuntimeException $exception) {
-            $this->assertSame('Portal-fee refunds are disabled.', $exception->getMessage());
-        }
-
-        $refund = RefundRequest::create([
+        $refund = $service->request([
             'booking_id' => $booking->id,
             'agency_id' => $agency->id,
             'amount' => 25.00,
-            'reason' => 'Legacy pending request',
-            'status' => 'pending',
+            'reason' => 'Manual review requested after the failed booking.',
         ]);
 
-        try {
-            $service->approve($refund);
-            $this->fail('A pending refund must not be approved when refunds are disabled.');
-        } catch (\RuntimeException $exception) {
-            $this->assertSame('Portal-fee refunds are disabled.', $exception->getMessage());
-        }
+        $this->assertSame('pending', $refund->status);
+        $processed = $service->approve($refund->fresh());
 
-        $this->assertDatabaseCount('wallet_transactions', 0);
+        $this->assertSame('processed', $processed->fresh()->status);
+        $this->assertDatabaseHas('bookings', [
+            'id' => $booking->id,
+            'booking_status' => 'refunded',
+        ]);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'type' => 'refund',
+            'amount' => 25.00,
+            'reference' => 'refund-request-'.$refund->id,
+        ]);
         $this->assertDatabaseCount('user_wallet_transactions', 0);
     }
 

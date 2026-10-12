@@ -54,9 +54,10 @@ return [
     // when no admin booking_price setting exists. This is separate from SVP's
     // own reservation amount or reservation-credit decision.
     'portal_booking_fee'     => (float) env('SVP_PORTAL_BOOKING_FEE', 0),
-    // Portal booking fees are non-refundable. A reservation API attempt charges
-    // the fee even when SVP rejects, cancels, or cannot complete the booking.
+    // Automatic portal-fee refunds remain disabled. Manual requests are reviewed
+    // by an administrator before any wallet credit is issued.
     'portal_fee_refunds_enabled' => false,
+    'portal_manual_refund_requests_enabled' => filter_var(env('SVP_MANUAL_REFUND_REQUESTS_ENABLED', true), FILTER_VALIDATE_BOOL),
     // SVP's category-filtered center response can omit known Dhaka centers.
     // Keep the supplied real SVP IDs canonical so both booking panels expose
     // the complete seven-center set; session availability is still verified

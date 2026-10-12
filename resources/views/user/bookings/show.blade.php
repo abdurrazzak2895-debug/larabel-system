@@ -33,6 +33,9 @@
     }
     $statusSteps = ['pending', 'processing', 'booked'];
     $currentStep = array_search($booking->booking_status, $statusSteps);
+    $canRequestRefund = in_array($booking->booking_status, ['failed', 'cancelled'], true)
+        && (float) ($booking->portal_booking_fee ?? 0) > 0
+        && ! $refunds->contains(fn ($refund) => in_array($refund->status, ['pending', 'approved', 'processed'], true));
 @endphp
 <div class="space-y-6">
 
@@ -190,8 +193,15 @@
 
         {{-- Refunds --}}
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h3 class="text-sm font-semibold text-slate-800">Refund Requests</h3>
-            <p class="text-xs text-slate-400 mt-0.5">Portal fees are non-refundable</p>
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-800">Refund Requests</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Manual requests require administrator review</p>
+                </div>
+                @if ($canRequestRefund)
+                    <a href="{{ route('user.refunds.create', ['booking' => $booking->id]) }}" class="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 transition">Request Refund</a>
+                @endif
+            </div>
             <div class="mt-4">
                 @forelse ($refunds as $refund)
                 @php

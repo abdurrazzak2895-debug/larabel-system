@@ -52,6 +52,9 @@
                                 {{ $booking->booking_reference ?: '#'.$booking->id }}
                             </a>
                             <span class="block text-[11px] text-slate-400 mt-1">{{ $booking->credential?->full_name ?: 'SVP account' }}</span>
+                            @if (in_array($status, ['failed', 'cancelled'], true) && (float) ($booking->portal_booking_fee ?? 0) > 0 && (! $latestRefund || $latestRefund->status === 'rejected'))
+                                <a href="{{ route('user.refunds.create', ['booking' => $booking->id]) }}" class="inline-flex mt-2 items-center px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 transition">Request Refund</a>
+                            @endif
                         </td>
                         <td class="px-6 py-4">
                             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border {{ $statusClass }}">{{ ucfirst($status) }}</span>
