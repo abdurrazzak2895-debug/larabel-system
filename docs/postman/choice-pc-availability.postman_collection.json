@@ -1,0 +1,592 @@
+{
+  "info": {
+    "_postman_id": "b7bd3e56-2c0e-4c08-8d3d-4e1a5b7c9d21",
+    "name": "Choice PC SVP/Takamol Availability API",
+    "description": "Read-only availability API tests for the Takamol shared-session gateway and the optional candidate-session SVP gateway. Set the collection variables before sending requests. Never commit a real API key.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "api_base_url",
+      "value": "https://api.choice-pc-sv.xyz",
+      "type": "string"
+    },
+    {
+      "key": "takamol_api_key",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "portal_api_key",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "search",
+      "value": "Barber",
+      "type": "string"
+    },
+    {
+      "key": "category_id",
+      "value": "50",
+      "type": "string"
+    },
+    {
+      "key": "city",
+      "value": "Dhaka",
+      "type": "string"
+    },
+    {
+      "key": "exam_date",
+      "value": "2026-10-25",
+      "type": "string"
+    },
+    {
+      "key": "test_center_id",
+      "value": "45",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Takamol Gateway",
+      "description": "Uses X-Takamol-API-Key and the shared server-side Takamol/T2Hub session.",
+      "item": [
+        {
+          "name": "1. Occupations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Takamol-API-Key",
+                "value": "{{takamol_api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/external/takamol-availability/v1/occupations?search={{search}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "external",
+                "takamol-availability",
+                "v1",
+                "occupations"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "{{search}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(body.success).to.eql(true); });",
+                  "pm.test('occupations array', function () { pm.expect(body.data.occupations).to.be.an('array'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Cities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Takamol-API-Key",
+                "value": "{{takamol_api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/external/takamol-availability/v1/cities?category_id={{category_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "external",
+                "takamol-availability",
+                "v1",
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "category_id",
+                  "value": "{{category_id}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(body.success).to.eql(true); });",
+                  "pm.test('cities array', function () { pm.expect(body.data.cities).to.be.an('array'); });",
+                  "if (body.data.cities && body.data.cities.length) {",
+                  "  const first = body.data.cities[0];",
+                  "  const city = typeof first === 'string' ? first : (first.name || first.city || first.value);",
+                  "  if (city) pm.collectionVariables.set('city', city);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Available Dates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Takamol-API-Key",
+                "value": "{{takamol_api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/external/takamol-availability/v1/dates?category_id={{category_id}}&city={{city}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "external",
+                "takamol-availability",
+                "v1",
+                "dates"
+              ],
+              "query": [
+                {
+                  "key": "category_id",
+                  "value": "{{category_id}}"
+                },
+                {
+                  "key": "city",
+                  "value": "{{city}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(body.success).to.eql(true); });",
+                  "pm.test('dates array', function () { pm.expect(body.data.dates).to.be.an('array'); });",
+                  "if (body.data.dates && body.data.dates.length) {",
+                  "  const first = body.data.dates[0];",
+                  "  const date = typeof first === 'string' ? first : (first.date || first.exam_date || first.value);",
+                  "  if (date) pm.collectionVariables.set('exam_date', date);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. All Test Centers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Takamol-API-Key",
+                "value": "{{takamol_api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/external/takamol-availability/v1/centers",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "external",
+                "takamol-availability",
+                "v1",
+                "centers"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(body.success).to.eql(true); });",
+                  "pm.test('sites array', function () { pm.expect(body.data.sites).to.be.an('array'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Test Centers by City",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Takamol-API-Key",
+                "value": "{{takamol_api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/external/takamol-availability/v1/centers?city={{city}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "external",
+                "takamol-availability",
+                "v1",
+                "centers"
+              ],
+              "query": [
+                {
+                  "key": "city",
+                  "value": "{{city}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(body.success).to.eql(true); });",
+                  "pm.test('sites array', function () { pm.expect(body.data.sites).to.be.an('array'); });",
+                  "if (body.data.sites && body.data.sites.length) {",
+                  "  const first = body.data.sites[0];",
+                  "  const id = typeof first === 'string' ? first : (first.id || first.site_id || first.center_id);",
+                  "  if (id) pm.collectionVariables.set('test_center_id', String(id));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Sessions for City and Date",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Takamol-API-Key",
+                "value": "{{takamol_api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/external/takamol-availability/v1/sessions?category_id={{category_id}}&city={{city}}&exam_date={{exam_date}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "external",
+                "takamol-availability",
+                "v1",
+                "sessions"
+              ],
+              "query": [
+                {
+                  "key": "category_id",
+                  "value": "{{category_id}}"
+                },
+                {
+                  "key": "city",
+                  "value": "{{city}}"
+                },
+                {
+                  "key": "exam_date",
+                  "value": "{{exam_date}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(body.success).to.eql(true); });",
+                  "pm.test('sessions array', function () { pm.expect(body.data.sessions).to.be.an('array'); });",
+                  "if (body.data.sessions && body.data.sessions.length) {",
+                  "  const first = body.data.sessions[0];",
+                  "  console.log('First session availability:', { seats: first.available_seats, time: first.exam_time, center: first.center_name });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Sessions for One Center",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Takamol-API-Key",
+                "value": "{{takamol_api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{api_base_url}}/api/external/takamol-availability/v1/sessions?category_id={{category_id}}&city={{city}}&exam_date={{exam_date}}&test_center_id={{test_center_id}}",
+              "host": [
+                "{{api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "external",
+                "takamol-availability",
+                "v1",
+                "sessions"
+              ],
+              "query": [
+                {
+                  "key": "category_id",
+                  "value": "{{category_id}}"
+                },
+                {
+                  "key": "city",
+                  "value": "{{city}}"
+                },
+                {
+                  "key": "exam_date",
+                  "value": "{{exam_date}}"
+                },
+                {
+                  "key": "test_center_id",
+                  "value": "{{test_center_id}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(body.success).to.eql(true); });",
+                  "pm.test('sessions array', function () { pm.expect(body.data.sessions).to.be.an('array'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Optional SVP Gateway",
+      "description": "Uses X-Portal-API-Key and an administrator-mapped encrypted candidate SVP session.",
+      "item": [
+        {
+          "name": "1. Occupations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Portal-API-Key",
+                "value": "{{portal_api_key}}"
+              }
+            ],
+            "url": "{{api_base_url}}/api/external/svp-availability/v1/occupations"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(body.success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Cities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Portal-API-Key",
+                "value": "{{portal_api_key}}"
+              }
+            ],
+            "url": "{{api_base_url}}/api/external/svp-availability/v1/cities?category_id={{category_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success envelope', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Available Dates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Portal-API-Key",
+                "value": "{{portal_api_key}}"
+              }
+            ],
+            "url": "{{api_base_url}}/api/external/svp-availability/v1/dates?category_id={{category_id}}&city={{city}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success envelope', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Centers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Portal-API-Key",
+                "value": "{{portal_api_key}}"
+              }
+            ],
+            "url": "{{api_base_url}}/api/external/svp-availability/v1/centers?city={{city}}&category_id={{category_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success envelope', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Portal-API-Key",
+                "value": "{{portal_api_key}}"
+              }
+            ],
+            "url": "{{api_base_url}}/api/external/svp-availability/v1/sessions?category_id={{category_id}}&city={{city}}&test_center_id={{test_center_id}}&exam_date={{exam_date}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(body.success).to.eql(true); });",
+                  "pm.test('sessions array', function () { pm.expect(body.data.sessions).to.be.an('array'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
