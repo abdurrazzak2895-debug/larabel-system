@@ -404,7 +404,75 @@ Recommended client sequence:
 occupation/category → cities → dates → centers → sessions
 ```
 
-## 12. Optional SVP gateway contract
+## 12. Postman collection
+
+The repository includes a ready-to-import collection:
+
+```text
+docs/postman/choice-pc-availability.postman_collection.json
+```
+
+Import it in Postman using **Import → File**. The collection contains 12 requests:
+
+- Seven Takamol requests: occupations, cities, dates, all centers, city centers, city/date sessions, and center-filtered sessions.
+- Five optional SVP requests: occupations, cities, dates, centers, and sessions.
+
+Set these collection variables before testing:
+
+| Variable | Value |
+|---|---|
+| `api_base_url` | `https://api.choice-pc-sv.xyz` |
+| `takamol_api_key` | The server-side key from External Takamol API Access |
+| `portal_api_key` | The server-side key from External SVP API Access, if used |
+| `category_id` | A category returned by the occupation catalogue |
+| `city` | A city returned by the cities endpoint |
+| `exam_date` | A date returned by the dates endpoint |
+| `test_center_id` | A center ID returned by the centers endpoint |
+
+The collection does not contain a real key. Its test scripts validate the JSON envelope and automatically update `city`, `exam_date`, and `test_center_id` from successful responses where possible.
+
+## 13. Recommended partner architecture
+
+Use this request path:
+
+```text
+Browser/mobile client
+        │
+        │  partner website session/API
+        ▼
+Partner website backend
+        │  X-Takamol-API-Key kept server-side
+        ▼
+Choice PC availability gateway
+        │
+        ▼
+Server-side Takamol/T2Hub session
+```
+
+The browser should call the partner backend, for example `/api/availability/cities`, rather than calling the Choice PC gateway directly. The partner backend should validate its own user input, call the upstream gateway, normalize only the fields needed by its UI, and return a partner-specific response.
+
+Do not proxy the API key to a browser. Do not expose the upstream session cookie, encryption key, bearer token, or opaque internal session values to the client.
+
+## 14. End-to-end acceptance test
+
+Run the following checks after configuring the partner backend:
+
+1. `occupations` returns HTTP 200 and an array.
+2. Select a valid `category_id` from the occupation/category data.
+3. `cities?category_id=...` returns HTTP 200.
+4. Select a returned city and call `dates`.
+5. Only dates returned by `dates` are enabled in the partner UI.
+6. `centers?city=...` returns the center catalogue.
+7. Call `sessions` with the selected category, city, and date.
+8. Verify each displayed session uses `exam_time` and `available_seats` from the response.
+9. If a center is selected, call `sessions` again with `test_center_id` and verify the response is center-scoped.
+10. Test invalid, missing, expired, and revoked keys without logging their values.
+11. Test missing and malformed query parameters and confirm the partner maps HTTP 422 to a validation message.
+12. Test a temporary upstream failure and confirm the partner shows a retry state rather than creating a false availability result.
+
+The gateway is read-only. A successful availability response is not a reservation and does not lock a seat.
+
+## 15. Optional SVP gateway contract
 
 If the partner specifically needs a candidate-session-backed SVP catalogue, use the same endpoint names with this base path:
 
@@ -428,7 +496,7 @@ The endpoints are:
 
 The SVP key is mapped to an encrypted candidate session. The partner website must never receive or forward the upstream SVP bearer token. SVP keys and Takamol keys are different and are not interchangeable.
 
-## 13. Production integration checklist
+## 16. Production integration checklist
 
 Before going live:
 
@@ -446,6 +514,6 @@ Before going live:
 - [ ] Rotate and revoke keys through the admin panel.
 - [ ] Test with a non-production or least-privileged consumer key where possible.
 
-## 14. Capability boundary
+## 17. Capability boundary
 
 This API is an availability/catalogue gateway only. It does not authorize the partner website to create a temporary seat hold, confirm a reservation, take payment, cancel a booking, reschedule an exam, or access candidate accounts. Those operations remain inside the Laravel application and require separate product, security, and authorization work.
