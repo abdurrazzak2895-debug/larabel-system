@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Contracts\PortalAvailabilityProviderInterface;
 use App\Models\SvpApiConsumerKey;
+use App\Models\TakamolApiConsumerKey;
 use App\Services\Providers\BookingProviderInterface;
 use App\Services\Providers\PortalAvailabilityProvider;
 use App\Services\Providers\TakamolProvider;
@@ -57,6 +58,28 @@ class AppServiceProvider extends ServiceProvider
             $limit = $key instanceof SvpApiConsumerKey
                 ? (int) $key->rate_limit_per_minute
                 : (int) config('svp.external_api.rate_limit_per_minute', 60);
+            $bucket = $presentedKey !== ''
+                ? 'key:'.hash('sha256', $presentedKey)
+                : 'ip:'.($request->ip() ?? 'unknown');
+
+            return Limit::perMinute(max(1, $limit))->by($bucket);
+        });
+
+        RateLimiter::for('takamol-external-api', function (Request $request): Limit {
+            $header = (string) config('takamol_api.header', 'X-Takamol-API-Key');
+            $presentedKey = trim((string) $request->header($header));
+            $key = $request->attributes->get('takamol_api_consumer_key');
+
+            if (! $key instanceof TakamolApiConsumerKey && $presentedKey !== '' && strlen($presentedKey) <= 128) {
+                $key = TakamolApiConsumerKey::query()
+                    ->usable()
+                    ->where('key_hash', TakamolApiConsumerKey::hashPlaintext($presentedKey))
+                    ->first();
+            }
+
+            $limit = $key instanceof TakamolApiConsumerKey
+                ? (int) $key->rate_limit_per_minute
+                : (int) config('takamol_api.rate_limit_per_minute', 60);
             $bucket = $presentedKey !== ''
                 ? 'key:'.hash('sha256', $presentedKey)
                 : 'ip:'.($request->ip() ?? 'unknown');

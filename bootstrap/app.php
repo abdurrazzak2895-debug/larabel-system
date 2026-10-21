@@ -3,6 +3,7 @@
 use App\Http\Middleware\AgencyScope;
 use App\Http\Middleware\AuthenticateMultiGuard;
 use App\Http\Middleware\AuthenticatePortalAvailabilityApiKey;
+use App\Http\Middleware\AuthenticateTakamolApiConsumerKey;
 use App\Http\Middleware\AuthenticateSvpApiConsumerKey;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\HandleSvpCors;
@@ -39,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'svp_cors' => HandleSvpCors::class,
             'portal.api.key' => AuthenticatePortalAvailabilityApiKey::class,
             'svp.api.key' => AuthenticateSvpApiConsumerKey::class,
+            'takamol.api.key' => AuthenticateTakamolApiConsumerKey::class,
         ]);
 
         // The booking-data endpoints are a read-only JSON API used by the

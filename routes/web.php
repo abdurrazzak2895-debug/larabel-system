@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\AgencyController;
 use App\Http\Controllers\Admin\TestCenterController;
 use App\Http\Controllers\Admin\PortalAvailabilityController;
 use App\Http\Controllers\Admin\SvpApiAccessController;
+use App\Http\Controllers\Admin\TakamolApiAccessController;
 use App\Http\Controllers\Agency\DashboardController as AgencyDashboardController;
 use App\Http\Controllers\Agency\NotificationController as AgencyNotificationController;
 use App\Http\Controllers\Agency\RefundController as AgencyRefundController;
@@ -153,6 +154,9 @@ Route::middleware('web')->group(function () {
     Route::get('/external-api-access', [SvpApiAccessController::class, 'index'])->name('svp-api-access.index');
     Route::post('/external-api-access/keys', [SvpApiAccessController::class, 'store'])->name('svp-api-access.store');
     Route::post('/external-api-access/keys/{apiKey}/revoke', [SvpApiAccessController::class, 'revoke'])->name('svp-api-access.revoke');
+    Route::get('/takamol-api-access', [TakamolApiAccessController::class, 'index'])->name('takamol-api-access.index');
+    Route::post('/takamol-api-access/keys', [TakamolApiAccessController::class, 'store'])->name('takamol-api-access.store');
+    Route::post('/takamol-api-access/keys/{apiKey}/revoke', [TakamolApiAccessController::class, 'revoke'])->name('takamol-api-access.revoke');
 
     // Settings
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');

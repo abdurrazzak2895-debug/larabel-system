@@ -139,3 +139,19 @@ Route::prefix('external/svp-availability/v1')
         Route::get('/sessions', [\App\Http\Controllers\Api\ExternalSvpAvailabilityController::class, 'sessions'])
             ->name('external.svp-availability.sessions');
     });
+
+// Read-only external Takamol gateway using the app's shared server-side agent session.
+Route::prefix('external/takamol-availability/v1')
+    ->middleware(['takamol.api.key', 'throttle:takamol-external-api'])
+    ->group(function (): void {
+        Route::get('/occupations', [\App\Http\Controllers\Api\ExternalTakamolAvailabilityController::class, 'occupations'])
+            ->name('external.takamol-availability.occupations');
+        Route::get('/cities', [\App\Http\Controllers\Api\ExternalTakamolAvailabilityController::class, 'cities'])
+            ->name('external.takamol-availability.cities');
+        Route::get('/dates', [\App\Http\Controllers\Api\ExternalTakamolAvailabilityController::class, 'dates'])
+            ->name('external.takamol-availability.dates');
+        Route::get('/centers', [\App\Http\Controllers\Api\ExternalTakamolAvailabilityController::class, 'centers'])
+            ->name('external.takamol-availability.centers');
+        Route::get('/sessions', [\App\Http\Controllers\Api\ExternalTakamolAvailabilityController::class, 'sessions'])
+            ->name('external.takamol-availability.sessions');
+    });

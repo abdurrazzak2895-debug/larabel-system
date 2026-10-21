@@ -124,6 +124,7 @@
                     {!! $__navLink('Settings', 'admin.settings.index', str_starts_with((string) $__routeName, 'admin.settings'), 'settings') !!}
                     {!! $__navLink('Portal Availability', 'admin.portal-availability.index', str_starts_with((string) $__routeName, 'admin.portal-availability'), 'calendar') !!}
                     {!! $__navLink('External API Access', 'admin.svp-api-access.index', str_starts_with((string) $__routeName, 'admin.svp-api-access'), 'list') !!}
+                    {!! $__navLink('Takamol API Access', 'admin.takamol-api-access.index', str_starts_with((string) $__routeName, 'admin.takamol-api-access'), 'list') !!}
                 </div>
             </div>
             @endif

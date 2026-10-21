@@ -21,9 +21,9 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-## Portal Availability
+## External Availability APIs
 
-The repository includes a read-only external API at `https://choice-pc-sv.xyz` that issues consumer keys mapped to encrypted SVP/Takamol bearer sessions already stored by the app. See [`docs/external-svp-api.md`](docs/external-svp-api.md) for setup, key management, and endpoint details. The older cookie-backed Portal Availability dashboard and gateway are separate legacy functionality; see [`docs/portal-availability.md`](docs/portal-availability.md) and [`docs/portal-availability-external-api.md`](docs/portal-availability-external-api.md).
+The repository includes two separate read-only external APIs at `https://choice-pc-sv.xyz`. The [Takamol gateway](docs/external-takamol-api.md) uses the app's shared server-side agent session and standalone hashed consumer keys. The [SVP gateway](docs/external-svp-api.md) instead maps keys to saved encrypted candidate SVP sessions. Neither gateway is the legacy cookie-backed Portal Availability adapter; see [`docs/portal-availability.md`](docs/portal-availability.md) and [`docs/portal-availability-external-api.md`](docs/portal-availability-external-api.md).
 
 ## Learning Laravel
 
