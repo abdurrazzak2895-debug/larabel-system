@@ -2,15 +2,16 @@
 
 namespace App\Providers;
 
+use App\Contracts\PortalAvailabilityProviderInterface;
+use App\Models\SvpApiConsumerKey;
+use App\Services\Providers\BookingProviderInterface;
+use App\Services\Providers\PortalAvailabilityProvider;
+use App\Services\Providers\TakamolProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
-use App\Contracts\PortalAvailabilityProviderInterface;
-use App\Services\Providers\BookingProviderInterface;
-use App\Services\Providers\PortalAvailabilityProvider;
-use App\Services\Providers\TakamolProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -48,6 +49,19 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(max(1, (int) config('portal.external_api.rate_limit_per_minute', 60)))
                 ->by($bucket);
+        });
+
+        RateLimiter::for('svp-external-api', function (Request $request): Limit {
+            $presentedKey = trim((string) $request->header((string) config('svp.external_api.header', 'X-Portal-API-Key')));
+            $key = $request->attributes->get('svp_api_consumer_key');
+            $limit = $key instanceof SvpApiConsumerKey
+                ? (int) $key->rate_limit_per_minute
+                : (int) config('svp.external_api.rate_limit_per_minute', 60);
+            $bucket = $presentedKey !== ''
+                ? 'key:'.hash('sha256', $presentedKey)
+                : 'ip:'.($request->ip() ?? 'unknown');
+
+            return Limit::perMinute(max(1, $limit))->by($bucket);
         });
 
         // Permission seeding removed — use database/seeders instead.

@@ -1,5 +1,7 @@
 # External Portal Availability API
 
+> **Legacy integration:** This guide describes the older cookie-backed adapter that calls `svp-international.xyz`. For the new API hosted on `https://choice-pc-sv.xyz` and backed by an encrypted SVP/Takamol session saved in this app, use [`external-svp-api.md`](external-svp-api.md). New integrations should not create keys or call this legacy gateway.
+
 This project exposes a separate API-key gateway for an external website that needs read-only portal availability. The gateway uses the encrypted portal session configured in the admin dashboard and calls only the authenticated portal chain:
 
 > `GET https://svp-international.xyz/api/occupations` → `POST /api/search_dates` → `POST /api/centers`

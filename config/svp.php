@@ -144,4 +144,9 @@ return [
     'otp_test_email' => env('SVP_OTP_TEST_EMAIL'),
     'otp_test_password' => env('SVP_OTP_TEST_PASSWORD'),
 
+    'external_api' => [
+        'header' => 'X-Portal-API-Key',
+        'rate_limit_per_minute' => (int) env('SVP_EXTERNAL_API_RATE_LIMIT', 60),
+    ],
+
 ];

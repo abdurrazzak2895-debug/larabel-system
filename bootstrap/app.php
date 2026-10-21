@@ -2,8 +2,9 @@
 
 use App\Http\Middleware\AgencyScope;
 use App\Http\Middleware\AuthenticateMultiGuard;
-use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\AuthenticatePortalAvailabilityApiKey;
+use App\Http\Middleware\AuthenticateSvpApiConsumerKey;
+use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\HandleSvpCors;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -37,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.multi' => AuthenticateMultiGuard::class,
             'svp_cors' => HandleSvpCors::class,
             'portal.api.key' => AuthenticatePortalAvailabilityApiKey::class,
+            'svp.api.key' => AuthenticateSvpApiConsumerKey::class,
         ]);
 
         // The booking-data endpoints are a read-only JSON API used by the

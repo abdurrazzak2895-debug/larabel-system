@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\AgencyController;
 use App\Http\Controllers\Admin\TestCenterController;
 use App\Http\Controllers\Admin\PortalAvailabilityController;
+use App\Http\Controllers\Admin\SvpApiAccessController;
 use App\Http\Controllers\Agency\DashboardController as AgencyDashboardController;
 use App\Http\Controllers\Agency\NotificationController as AgencyNotificationController;
 use App\Http\Controllers\Agency\RefundController as AgencyRefundController;
@@ -142,12 +143,16 @@ Route::middleware('web')->group(function () {
         Route::post('/credentials/{credential}/refresh', [PortalAvailabilityController::class, 'refreshCredential'])->name('credentials.refresh');
         Route::post('/credentials/{credential}/activate', [PortalAvailabilityController::class, 'activate'])->name('credentials.activate');
         Route::post('/credentials/{credential}/deactivate', [PortalAvailabilityController::class, 'deactivate'])->name('credentials.deactivate');
-        Route::post('/api-keys', [PortalAvailabilityController::class, 'storeApiKey'])->name('api-keys.store');
         Route::post('/api-keys/{apiKey}/revoke', [PortalAvailabilityController::class, 'revokeApiKey'])->name('api-keys.revoke');
         Route::get('/occupations', [PortalAvailabilityController::class, 'occupations'])->name('occupations');
         Route::post('/dates', [PortalAvailabilityController::class, 'dates'])->name('dates');
         Route::post('/centers', [PortalAvailabilityController::class, 'centers'])->name('centers');
     });
+
+    // Consumer keys map to existing encrypted SVP/Takamol sessions.
+    Route::get('/external-api-access', [SvpApiAccessController::class, 'index'])->name('svp-api-access.index');
+    Route::post('/external-api-access/keys', [SvpApiAccessController::class, 'store'])->name('svp-api-access.store');
+    Route::post('/external-api-access/keys/{apiKey}/revoke', [SvpApiAccessController::class, 'revoke'])->name('svp-api-access.revoke');
 
     // Settings
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');

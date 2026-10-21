@@ -123,3 +123,19 @@ Route::prefix('external/portal-availability/v1')
         Route::post('/centers', [\App\Http\Controllers\Admin\PortalAvailabilityController::class, 'externalCenters'])
             ->name('external.portal-availability.centers');
     });
+
+// Read-only gateway backed by the app's encrypted CandidateSvpSession.
+Route::prefix('external/svp-availability/v1')
+    ->middleware(['svp.api.key', 'throttle:svp-external-api'])
+    ->group(function (): void {
+        Route::get('/occupations', [\App\Http\Controllers\Api\ExternalSvpAvailabilityController::class, 'occupations'])
+            ->name('external.svp-availability.occupations');
+        Route::get('/cities', [\App\Http\Controllers\Api\ExternalSvpAvailabilityController::class, 'cities'])
+            ->name('external.svp-availability.cities');
+        Route::get('/dates', [\App\Http\Controllers\Api\ExternalSvpAvailabilityController::class, 'dates'])
+            ->name('external.svp-availability.dates');
+        Route::get('/centers', [\App\Http\Controllers\Api\ExternalSvpAvailabilityController::class, 'centers'])
+            ->name('external.svp-availability.centers');
+        Route::get('/sessions', [\App\Http\Controllers\Api\ExternalSvpAvailabilityController::class, 'sessions'])
+            ->name('external.svp-availability.sessions');
+    });

@@ -133,48 +133,17 @@
         </div>
     </section>
 
-    @if (session('created_api_key'))
-        <section class="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
-            <h3 class="text-base font-bold text-amber-950">New external API key — copy it now</h3>
-            <p class="mt-1 text-sm leading-6 text-amber-900">This key is shown once only. Store it in the other website’s server-side environment, never in browser JavaScript, GitHub, logs, or screenshots.</p>
-            <input value="{{ session('created_api_key') }}" readonly class="mt-3 w-full rounded-xl border-amber-300 bg-white font-mono text-sm text-slate-900" aria-label="New external API key">
-        </section>
-    @endif
-
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                <h3 class="text-base font-bold text-slate-900">External website API access</h3>
-                <p class="mt-1 max-w-3xl text-xs leading-5 text-slate-500">Generate a key for a server-side consumer. The key can call only the read-only occupations, search_dates, and centers endpoints and is mapped to one encrypted portal session.</p>
+                <h3 class="text-base font-bold text-slate-900">Legacy cookie-backed API keys</h3>
+                <p class="mt-1 max-w-3xl text-xs leading-5 text-slate-500">This older gateway uses a separate portal cookie session. Do not create new integrations here. For the new API mapped to an SVP/Takamol login session already saved by this app, use External API Access.</p>
             </div>
-            <span class="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">X-Portal-API-Key</span>
+            <a href="{{ route('admin.svp-api-access.index') }}" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Open External API Access</a>
         </div>
-        <form method="POST" action="{{ route('admin.portal-availability.api-keys.store') }}" class="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
-            @csrf
-            <label class="block text-sm font-medium text-slate-700">Consumer name
-                <input name="name" required maxlength="120" value="{{ old('name') }}" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm" placeholder="Partner website">
-            </label>
-            <label class="block text-sm font-medium text-slate-700">Portal session
-                <select name="portal_availability_credential_id" required class="mt-1.5 w-full rounded-xl border-slate-300 text-sm">
-                    <option value="">Select a ready session</option>
-                    @foreach ($credentials as $credential)
-                        @if ($credential['usable'])
-                            <option value="{{ $credential['id'] }}">{{ $credential['name'] }} · {{ $credential['portal_account_id'] }}</option>
-                        @endif
-                    @endforeach
-                </select>
-            </label>
-            <label class="block text-sm font-medium text-slate-700">Expires (optional)
-                <input name="expires_at" type="datetime-local" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm">
-            </label>
-            <label class="block text-sm font-medium text-slate-700">Requests per minute
-                <input name="rate_limit_per_minute" type="number" min="1" max="1000" value="60" required class="mt-1.5 w-full rounded-xl border-slate-300 text-sm">
-            </label>
-            <div class="md:col-span-4"><button class="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Generate API key</button></div>
-        </form>
 
         <div class="mt-6 border-t border-slate-200 pt-5">
-            <h4 class="text-sm font-bold text-slate-900">Issued external keys</h4>
+            <h4 class="text-sm font-bold text-slate-900">Previously issued legacy keys</h4>
             <div class="mt-3 space-y-2">
                 @forelse ($apiKeys as $apiKey)
                     <article class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">

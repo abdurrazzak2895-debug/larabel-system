@@ -2,16 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Admin;
-use App\Models\Permission;
 use App\Models\PortalAvailabilityApiKey;
 use App\Models\PortalAvailabilityCredential;
-use App\Models\Role;
-use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
-use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -136,39 +129,9 @@ class PortalExternalApiTest extends TestCase
         });
     }
 
-    public function test_admin_can_issue_a_hashed_key_once_and_revoke_it(): void
+    public function test_legacy_cookie_gateway_no_longer_issues_new_api_keys(): void
     {
-        $permission = Permission::query()->create(['name' => 'manage agencies', 'slug' => 'manage-agencies']);
-        $role = Role::query()->create(['name' => 'Portal API Admin', 'slug' => 'portal-api-admin']);
-        $role->permissions()->attach($permission->id);
-        $admin = Admin::factory()->create();
-        $admin->assignRole($role->name);
-        Auth::guard('admin')->login($admin);
-
-        $credential = PortalAvailabilityCredential::query()->create([
-            'name' => 'Authorized Portal Session',
-            'portal_account_id' => 'portal-account-1',
-            'session_cookie' => 'session=authorized',
-            'active' => true,
-        ]);
-
-        $this->withoutMiddleware([PreventRequestForgery::class, ValidateCsrfToken::class, VerifyCsrfToken::class]);
-        $response = $this->post(route('admin.portal-availability.api-keys.store'), [
-            'name' => 'Partner Website',
-            'portal_availability_credential_id' => $credential->id,
-            'rate_limit_per_minute' => 30,
-        ]);
-
-        $response->assertRedirect()->assertSessionHas('created_api_key');
-        $plaintext = $response->getSession()->get('created_api_key');
-        $apiKey = PortalAvailabilityApiKey::query()->firstOrFail();
-        $this->assertNotSame($plaintext, $apiKey->key_hash);
-        $this->assertSame(PortalAvailabilityApiKey::hashPlaintext($plaintext), $apiKey->key_hash);
-        $this->assertSame(30, $apiKey->rate_limit_per_minute);
-
-        $this->post(route('admin.portal-availability.api-keys.revoke', $apiKey->id))
-            ->assertRedirect();
-        $this->assertNotNull($apiKey->fresh()->revoked_at);
+        $this->post('/admin/portal-availability/api-keys')->assertNotFound();
     }
 
     public function test_revoked_api_key_cannot_call_the_portal(): void

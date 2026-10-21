@@ -125,35 +125,6 @@ final class PortalAvailabilityController extends Controller
         return back()->with('success', 'Portal availability credential activated.');
     }
 
-    public function storeApiKey(Request $request): RedirectResponse
-    {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'portal_availability_credential_id' => ['required', 'integer', 'exists:portal_availability_credentials,id'],
-            'expires_at' => ['nullable', 'date'],
-            'rate_limit_per_minute' => ['required', 'integer', 'min:1', 'max:1000'],
-        ]);
-
-        $credential = PortalAvailabilityCredential::query()->findOrFail($data['portal_availability_credential_id']);
-        if (! $credential->hasUsableSession()) {
-            return back()->withErrors(['portal_availability_credential_id' => 'Choose an active portal session with a valid cookie.']);
-        }
-
-        $plaintext = PortalAvailabilityApiKey::generatePlaintext();
-        PortalAvailabilityApiKey::query()->create([
-            'portal_availability_credential_id' => $credential->id,
-            'name' => trim($data['name']),
-            'key_prefix' => PortalAvailabilityApiKey::prefix($plaintext),
-            'key_hash' => PortalAvailabilityApiKey::hashPlaintext($plaintext),
-            'expires_at' => $data['expires_at'] ?? null,
-            'rate_limit_per_minute' => (int) $data['rate_limit_per_minute'],
-        ]);
-
-        return back()
-            ->with('success', 'API key created. Copy it now; it will not be shown again.')
-            ->with('created_api_key', $plaintext);
-    }
-
     public function revokeApiKey(PortalAvailabilityApiKey $apiKey): RedirectResponse
     {
         $apiKey->forceFill(['revoked_at' => now()])->saveQuietly();
